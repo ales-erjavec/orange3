@@ -267,7 +267,11 @@ class OWTestLearners(widget.OWWidget):
             row.append(head)
             for stat in input.stats:
                 item = QStandardItem()
-                item.setData(" {:.3f} ".format(stat[0]), Qt.DisplayRole)
+                if not numpy.isnan(stat[0]):
+                    item.setData(" {:.3f} ".format(stat[0]), Qt.DisplayRole)
+                else:
+                    item.setData("N/A", Qt.DisplayRole)
+
                 row.append(item)
             model.appendRow(row)
 
@@ -379,11 +383,16 @@ def CA(results):
 
 
 def Precision(results):
-    return _skl_metric(results, sklearn.metrics.precision_score)
+    return _averaged_cm_score(cm_precision, results)
 
 
 def Recall(results):
-    return _skl_metric(results, sklearn.metrics.recall_score)
+    return _averaged_cm_score(cm_recall, results)
+
+
+def F1(results):
+    return _averaged_cm_score(cm_f1, results)
+
 
 def multi_class_auc(results):
     number_of_classes = len(results.data.domain.class_var.values)
@@ -401,16 +410,13 @@ def multi_class_auc(results):
         for class_ in range(number_of_classes)])
     
     return np.array([np.sum(auc_array*weights_norm)])
-    
+
+
 def AUC(results):
     if len(results.data.domain.class_var.values) == 2:
         return _skl_metric(results, sklearn.metrics.roc_auc_score)
     else:
         return multi_class_auc(results)
-
-
-def F1(results):
-    return _skl_metric(results, sklearn.metrics.f1_score)
 
 
 def MSE(results):
@@ -429,18 +435,79 @@ def R2(results):
     return _skl_metric(results, sklearn.metrics.r2_score)
 
 
+def confusion_matrices(results):
+    """Return a list if confusion matrices, one for each model."""
+    labels = numpy.arange(len(results.data.domain.class_var.values))
+    actual = results.actual
+    return [sklearn.metrics.confusion_matrix(actual, predicted, labels)
+            for predicted in results.predicted]
+
+
+def cm_precision(confusion_matrix):
+    """Return the precision scores for a confusion matrix."""
+    tp = numpy.diag(confusion_matrix)
+    predicted = numpy.sum(confusion_matrix, axis=0)
+
+    with numpy.errstate(divide="ignore", invalid="ignore"):
+        # TP / (TP + FP)
+        precision = tp / predicted
+
+    precision[~numpy.isfinite(precision)] = numpy.nan
+    return precision
+
+
+def cm_recall(confusion_matrix):
+    """Return the recall scores for a confusion matrix."""
+    tp = numpy.diag(confusion_matrix)
+    positive = numpy.sum(confusion_matrix, axis=1)
+
+    with numpy.errstate(divide="ignore", invalid="ignore"):
+        # TP / (TP + FN)
+        recall = tp / positive
+
+    recall[~numpy.isfinite(recall)] = numpy.nan
+    return recall
+
+
+def cm_f1(confusion_matrix):
+    """Return the F1 scores for a confusion matrix."""
+    precision = cm_precision(confusion_matrix)
+    recall = cm_precision(confusion_matrix)
+    with numpy.errstate(divide="ignore", invalid="ignore"):
+        f1 = 2 * precision * recall / (precision + recall)
+    return f1
+
+
+def _averaged_cm_score(cm_score, results):
+    """
+    Evaluate cm_score function on results and average the results,
+    weighted by class prior.
+    """
+    matrices = confusion_matrices(results)
+
+    scores = [cm_score(cm) for cm in matrices]
+
+    def average(a, w):
+        mask = w > 0
+        return numpy.average(a[mask], weights=w[mask])
+
+    return [average(s, cm.sum(axis=1)) for s, cm in zip(scores, matrices)]
+
+
 def main():
     from Orange.classification import \
-        logistic_regression as lr, naive_bayes as nb
+        logistic_regression as lr, svm, majority
 
     app = QtGui.QApplication([])
     data = Orange.data.Table("iris")
     w = OWTestLearners()
     w.show()
+    w.raise_()
     w.set_train_data(data)
     w.set_test_data(data)
     w.set_learner(lr.LogisticRegressionLearner(), 1)
-    w.set_learner(nb.BayesLearner(), 2)
+    w.set_learner(svm.SVMLearner(), 2)
+    w.set_learner(majority.MajorityFitter(), 3)
     w.handleNewSignals()
     return app.exec_()
 
