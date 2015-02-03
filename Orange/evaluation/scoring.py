@@ -34,7 +34,7 @@ class utils:
     disc_results = namedtuple(
         "disc_results", ["folds", "true", "predicted", "probs"]
     )
-    #: Continupus results for a single learner/model
+    #: Continuous results for a single learner/model
     #: (optional list of slice, (N,) ndarray, (N,) ndarray)
     cont_results = namedtuple(
         "cont_results", ["folds", "true", "predicted"]
@@ -71,7 +71,7 @@ class utils:
 
     @staticmethod
     def one_vs_rest(self, results, pos_label):
-        """Return a one vs. rest result from a multiclass utils.disc_results.
+        """Return a one-vs-rest results from a multiclass utils.disc_results.
         """
         assert isinstance(results, utils.disc_results)
         assert 0 <= pos_label < utils.nclasses(results)
@@ -124,7 +124,7 @@ class utils:
 
     @staticmethod
     def score_folds(score, results):
-        """Apply score over folds and return a sequence of results."""
+        """Apply `score` over folds."""
         assert results.folds is not None
         return [score(utils.take(results, fold)) for fold in results.folds]
 
@@ -217,7 +217,16 @@ class utils_auc:
 
     @staticmethod
     def auc_pairwise_matrix(results):
-        """Return a pairwise class one-vs-one AUC matrix.
+        """
+        Return a pairwise class one-vs-one AUC matrix.
+
+        The A[i, j] element represents the probability of ranking
+        a randomly selected instance of class j lower then a random
+        selected instance of class i. The diagonal elements are set
+        to `NaN`.
+
+        .. note: In general this is not a symmetric matrix.
+
         """
         nclass = utils.nclasses(results)
         table = numpy.full((nclass, nclass), numpy.nan)
@@ -230,13 +239,24 @@ class utils_auc:
 
     @staticmethod
     def auc_pairwise(results, weights=None):
+        """
+        Average the AUC for each pair of classes.
+
+        :param utils.disc_results results:
+        :param weights:
+            * if `None` (default) return unweighted average
+            * if `True` use class pair prior as weights
+            * (K,) numpy.ndarray or (K, K) numpy.ndarray of weights
+
+        .. seealso: utils_auc.auc_pairwise_matrix
+
+        """
         if weights is True:
             weights = utils.class_counts(results)
 
         nclass = utils.nclasses(results)
 
         table = utils_auc.auc_pairwise_matrix(results)
-        table = (table + table.T) / 2
 
         if weights is not None:
             weights = numpy.array(weights)
@@ -246,6 +266,7 @@ class utils_auc:
             weights = numpy.ones((nclass, nclass))
 
         assert weights.shape == (nclass, nclass)
+        # Zero out the diagonal elements.
         diag_ind = numpy.diag_indices(nclass, ndim=2)
         weights[diag_ind] = 0.0
         table[diag_ind] = 0.0
@@ -253,6 +274,12 @@ class utils_auc:
 
     @staticmethod
     def auc_pairwise_by_folds(results, weights=None):
+        """
+        `utils_auc.auc_pairwise` averaged over folds.
+
+        .. seealso: utils_auc.auc_pairwise
+
+        """
         if weights is True:
             weights = utils.class_counts(results)
 
@@ -506,6 +533,9 @@ class Summary(object):
 
 
 def Result_summary(results, digits=3):
+    """
+    Summarize a :class:`Results` instance.
+    """
     assert digits >= 0
     nmodels = results.predicted.shape[0]
     names = getattr(results, "names", None)
