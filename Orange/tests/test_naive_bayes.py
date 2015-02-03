@@ -10,7 +10,7 @@ class NaiveBayesTest(unittest.TestCase):
         table = Orange.data.Table('titanic')
         bayes = nb.NaiveBayesLearner()
         results = testing.CrossValidation(table[::20], [bayes], k=10)
-        ca = scoring.CA(results)
+        (ca,) = scoring.CA(results)
         self.assertGreater(ca, 0.7)
         self.assertLess(ca, 0.9)
 

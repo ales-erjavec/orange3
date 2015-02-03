@@ -10,7 +10,7 @@ class RandomForestTest(unittest.TestCase):
         table = Orange.data.Table('iris')
         forest = rf.RandomForestLearner()
         results = testing.CrossValidation(table, [forest], k=10)
-        ca = scoring.CA(results)
+        (ca,) = scoring.CA(results)
         self.assertGreater(ca, 0.9)
         self.assertLess(ca, 0.99)
 

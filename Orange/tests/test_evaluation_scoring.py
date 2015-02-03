@@ -25,14 +25,14 @@ class Scoring_CA_Test(unittest.TestCase):
         res.actual[:50] = 0
         res.actual[50:] = 1
         res.predicted = np.vstack((res.actual, res.actual))
-        ca = scoring.CA()
-        np.testing.assert_almost_equal(ca(res), [1, 1])
+
+        np.testing.assert_almost_equal(scoring.CA(res), [1, 1])
 
         res.predicted[0][0] = 1
-        np.testing.assert_almost_equal(ca(res), [0.99, 1])
+        np.testing.assert_almost_equal(scoring.CA(res), [0.99, 1])
 
         res.predicted[1] = 1 - res.predicted[1]
-        np.testing.assert_almost_equal(ca(res), [0.99, 0])
+        np.testing.assert_almost_equal(scoring.CA(res), [0.99, 0])
 
     def test_bayes(self):
         x = np.random.random_integers(1, 3, (100, 5))
