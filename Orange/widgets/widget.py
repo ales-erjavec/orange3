@@ -9,9 +9,8 @@ from PyQt4.QtCore import QByteArray, Qt, pyqtSignal as Signal, pyqtProperty,\
 from PyQt4.QtGui import QDialog, QPixmap, QLabel, QVBoxLayout, QSizePolicy, \
     qApp, QFrame, QStatusBar, QHBoxLayout, QStyle, QApplication
 
+from orangecanvas.registry import description as widget_description
 from Orange.widgets import settings, gui
-from Orange.canvas.registry import description as widget_description
-from Orange.canvas.scheme import widgetsscheme as widget_scheme
 from Orange.widgets.gui import ControlledAttributesDict, notify_changed
 from Orange.widgets.settings import SettingsHandler
 from Orange.widgets.utils import vartype
@@ -26,7 +25,7 @@ class WidgetMetaClass(type(QDialog)):
 
     #noinspection PyMethodParameters
     def __new__(mcs, name, bases, dict):
-        from Orange.canvas.registry.description import (
+        from orangecanvas.registry.description import (
             input_channel_from_args, output_channel_from_args)
 
         cls = type.__new__(mcs, name, bases, dict)
@@ -753,10 +752,6 @@ Explicit = widget_description.Explicit
 Dynamic = widget_description.Dynamic
 InputSignal = widget_description.InputSignal
 OutputSignal = widget_description.OutputSignal
-
-SignalLink = widget_scheme.SignalLink
-WidgetsSignalManager = widget_scheme.WidgetsSignalManager
-SignalWrapper = widget_scheme.SignalWrapper
 
 
 class AttributeList(list):
