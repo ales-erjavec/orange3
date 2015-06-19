@@ -62,17 +62,20 @@ class Value(float):
         :type variable: Orange.data.Variable
         :param value: value
         """
-        if not isinstance(value, str):
-            try:
-                self = super().__new__(cls, value)
-                self.variable = variable
-                return self
-            except:
-                pass
-        self = super().__new__(cls, -1)
-        self._value = value
-        self.variable = variable
+        if variable.is_primitive():
+            self = super().__new__(cls, value)
+            self.variable = variable
+            self._value = None
+        else:
+            isunknown = isinstance(value, Real) and isnan(value)
+            self = super().__new__(cls, Unknown if isunknown else -1)
+            self.variable = variable
+            self._value = value
         return self
+
+    def __getnewargs__(self):
+        return (self.variable,
+                float(self) if self.variable.is_primitive() else self._value)
 
     def __init__(self, _, __=Unknown):
         pass
@@ -110,16 +113,8 @@ class Value(float):
     @property
     def value(self):
         if self.variable.is_discrete:
-            return self.variable.values[int(self)]
-        if self.variable.is_string:
+            return self.variable.values[int(self)] if not isnan(self) else "?"
+        elif self.variable.is_continuous:
+            return float(self)
+        else:
             return self._value
-        return float(self)
-
-    def __getnewargs__(self):
-        return self.variable, float(self)
-
-    def __getstate__(self):
-        return dict(value=getattr(self, '_value', None))
-
-    def __setstate__(self, state):
-        self._value = state.get('value', None)
