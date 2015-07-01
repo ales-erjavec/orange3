@@ -14,7 +14,7 @@ from operator import itemgetter
 
 import pkg_resources
 
-from .provider import IntersphinxHelpProvider
+from . import provider
 
 from PyQt4.QtCore import QObject, QUrl
 
@@ -260,7 +260,7 @@ def create_intersphinx_provider(entry_point):
 
             if os.path.exists(target) and \
                     os.path.exists(os.path.join(target, "objects.inv")):
-                return IntersphinxHelpProvider(target=target)
+                return provider.IntersphinxHelpProvider(target=target)
             else:
                 continue
         elif fields:
@@ -273,14 +273,64 @@ def create_intersphinx_provider(entry_point):
                               "'%s', '%s'." % (target, inventory))
                 continue
 
-            return IntersphinxHelpProvider(target=target, inventory=inventory)
+            return provider.IntersphinxHelpProvider(
+                target=target, inventory=inventory)
         else:
-            return IntersphinxHelpProvider(target=target, inventory=inventory)
+            return provider.IntersphinxHelpProvider(
+                target=target, inventory=inventory)
 
     return None
 
 
-_providers = {"intersphinx": create_intersphinx_provider}
+def create_html_provider(entry_point):
+    locations = entry_point.load()
+    dist = entry_point.dist
+    replacements = {"PROJECT_NAME": dist.project_name,
+                    "PROJECT_NAME_LOWER": dist.project_name.lower(),
+                    "PROJECT_VERSION": dist.version}
+    try:
+        replacements["URL"] = get_dist_url(dist)
+    except KeyError:
+        pass
+
+    formatter = string.Formatter()
+
+    for target in locations:
+        # Extract all format fields
+        format_iter = formatter.parse(target)
+        fields = list(map(itemgetter(1), format_iter))
+        fields = [_f for _f in set(fields) if _f]
+
+        if "DEVELOP_ROOT" in fields:
+            if not is_develop_egg(dist):
+                # skip the location
+                continue
+            target = formatter.format(target, DEVELOP_ROOT=dist.location)
+            print("try", target, os.path.exists(target))
+            if os.path.exists(target):
+                return provider.HtmlHelpProvider(
+                    baseurl=QUrl.fromLocalFile(target))
+            else:
+                continue
+        elif fields:
+            try:
+                target = formatter.format(target, **replacements)
+            except KeyError:
+                log.exception("Error while formating doc root mapping",
+                              target)
+                continue
+
+            return provider.HtmlHelpProvider(baseurl=target)
+        else:
+            return provider.HtmlHelpProvider(baseurl=target)
+
+    return None
+
+
+_providers = {
+    "intersphinx": create_intersphinx_provider,
+    "html": create_html_provider,
+}
 
 
 def get_help_provider_for_distribution(dist):

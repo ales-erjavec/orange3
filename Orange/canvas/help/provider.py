@@ -123,6 +123,33 @@ class IntersphinxHelpProvider(HelpProvider):
         self.items = items
 
 
+class HtmlHelpProvider(HelpProvider):
+    def __init__(self, parent=None, baseurl=None):
+        super().__init__(parent)
+        self.baseurl = baseurl
+
+    def search(self, description):
+        if description.help_ref:
+            ref = description.help_ref
+        else:
+            ref = "{}/{}".format(description.category, description.name)
+            ref = ref.lower().replace(" ", "-")
+
+        url = QUrl(self.baseurl).resolved(QUrl(ref))
+        url = QUrl.fromUserInput(url.toString())
+
+        if url.isLocalFile():
+            path = url.toLocalFile()
+            if os.path.isdir(path) and \
+                    os.path.isfile(os.path.join(path, "index.html")):
+                fragment = url.fragment()
+                url = QUrl.fromLocalFile(os.path.join(path, "index.html"))
+                url.setFragment(fragment)
+            elif not os.path.exists(path) and os.path.isfile(path + ".html"):
+                url = url.resolved(QUrl(os.path.basename(path) + ".html"))
+        return url
+
+
 def qurl_query_items(url):
     items = []
     for key, value in url.queryItems():
