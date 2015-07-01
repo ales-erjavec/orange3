@@ -1,6 +1,9 @@
 """
 
 """
+import os
+import sysconfig
+
 import pkg_resources
 
 
@@ -16,3 +19,15 @@ def widget_discovery(discovery):
             "Orange.widgets.unsupervised"]
     for pkg in pkgs:
         discovery.process_category_package(pkg, distribution=dist)
+
+dist = pkg_resources.get_distribution("Orange")
+
+statichelp = (
+    "{DEVELOP_ROOT}/doc/build/html/widgets/",
+    os.path.join(sysconfig.get_path("data"),
+                 "share", "doc", "Orange-{}".format(dist.version),
+                 "widgets"),
+    "http://docs.orange.biolab.si/3/widgets/"
+)
+
+del dist
