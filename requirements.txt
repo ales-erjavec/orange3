@@ -4,6 +4,12 @@ bottlechest>=0.7.0
 scikit-learn>=0.16
 nose==1.2.1
 Jinja2==2.6
-Sphinx
+
+--find-links https://dl.dropboxusercontent.com/u/100248799/wheelhouse/Sphinx-1.4a0.dev20150702-py2.py3-none-any.whl
+Sphinx>=1.4a0.dev20150702
+
+--find-links https://dl.dropboxusercontent.com/u/100248799/wheelhouse/recommonmark-0.1.0-py2.py3-none-any.whl
+recommonmark>=0.1
+
 numpydoc
 openpyxl>=2.1.2
