@@ -25,24 +25,15 @@ from OrangeCanvas.application.canvasmain import CanvasMainWindow
 from OrangeCanvas.application.outputview import TextStream, ExceptHook
 
 from OrangeCanvas.gui.splashscreen import SplashScreen
-from OrangeCanvas import config
 from OrangeCanvas.utils.redirect import redirect_stdout, redirect_stderr
 from OrangeCanvas.utils.qtcompat import QSettings
 
 from OrangeCanvas.registry import qt
-from OrangeCanvas.registry import WidgetRegistry
+from OrangeCanvas.registry import WidgetRegistry, set_global_registry
 from OrangeCanvas.registry import cache
+from OrangeCanvas import config
 
 from . import conf
-
-config.init = conf.init
-config.application_icon
-config.widgets_entry_points = conf.widgets_entry_points
-config.default_entry_point = conf.default_entry_point
-config.ADDON_ENTRY = conf.ADDON_ENTRY
-config.ADDON_PYPI_SEARCH_SPEC = conf.ADDON_PYPI_SEARCH_SPEC
-config.widget_discovery = conf.widget_discovery
-config.workflow_constructor = conf.workflow_constructor
 
 log = logging.getLogger(__name__)
 
@@ -155,6 +146,7 @@ def main(argv=None):
     stream_hander.setLevel(level=levels[options.log_level])
     rootlogger.addHandler(stream_hander)
 
+    config.set_default(conf.orangeconfig)
     log.info("Starting 'Orange Canvas' application.")
 
     qt_argv = argv[:1]
@@ -258,15 +250,8 @@ def main(argv=None):
         reg_cache = None
 
     widget_registry = qt.QtWidgetRegistry()
-    widget_discovery = conf.widget_discovery(
+    widget_discovery = config.widget_discovery(
         widget_registry, cached_descriptions=reg_cache)
-
-#     widget_discovery.found_category.connect(
-#         widget_registry.register_category
-#     )
-#     widget_discovery.found_widget.connect(
-#         widget_registry.register_widget
-#     )
 
     want_splash = \
         settings.value("startup/show-splash-screen", True, type=bool) and \
@@ -282,9 +267,6 @@ def main(argv=None):
             splash_screen.showMessage(message, color=color)
 
         widget_registry.category_added.connect(show_message)
-#         widget_discovery.discovery_start.connect(splash_screen.show)
-#         widget_discovery.discovery_process.connect(show_message)
-#         widget_discovery.discovery_finished.connect(splash_screen.hide)
 
     log.info("Running widget discovery process.")
 
@@ -305,7 +287,7 @@ def main(argv=None):
         with open(cache_filename, "wb") as f:
             pickle.dump(WidgetRegistry(widget_registry), f)
 
-#     set_global_registry(widget_registry)
+    set_global_registry(widget_registry)
     canvas_window.set_widget_registry(widget_registry)
     canvas_window.show()
     canvas_window.raise_()
