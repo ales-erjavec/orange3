@@ -1,7 +1,7 @@
 import itertools
 import pkg_resources
 
-from OrangeCanvas import config
+from orangecanvas import config
 
 from . import discovery
 from . import widgetsscheme

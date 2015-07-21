@@ -29,12 +29,12 @@ from PyQt4.QtGui import (
 from PyQt4.QtCore import Qt, QObject, QCoreApplication, QTimer, QEvent
 from PyQt4.QtCore import pyqtSignal as Signal
 
-from OrangeCanvas.scheme.signalmanager import \
+from orangecanvas.scheme.signalmanager import \
     SignalManager, compress_signals, can_enable_dynamic
-from OrangeCanvas.scheme import Scheme, SchemeNode, events
-from OrangeCanvas.scheme.node import UserMessage
-from OrangeCanvas.utils import name_lookup
-from OrangeCanvas.resources import icon_loader
+from orangecanvas.scheme import Scheme, SchemeNode, events
+from orangecanvas.scheme.node import UserMessage
+from orangecanvas.utils import name_lookup
+from orangecanvas.resources import icon_loader
 
 log = logging.getLogger(__name__)
 
