@@ -2,7 +2,7 @@
 Distributions
 -------------
 
-A widget for plotting attribute distributions.
+A widget for plotting variable distributions.
 
 """
 import sys
@@ -212,15 +212,54 @@ class OWDistributions(widget.OWWidget):
 
     def _density_estimator(self):
         if self.cont_est_type == OWDistributions.Hist:
-            def hist(dist, cont):
-                h, edges = numpy.histogram(dist[0, :], bins=10,
-                                           weights=dist[1, :])
+            def hist(dist):
+                dist = numpy.asarray(dist)
+                X, W = dist
+                nbins = hist_nbins_scott(X, W)
+                h, edges = numpy.histogram(X, bins=max(10, nbins), weights=W)
                 return edges, h
             return hist
         elif self.cont_est_type == OWDistributions.ASH:
-            return lambda dist, cont: ash_curve(dist, cont, m=5)
+            def ash(dist):
+                dist = numpy.asarray(dist)
+                X, W = dist
+                nbins = hist_nbins_scott(X, W)
+                return ASH_for_distribution(dist, bins=nbins, m=5)
+            return ash
         elif self.cont_est_type == OWDistributions.Kernel:
-            return rect_kernel_curve
+            def rkernel(dist):
+                dist = numpy.asarray(dist)
+                X, W = dist
+                bw = kde_bw_silverman(X, weights=W)
+                return rect_kernel_curve(dist, bandwidth=bw)
+            return rkernel
+
+    def _conditional_density_estimator(self):
+        if self.cont_est_type == OWDistributions.Hist:
+            def hist(cont):
+                nbins = hist_nbins_scott(cont.values, cont.counts.sum(axis=0))
+                return histogram_for_contingency(cont, bins=max(10, nbins))
+            return hist
+        elif self.cont_est_type == OWDistributions.ASH:
+            def ash(cont):
+                nbins = hist_nbins_scott(cont.values, cont.counts.sum(axis=0))
+                amin, amax = cont.values.min(), cont.values.max()
+                basebins = histogram_bins([amin, amax], nbins)
+                return ASH_for_contingency(cont, bins=basebins, m=5)
+            return ash
+        elif self.cont_est_type == OWDistributions.Kernel:
+            def rkernel(cont):
+                bw = kde_bw_silverman(
+                    cont.values, weights=cont.counts.sum(axis=0))
+                curves = [rect_kernel_curve(dist, bandwidth=bw)
+                          for dist in cont]
+                W = cont.counts.sum(axis=1)
+                W /= W.sum() if W.sum() > 0 else 1
+                return [(X, Y * w) for (X, Y), w in zip(curves, W)]
+
+            return rkernel
+        else:
+            assert False
 
     def display_distribution(self):
         dist = self.distributions
@@ -235,12 +274,13 @@ class OWDistributions(widget.OWWidget):
         if var and var.is_continuous:
             bottomaxis.setTicks(None)
             curve_est = self._density_estimator()
-            edges, curve = curve_est(dist, None)
-            item = pg.PlotCurveItem()
-            item.setData(edges, curve, antialias=True, stepMode=True,
-                         fillLevel=0, brush=QtGui.QBrush(Qt.gray),
-                         pen=QtGui.QColor(Qt.white))
-            self.plot.addItem(item)
+            edges, curve = curve_est(dist)
+            if len(edges):
+                item = pg.PlotCurveItem()
+                item.setData(edges, curve, antialias=True, stepMode=True,
+                             fillLevel=0, brush=QtGui.QBrush(Qt.gray),
+                             pen=QtGui.QColor(Qt.white))
+                self.plot.addItem(item)
         else:
             bottomaxis.setTicks([list(enumerate(var.values))])
             for i, w in enumerate(dist):
@@ -272,52 +312,52 @@ class OWDistributions(widget.OWWidget):
         palette = colorpalette.ColorPaletteGenerator(len(cvar.values))
         colors = [palette[i] for i in range(len(cvar.values))]
 
+        def isvalid(edges, values):
+            """Is the curve valid (defines at least one patch)."""
+            return len(edges) > 0
+
         if var and var.is_continuous:
             bottomaxis.setTicks(None)
 
-            weights = numpy.array([numpy.sum(W) for _, W in cont])
-            weights /= numpy.sum(weights)
+            curve_est = self._conditional_density_estimator()
+            curves = curve_est(cont)
 
-            curve_est = self._density_estimator()
-            curves = [curve_est(dist, cont) for dist in cont if len(dist[0])]
-            curves = [(X, Y * w) for (X, Y), w in zip(curves, weights)]
+            # Compute the cumulative curves (stacked on top of each other),
+            # but preserve the invalid ones.
+            cum_curves = []
+            cumulative_curve = [], []
+            for X, Y  in curves:
+                if isvalid(*cumulative_curve) and isvalid(X, Y):
+                    cumulative_curve = sum_rect_curve(X, Y, *cumulative_curve)
+                    cum_curves.append(cumulative_curve)
+                elif isvalid(X, Y):
+                    cumulative_curve = X, Y
+                    cum_curves.append(cumulative_curve)
+                else:
+                    # X, Y is not valid. Preserve it in the list.
+                    cum_curves.append(([], []))
 
-            cum_curves = [curves[0]]
-            for X, Y in curves[1:]:
-                cum_curves.append(sum_rect_curve(X, Y, *cum_curves[-1]))
+            assert len(cum_curves) == len(cvar.values)
 
+            # plot the cumulative curves 'back to front'.
             for (X, Y), color in reversed(list(zip(cum_curves, colors))):
-                item = pg.PlotCurveItem()
-                pen = QtGui.QPen(QtGui.QBrush(Qt.white), 0.5)
-                pen.setCosmetic(True)
-                item.setData(X, Y, antialias=True, stepMode=True,
-                             fillLevel=0, brush=QtGui.QBrush(color.lighter()),
-                             pen=pen)
-                self.plot.addItem(item)
+                if isvalid(X, Y):
+                    item = pg.PlotCurveItem()
+                    pen = QtGui.QPen(QtGui.QBrush(Qt.white), 0.5)
+                    pen.setCosmetic(True)
+                    item.setData(X, Y, antialias=True, stepMode=True,
+                                 fillLevel=0, brush=QtGui.QBrush(color.lighter()),
+                                 pen=pen)
+                    self.plot.addItem(item)
 
-#             # XXX: sum the individual curves and not the distributions.
-#             # The conditional distributions might be 'smoother' than
-#             # the cumulative one
-#             cum_dist = [cont[0]]
-#             for dist in cont[1:]:
-#                 cum_dist.append(dist_sum(dist, cum_dist[-1]))
-#
-#             curves = [rect_kernel_curve(dist) for dist in cum_dist]
-#             colors = [Qt.blue, Qt.red, Qt.magenta]
-#             for (X, Y), color in reversed(list(zip(curves, colors))):
-#                 item = pg.PlotCurveItem()
-#                 item.setData(X, Y, antialias=True, stepMode=True,
-#                              fillLevel=0, brush=QtGui.QBrush(color))
-#                 item.setPen(QtGui.QPen(color))
-#                 self.plot.addItem(item)
         elif var and var.is_discrete:
             bottomaxis.setTicks([list(enumerate(var.values))])
 
             cont = numpy.array(cont)
             for i, (value, dist) in enumerate(zip(var.values, cont.T)):
                 dsum = sum(dist)
-                geom = QtCore.QRectF(i - 0.333, 0, 0.666, 100
-                                     if self.relative_freq else dsum)
+                geom = QtCore.QRectF(i - 0.333, 0, 0.666,
+                                     100 if self.relative_freq else dsum)
                 item = DistributionBarItem(geom, dist / dsum, colors)
                 self.plot.addItem(item)
 
@@ -329,14 +369,15 @@ class OWDistributions(widget.OWWidget):
         self._legend.show()
 
     def set_left_axis_name(self):
-        set_label = self.plot.getAxis("left").setLabel
-        if (self.var and
-            self.var.is_continuous and
-            self.cont_est_type != OWDistributions.Hist):
-            set_label("Density")
-        else:
-            set_label(["Frequency", "Relative frequency"]
-                      [self.cvar is not None and self.relative_freq])
+        label = "Frequency"
+        if self.var and self.var.is_continuous and \
+                self.cont_est_type == OWDistributions.Kernel:
+            label = "Density"
+        elif self.var and self.var.is_discrete and self.cvar and \
+                self.relative_freq:
+            label = "Relative frequency"
+
+        self.plot.getAxis("left").setLabel(label)
 
     def enable_disable_rel_freq(self):
         self.cb_rel_freq.setDisabled(
@@ -380,35 +421,136 @@ def dist_sum(D1, D2):
     return unique, W
 
 
-def rect_kernel_curve(dist, cont=None, bandwidth=None):
+def histogram_bins(a, bins=10):
+    _, edges = numpy.histogram(a, bins)
+    return edges
+
+
+def histogram_for_distribution(dist, bins=10):
+    dist = numpy.asarray(dist)
+    X, W = dist
+
+    if X.size == 0:
+        return numpy.array([], dtype=float), numpy.array([], dtype=float)
+
+    counts, edges = numpy.histogram(X, bins, weights=W)
+    return edges, counts
+
+
+def histogram_for_contingency(cont, bins=10):
+    bins = histogram_bins([cont.values.min(), cont.values.max()], bins=bins)
+    return [histogram_for_distribution(dist, bins) for dist in cont]
+
+
+def ASH_for_distribution(dist, bins=10, m=5):
+    dist = numpy.asarray(dist)
+    X, W = dist
+    if X.size == 0:
+        return numpy.array([], dtype=float), numpy.array([], dtype=float)
+
+    if numpy.isscalar(bins):
+        bins = histogram_bins(X, bins)
+
+    hist, bin_edges = ash(X, bins=bins, m=m, weights=W)
+    return bin_edges, hist
+
+
+def ASH_for_contingency(cont, bins=10, m=5):
+    if numpy.isscalar(bins):
+        bins = histogram_bins(cont.values, bins)
+
+    return [ASH_for_distribution(dist, bins=bins, m=m) for dist in cont]
+
+
+def ash_smooth(hist, m=5):
+    hist = numpy.asarray(hist)
+    if m < 0 or m % 2 != 1:
+        raise ValueError("m % 2 != 1")
+
+    kernel = triangular_kernel(m)
+    kernel /= kernel.sum()
+    if hist.size < kernel.size:
+        raise ValueError("hist.size < m")
+
+    return numpy.convolve(hist, kernel, mode="same")
+
+
+def ash(a, bins=10, m=5, weights=None):
+    """
+    Compute the average shifted histogram.
+
+    Parameters
+    ----------
+    a : array-like
+        Input data array.
+    bins : int or array-like
+        Base histogram bins. If array-like then it MUST contain
+        equi-width bin edges.
+    m : int
+        Smoothing parameter.
+    weights : array-like
+        An array of weights of the same shape as `a`
+    """
+    bins = histogram_bins(a, bins)
+    ash_bins = ash_resample_bins(bins, m=m)
+    hist, bin_edges = numpy.histogram(a, ash_bins, weights=weights)
+    ash = ash_smooth(hist, m=m)
+    return ash, bin_edges
+
+
+def ash_sample_bins(amin, amax, h, m):
+    if m % 2 != 1:
+        raise ValueError("m % 2 != 1")
+
+    k = m // 2
+
+    if amin == amax:
+        # This is bad, but consistent with numpy.histogram
+        amin, amax = amin - 0.5, amax + 0.5
+
+    delta = h / m
+    offset = k * delta
+    nbins = max(numpy.ceil((amax - amin + 2 * offset) / delta), m)
+    bins = numpy.linspace(amin - offset, amax + offset, nbins + 1,
+                          endpoint=True)
+    return bins
+
+
+def ash_resample_bins(basebins, m):
+    assert m % 2 == 1
+
+    basebins = numpy.asarray(basebins, dtype=float)
+    binwidths = numpy.diff(basebins, n=1)
+
+    if numpy.any(numpy.abs(numpy.diff(binwidths)) > 1e-9):
+        raise ValueError
+
+    h = numpy.mean(binwidths)
+    amin, amax = basebins[0], basebins[-1]
+    return ash_sample_bins(amin, amax, h, m)
+
+
+def triangular_kernel(n):
+    if n % 2 != 1:
+        raise ValueError("n % 2 != 1")
+
+    a = numpy.linspace(-1, 1, n + 2, endpoint=True)[1:-1]
+    return numpy.clip(1 - numpy.abs(a), 0, 1)
+
+
+def rect_kernel_curve(dist, bandwidth=None):
     """
     Return a rectangular kernel density curve for `dist`.
-
-    `dist` must not be empty.
     """
-    # XXX: what to do with unknowns
-    #      Distribute uniformly between the all points?
-
     dist = numpy.array(dist)
     if dist.size == 0:
-        raise ValueError("'dist' is empty.")
+        return numpy.array([], dtype=float), numpy.array([], dtype=float)
 
-    X = dist[0, :]
-    W = dist[1, :]
-
-    def IQR(a, weights=None):
-        """Interquartile range of `a`."""
-        q1, q3 = weighted_quantiles(a, [0.25, 0.75], weights=weights)
-        return q3 - q1
+    X, W = dist
 
     if bandwidth is None:
         # Silverman's rule of thumb.
-        A = weighted_std(X, weights=W)
-        iqr = IQR(X, weights=W)
-        if iqr > 0:
-            A = min(A, iqr / 1.34)
-
-        bandwidth = 0.9 * A * (X.size ** -0.2)
+        bandwidth = kde_bw_silverman(X, W)
 
     bottom_edges = X - bandwidth / 2
     top_edges = X + bandwidth / 2
@@ -424,6 +566,26 @@ def rect_kernel_curve(dist, cont=None, bandwidth=None):
     curve = numpy.cumsum(edge_weights)[:-1]
     curve /= numpy.sum(W) * bandwidth
     return edges, curve
+
+
+def IQR(a, weights=None):
+    """
+    Interquartile range of `a`.
+    """
+    q1, q3 = weighted_quantiles(a, [0.25, 0.75], weights=weights)
+    return q3 - q1
+
+
+def kde_bw_silverman(a, weights=None):
+    """
+    Silverman's rule of thumb for kernel bandwidth selection.
+    """
+    A = weighted_std(a, weights=weights)
+    iqr = IQR(a, weights=weights)
+    if iqr > 0:
+        A = min(A, iqr / 1.34)
+
+    return 0.9 * A * (a.size ** -0.2)
 
 
 def sum_rect_curve(Xa, Ya, Xb, Yb):
@@ -451,70 +613,36 @@ def sum_rect_curve(Xa, Ya, Xb, Yb):
     return unique, Y
 
 
-def ash_curve(dist, cont=None, bandwidth=None, m=3):
-    dist = numpy.asarray(dist)
-    X, W = dist
-    if bandwidth is None:
-        std = weighted_std(X, weights=W)
-        size = X.size
-        # if only one sample in the class
-        if std == 0 and cont is not None:
-            std = weighted_std(cont.values, weights=numpy.sum(cont.counts, axis=0))
-            size = cont.values.size
-        # if attr is constant or contingencies is None (no class variable)
-        if std == 0:
-            std = 0.1
-            size = X.size
-        bandwidth = 3.5 * std * (size ** (-1 / 3))
-
-    hist, edges = average_shifted_histogram(X, bandwidth, m, weights=W)
-    return edges, hist
-
-
-def average_shifted_histogram(a, h, m=3, weights=None):
+def hist_nbins_scott(a, weights=None):
     """
-    Compute the average shifted histogram.
-
-    Parameters
-    ----------
-    a : array-like
-        Input data.
-    h : float
-        Base bin width.
-    m : int
-        Number of shifted histograms.
-    weights : array-like
-        An array of weights of the same shape as `a`
+    Scott's normal reference rule for histogram bin count.
     """
-    a = numpy.asarray(a)
-
     if weights is not None:
-        weights = numpy.asarray(weights)
-        if weights.shape != a.shape:
-            raise ValueError("weights should have the same shape as a")
-        weights = weights.ravel()
+        std = weighted_std(a, weights=weights)
+    else:
+        std = numpy.std(a)
+    n = a.size if weights is None else numpy.sum(weights)
+    h = 3.5 * std * (n ** (- 1 / 3))
 
-    a = a.ravel()
-
-    amin, amax = a.min(), a.max()
-    delta = h / m
-    offset = (m - 1) * delta
-    nbins = max(numpy.ceil((amax - amin + 2 * offset) / delta), 2 * m - 1)
-    bins = numpy.linspace(amin - offset, amax + offset, nbins + 1,
-                          endpoint=True)
-    hist, edges = numpy.histogram(a, bins, weights=weights, density=True)
-
-    kernel = triangular_kernel((numpy.arange(2 * m - 1) - (m - 1)) / m)
-    kernel = kernel / numpy.sum(kernel)
-    ash = numpy.convolve(hist, kernel, mode="same")
-
-    ash = ash / numpy.diff(edges) / ash.sum()
-#     assert abs((numpy.diff(edges) * ash).sum()) <= 1e-6
-    return ash, edges
+    if h > 0:
+        return int(numpy.ceil((a.max() - a.min()) / h))
+    else:
+        return 1
 
 
-def triangular_kernel(x):
-    return numpy.clip(1, 0, 1 - numpy.abs(x))
+def hist_nbins_FD(a, weights=None):
+    """
+    Freedman-Diaconis's choice for histogram bin count.
+    """
+    q1, q3 = weighted_quantiles(a, weights=weights)
+    irq = q3 - q1
+    n = a.size if weights is None else numpy.sum(weights)
+    h = 2 * irq * (n ** (- 1 / 3))
+
+    if h > 0:
+        return int(numpy.ceil((a.max() - a.min()) / h))
+    else:
+        return 1
 
 
 def weighted_std(a, axis=None, weights=None, ddof=0):
@@ -591,6 +719,7 @@ def main(argv=None):
     rval = app.exec_()
     w.set_data(None)
     w.handleNewSignals()
+    w.saveSettings()
     w.deleteLater()
     del w
     app.processEvents()
