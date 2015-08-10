@@ -351,6 +351,9 @@ class AirBrushTool(DataTool):
     def mouseMoveEvent(self, event):
         if event.buttons() & Qt.LeftButton:
             self.__pos = self.mapToPlot(event.pos())
+            self.__timer.stop()
+            self.__timout()
+            self.__timer.start()
             return True
         else:
             return super().mouseMoveEvent(event)
@@ -407,6 +410,9 @@ class MagnetTool(DataTool):
     def mouseMoveEvent(self, event):
         if event.buttons() & Qt.LeftButton:
             self._pos = self.mapToPlot(event.pos())
+            self.__timer.stop()
+            self.__timeout()
+            self.__timer.start()
             return True
         else:
             return super().mouseMoveEvent(event)
@@ -432,7 +438,7 @@ class JitterTool(DataTool):
     def __init__(self, parent, plot):
         super().__init__(parent, plot)
         self.__timer = QTimer(self, interval=50)
-        self.__timer.timeout.connect(self._do)
+        self.__timer.timeout.connect(self.__timeout)
         self._pos = None
         self._radius = 20.0
         self._intensity = 5.0
@@ -450,6 +456,9 @@ class JitterTool(DataTool):
     def mouseMoveEvent(self, event):
         if event.buttons() & Qt.LeftButton:
             self._pos = self.mapToPlot(event.pos())
+            self.__timer.stop()
+            self.__timeout()
+            self.__timer.start()
             return True
         else:
             return super().mouseMoveEvent(event)
@@ -462,7 +471,7 @@ class JitterTool(DataTool):
         else:
             return super().mouseReleaseEvent(event)
 
-    def _do(self):
+    def __timeout(self):
         self.issueCommand.emit(
             Jitter(self._pos, self._radius, self._intensity,
                    next(self.__count))
