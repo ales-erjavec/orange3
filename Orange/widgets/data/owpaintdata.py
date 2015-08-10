@@ -381,8 +381,8 @@ def random_state(rstate):
 
 def create_data(x, y, radius, size, rstate):
     random = random_state(rstate)
-    x = random.normal(x, radius / 2, size=size)
-    y = random.normal(y, radius / 2, size=size)
+    x = random.normal(x, radius / 1.96, size=size)
+    y = random.normal(y, radius / 1.96, size=size)
     return numpy.c_[x, y]
 
 
@@ -754,16 +754,18 @@ def apply_jitter(data, point, density, radius, rstate=None):
     delta = data - point
     dist_sq = numpy.sum(delta ** 2, axis=1)
     dist = numpy.sqrt(dist_sq)
-    valid = dist_sq > 100 * numpy.finfo(dist_sq.dtype).eps
 
-    df = 0.05 * density / dist_sq[valid]
-    df_bound = 1 - radius / dist[valid]
-    df = numpy.clip(df, 0, df_bound)
-
+    u = dist / radius
+    mask = u < 1
+    k = 3 / 4 * (1 - numpy.clip(u[mask], 0, 1) ** 2)
+    df = 0.01 * density * k
     dx = numpy.zeros_like(delta)
     jitter = random.normal(0, 0.1, size=(df.size, data.shape[1]))
+    jitter_norm = numpy.sqrt(numpy.sum(jitter ** 2, axis=1, keepdims=True))
+    jitter_mask = numpy.flatnonzero(jitter_norm)
+    jitter[jitter_mask] /= jitter_norm[jitter_mask]
 
-    dx[valid, :] = df.reshape(-1, 1) * jitter
+    dx[mask] = df.reshape(-1, 1) * jitter
     return dx
 
 
@@ -1125,12 +1127,14 @@ class OWPaintData(widget.OWWidget):
         elif isinstance(cmd, Jitter):
             point = numpy.array([cmd.pos.x(), cmd.pos.y()])
             delta = - apply_jitter(self.data[:, :2], point,
-                                   self.density / 100.0, 0, cmd.rstate)
+                                   self.density / 100.0,
+                                   self.brushRadius / 1000, cmd.rstate)
             self._add_command(Move((..., slice(0, 2)), delta))
         elif isinstance(cmd, Magnet):
             point = numpy.array([cmd.pos.x(), cmd.pos.y()])
             delta = - apply_attractor(self.data[:, :2], point,
-                                      self.density / 100.0, 0)
+                                      self.density / 1000.0,
+                                      self.brushRadius / 2000)
             self._add_command(Move((..., slice(0, 2)), delta))
         else:
             assert False, "unreachable"
