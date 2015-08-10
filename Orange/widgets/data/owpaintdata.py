@@ -732,19 +732,16 @@ def apply_attractor(data, point, density, radius):
     dist_sq = numpy.sum(delta ** 2, axis=1)
     dist = numpy.sqrt(dist_sq)
 
-    dist[dist < radius] = 0
-    dist_sq = dist ** 2
-    valid = (dist_sq > 100 * numpy.finfo(dist.dtype).eps)
-    assert valid.shape == (dist.shape[0],)
+    with numpy.errstate(divide="ignore", invalid="ignore"):
+        # Force falls with distance squared outside of radius and
+        # is constant within.
+        force = 0.01 * density / numpy.clip(dist_sq, radius ** 2, dist_sq)
+        # clip to avoid overshooting the target point
+        force = numpy.clip(force, 0, dist)
 
-    df = 0.05 * density / dist_sq[valid]
-
-    df_bound = 1 - radius / dist[valid]
-
-    df = numpy.clip(df, 0, df_bound)
-
+    mask = numpy.isfinite(force) & (dist > 0)
     dx = numpy.zeros_like(delta)
-    dx[valid] = df.reshape(-1, 1) * delta[valid]
+    dx[mask] = (delta[mask] / numpy.c_[dist[mask]]) * numpy.c_[force[mask]]
     return dx
 
 
