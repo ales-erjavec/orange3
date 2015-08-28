@@ -430,6 +430,7 @@ class OWLinearProjection(widget.OWWidget):
         form.addRow("", size_slider)
 
         box = gui.widgetBox(self.controlArea, "Plot Properties")
+        box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.cb_class_density = gui.checkBox(
             box, self, value='class_density', label='Show class density',
             callback=self._invalidate_plot)
