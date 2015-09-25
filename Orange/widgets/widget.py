@@ -1,4 +1,3 @@
-
 import sys
 import time
 import os
@@ -7,9 +6,10 @@ import types
 from functools import reduce
 
 from PyQt4.QtCore import QByteArray, Qt, pyqtSignal as Signal, pyqtProperty,\
-    QEventLoop
+    QEventLoop, QSize
 from PyQt4.QtGui import QDialog, QPixmap, QLabel, QVBoxLayout, QSizePolicy, \
-    qApp, QFrame, QStatusBar, QHBoxLayout, QStyle, QApplication
+    qApp, QFrame, QStatusBar, QHBoxLayout, QStyle, QApplication, \
+    QAbstractButton, QStyle, QStyleOption, QPainter, QAction, QKeySequence
 
 from Orange.widgets import settings, gui
 from Orange.canvas.registry import description as widget_description
@@ -61,6 +61,41 @@ class WidgetMetaClass(type(QDialog)):
         return cls
 
 
+class CollapseHandle(QAbstractButton):
+    def __init__(self, parent=None, orientation=Qt.Vertical, handleWidth=3,
+                 **kwargs):
+        super().__init__(parent, **kwargs)
+        self.__orientation = orientation
+        self.__handleWidth = handleWidth
+
+        if self.__orientation == Qt.Vertical:
+            self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        else:
+            self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+    def sizeHint(self):
+        option = QStyleOption(0)
+        option.initFrom(self)
+        option.state = QStyle.State_None
+        hw = self.__handleWidth
+        sh = self.style().sizeFromContents(
+            QStyle.CT_Splitter, option, QSize(hw, hw))
+        return sh.expandedTo(QApplication.globalStrut())
+
+    def minimumSizeHint(self):
+        return QSize(self.__handleWidth, self.__handleWidth)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        option = QStyleOption(0)
+        option.initFrom(self)
+
+        if self.__orientation == Qt.Horizontal:
+            option.state |= QStyle.State_Horizontal
+
+        self.style().drawControl(QStyle.CE_Splitter, option, painter)
+
+
 class OWWidget(QDialog, metaclass=WidgetMetaClass):
     # Global widget count
     widget_id = 0
@@ -98,6 +133,8 @@ class OWWidget(QDialog, metaclass=WidgetMetaClass):
 
     save_position = True
     resizing_enabled = True
+
+    collapsible_control_area = True
 
     widgetStateChanged = Signal(str, int, str)
     blockingStateChanged = Signal(bool)
@@ -187,7 +224,24 @@ class OWWidget(QDialog, metaclass=WidgetMetaClass):
         if self.want_main_area:
             self.leftWidgetPart.setSizePolicy(
                 QSizePolicy(QSizePolicy.Fixed, QSizePolicy.MinimumExpanding))
-            self.leftWidgetPart.updateGeometry()
+
+            if self.want_control_area and self.collapsible_control_area:
+                action = QAction(
+                    "Collapse", self, checkable=True,
+                    shortcut=QKeySequence(Qt.ControlModifier | Qt.AltModifier
+                                          | Qt.Key_S))
+                action.setChecked(True)
+                action.toggled[bool].connect(self.leftWidgetPart.setVisible)
+
+                handle = CollapseHandle(
+                    orientation=Qt.Vertical, checkable=True)
+                handle.setChecked(True)
+                handle.toggled[bool].connect(self.leftWidgetPart.setVisible)
+                handle.toggled[bool].connect(action.setChecked)
+                self.addAction(action)
+
+                self.topWidgetPart.layout().addWidget(handle)
+
             self.mainArea = gui.widgetBox(self.topWidgetPart,
                                           orientation="vertical",
                                           sizePolicy=QSizePolicy(QSizePolicy.Expanding,
