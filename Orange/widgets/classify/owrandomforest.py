@@ -14,7 +14,7 @@ from Orange.widgets.utils.sql import check_sql_input
 
 class OWRandomForest(widget.OWWidget):
     name = "Random Forest"
-    description = "Random forest classication algorithm."
+    description = "Random forest classification algorithm."
     icon = "icons/RandomForest.svg"
 
     inputs = [("Data", Table, "set_data"),
