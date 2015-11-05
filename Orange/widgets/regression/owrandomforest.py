@@ -39,6 +39,10 @@ class OWRandomForest(widget.OWWidget):
     use_max_leaf_nodes = settings.Setting(True)
     index_output = settings.Setting(0)
 
+    #: Split Control (number of features to consider)
+    All, Log2, Sqrt, FixedP, FixedN = 0, 1, 2, 3, 4
+    max_features_type = 0
+
     def __init__(self):
         super().__init__()
 
@@ -51,6 +55,7 @@ class OWRandomForest(widget.OWWidget):
 
         # Basic properties
         form = QGridLayout()
+        form.setColumnStretch(0, 100)
         basic_box = gui.widgetBox(
             self.controlArea, "Basic properties", orientation=form)
 
@@ -58,30 +63,71 @@ class OWRandomForest(widget.OWWidget):
                        0, 0, Qt.AlignLeft)
         spin = gui.spin(basic_box, self, "n_estimators", minv=1, maxv=1e4,
                         callback=self.settingsChanged, addToLayout=False,
-                        controlWidth=50)
-        form.addWidget(spin, 0, 1, Qt.AlignRight)
+                        #controlWidth=50
+                        )
+        form.addWidget(spin, 0, 1)
 
-        max_features_cb = gui.checkBox(
-            basic_box, self, "use_max_features",
-            callback=self.settingsChanged, addToLayout=False,
-            label="Consider a number of best attributes at each split")
-
-        max_features_spin = gui.spin(
+        form.addWidget(QtGui.QLabel("At each split, consider:"),
+                       1, 0)
+#         layout = QtGui.QHBoxLayout()
+#         layout.setContentsMargins(0, 0, 0, 0)
+#         layout.addWidget(QtGui.QLabel("At each split, consider"))
+#         layout.addWidget(
+        form.addWidget(
+            gui.comboBox(box, self, "max_features_type",
+                         items=["all features",
+                                "log2(# features)",
+                                "sqrt(# features)",
+                                "a proportion of features",
+                                "a fixed number of features"],
+                         callback=self._max_features_type_changed,
+                         addToLayout=False),
+#         )
+            2, 0, Qt.AlignRight
+        )
+        self.max_features_spin = max_features_spin = gui.spin(
             basic_box, self, "max_features", 2, 50, addToLayout=False,
-            callback=self.settingsChanged, controlWidth=50)
+            callback=self.settingsChanged, #controlWidth=50
+        )
+        self.max_features_spin.setSuffix("%")
+        _st = QtGui.QStackedWidget()
+        _st.addWidget(self.max_features_spin)
+        _st.addWidget(QtGui.QWidget())
+        print(_st.getContentsMargins())
+        print(_st.layout().getContentsMargins())
+        _st.layout().setContentsMargins(0, 0, 0, 0)
+        _st.setSizePolicy(
+            QtGui.QSizePolicy.Ignored, QtGui.QSizePolicy.Preferred)
+        print(_st.layout().getContentsMargins())
+#         layout.addWidget(self.max_features_spin)
+#         form.addLayout(layout, 1, 0, 1, 2)
+#         form.addWidget(self.max_features_spin, 2, 1)
+        form.addWidget(_st, 2, 1,)
 
-        form.addWidget(max_features_cb, 1, 0, Qt.AlignLeft)
-        form.addWidget(max_features_spin, 1, 1, Qt.AlignRight)
+#         max_features_cb = gui.checkBox(
+#             basic_box, self, "use_max_features",
+#             callback=self.settingsChanged, addToLayout=False,
+#             label="Consider a number of best attributes at each split")
+# 
+#         max_features_spin = gui.spin(
+#             basic_box, self, "max_features", 2, 50, addToLayout=False,
+#             callback=self.settingsChanged, controlWidth=50)
+
+#         form.addWidget(max_features_cb, 1, 0, Qt.AlignLeft)
+#         form.addWidget(max_features_spin, 1, 1, Qt.AlignRight)
 
         random_state_cb = gui.checkBox(
             basic_box, self, "use_random_state", callback=self.settingsChanged,
             addToLayout=False, label="Use seed for random generator:")
         random_state_spin = gui.spin(
             basic_box, self, "random_state", 0, 2 ** 31 - 1, addToLayout=False,
-            callback=self.settingsChanged, controlWidth=50)
+            callback=self.settingsChanged, #controlWidth=50
+            )
+        random_state_spin.setSizePolicy(
+            QtGui.QSizePolicy.Ignored, QtGui.QSizePolicy.Preferred)
 
-        form.addWidget(random_state_cb, 2, 0, Qt.AlignLeft)
-        form.addWidget(random_state_spin, 2, 1, Qt.AlignRight)
+        form.addWidget(random_state_cb, 3, 0, Qt.AlignLeft)
+        form.addWidget(random_state_spin, 3, 1, )
         self._max_features_spin = max_features_spin
         self._random_state_spin = random_state_spin
 
@@ -121,6 +167,7 @@ class OWRandomForest(widget.OWWidget):
                    callback=self.apply, default=True)
 
         self.settingsChanged()
+        self._ensure_state()
         self.apply()
 
     @check_sql_input
@@ -171,6 +218,27 @@ class OWRandomForest(widget.OWWidget):
         self._random_state_spin.setEnabled(self.use_random_state)
         self._max_depth_spin.setEnabled(self.use_max_depth)
         self._max_leaf_nodes_spin.setEnabled(self.use_max_leaf_nodes)
+        self._ensure_state()
+
+    def _max_features_type_changed(self):
+        self._ensure_state()
+
+    def _ensure_state(self):
+        enabled = (self.max_features_type == OWRandomForest.FixedN or
+                   self.max_features_type == OWRandomForest.FixedP)
+
+        self.max_features_spin.setVisible(enabled)
+#             self.max_features_type == OWRandomForest.FixedN or
+#             self.max_features_type == OWRandomForest.FixedP)
+
+        self._max_features_spin.setEnabled(enabled)
+
+        if self.max_features_type == OWRandomForest.FixedN:
+            self.max_features_spin.setSuffix("")
+            self.max_features_spin.setMaximum(100)
+        elif self.max_features_type == OWRandomForest.FixedP:
+            self.max_features_spin.setSuffix(" \N{FULLWIDTH PERCENT SIGN}")
+            self.max_features_spin.setMaximum(100)
 
 
 def main(argv=sys.argv):
