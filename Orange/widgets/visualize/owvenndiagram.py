@@ -6,6 +6,7 @@ Venn Diagram Widget
 
 import math
 import unicodedata
+import operator
 from collections import namedtuple, defaultdict, OrderedDict, Counter
 from itertools import count
 from functools import reduce
@@ -389,13 +390,24 @@ class OWVennDiagram(widget.OWWidget):
 
         self.vennwidget.setItems(vennitems)
 
+        allitems = reduce(
+            operator.iadd, (s.items for s in self.itemsets.values()), [])
+
         for i, area in enumerate(self.vennwidget.vennareas()):
-            area_items = list(map(str, list(self.disjoint[i])))
+            area_items = [str(item) for item in self.disjoint[i]]
+            count = sum(item in self.disjoint[i] for item in allitems)
+
             if i:
-                area.setText("{0}".format(len(area_items)))
+                area.setText(str(count))
 
             label = disjoint_set_label(i, n, simplify=False)
-            head = "<h4>|{}| = {}</h4>".format(label, len(area_items))
+            # format area tool tip
+            if count != len(area_items):
+                head = ("<h4>|{}| = {} ({} unique)</h4>"
+                        .format(label, count, len(area_items)))
+            else:
+                head = "<h4>|{}| = {}</h4>".format(label, count)
+
             if len(area_items) > 32:
                 items_str = ", ".join(map(escape, area_items[:32]))
                 hidden = len(area_items) - 32
