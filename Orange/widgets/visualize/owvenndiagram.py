@@ -50,6 +50,9 @@ class OWVennDiagram(widget.OWWidget):
     inputhints = settings.Setting({})
     #: Use identifier columns for instance matching
     useidentifiers = settings.Setting(True)
+    #: Display/annotate the diagram with disjoint set sizes (unique elements)
+    #: or all matching input instances counts (i.e. count duplicated elements).
+    display_counts = settings.Setting(False)
     #: Output 'unique' items only (one output row for every unique
     #: instance `key`)
     output_uniqueonly = settings.Setting(True)
@@ -105,6 +108,12 @@ class OWVennDiagram(widget.OWWidget):
             # Store the combo in the box for later use.
             box.combo_box = cb
             box.layout().addWidget(cb)
+
+        box = gui.widgetBox(self.controlArea, "Display")
+        gui.comboBox(box, self, "display_counts",
+                     items=["Unique instances",
+                            "Count all instances"],
+                     callback=self._on_uniqueChanged)
 
         gui.rubber(self.controlArea)
 
@@ -386,7 +395,12 @@ class OWVennDiagram(widget.OWWidget):
         colors = colorpalette.ColorPaletteHSV(n)
 
         for i, (key, item) in enumerate(self.itemsets.items()):
-            gr = VennSetItem(text=item.title, count=len(item.items))
+            if self.display_counts:
+                count = len(item.items)
+            else:
+                count = len(set(item.items))
+
+            gr = VennSetItem(text=item.title, count=counts)
             color = colors[i]
             color.setAlpha(100)
             gr.setBrush(QBrush(color))
@@ -400,7 +414,10 @@ class OWVennDiagram(widget.OWWidget):
 
         for i, area in enumerate(self.vennwidget.vennareas()):
             area_items = [str(item) for item in self.disjoint[i]]
-            count = sum(item in self.disjoint[i] for item in allitems)
+            if self.display_counts:
+                count = sum(item in self.disjoint[i] for item in allitems)
+            else:
+                count = len(area_items)
 
             if i:
                 area.setText(str(count))
@@ -469,8 +486,10 @@ class OWVennDiagram(widget.OWWidget):
         self._invalidate()
         self._updateItemsets()
         self._createDiagram()
-
         self._updateInfo()
+
+    def _on_uniqueChanged(self):
+        self._createDiagram()
 
     def _on_inputAttrActivated(self, attr_index):
         combo = self.sender()
