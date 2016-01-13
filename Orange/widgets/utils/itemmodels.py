@@ -22,7 +22,11 @@ from AnyQt.QtWidgets import (
 
 import numpy
 
-from Orange.data import Variable, Storage, DiscreteVariable, ContinuousVariable
+from Orange.data import (
+    Storage, Variable, DiscreteVariable, ContinuousVariable, TimeVariable,
+    StringVariable
+)
+
 from Orange.widgets import gui
 from Orange.widgets.utils import datacaching
 from Orange.statistics import basic_stats
@@ -797,7 +801,7 @@ class VariableListModel(PyListModel):
             elif role == Qt.DecorationRole:
                 return gui.attributeIconDict[var]
             elif role == Qt.ToolTipRole:
-                return self.variable_tooltip(var)
+                return variable_tooltip(var)
             elif role == gui.TableVariable:
                 return var
             else:
@@ -917,6 +921,77 @@ _html_replace = [("<", "&lt;"), (">", "&gt;")]
 def safe_text(text):
     for old, new in _html_replace:
         text = str(text).replace(old, new)
+    return text
+
+
+from functools import singledispatch
+from itertools import starmap
+from typing import Optional, Sequence
+
+@singledispatch
+def variable_tooltip(var, label_keys=None):
+    # type: (Orange.data.Variable, Optional[Sequence[str]]) -> str
+    parts = "<b>{}</b>".format(escape(var.name))
+    parts += variable_labels_tooltip(var, label_keys=label_keys)
+    return "</br>".join(parts)
+
+
+def _variable_tooltip(var, label_keys=None):
+    if var.is_discrete:
+        return discrete_variable_tooltip(var, label_keys)
+    elif var.is_continuous:
+        return continuous_variable_tooltip(var, label_keys)
+    elif var.is_string:
+        return string_variable_tooltip(var, label_keys)
+    else:
+        raise TypeError
+
+
+def variable_labels_tooltip(var, label_keys=None):
+    if label_keys is None:
+        label_keys = var.attributes.keys()
+
+    items = [(escape(key), escape(var.attributes.get(key, "")))
+             for key in label_keys]
+    parts = []
+    if items:
+        parts += ["<div>Variable Labels:</div>"]
+        # parts += ["<ul>", ]
+        parts += starmap("<div>{} = {}</div>".format, items)
+        # parts += ["</ul>"]
+    return parts
+
+
+@variable_tooltip.register(DiscreteVariable)
+def discrete_variable_tooltip(var, label_keys=None):
+    text = ("<b>{}</b><br/>Categorical with {} value{s}:".format(
+            escape(var.name), len(var.values),
+            s="s" if len(var.values) != 1 else ""))
+    if var.values:
+        text += ": " + (", ".join("'{}'".format(escape(v)) for v in var.values))
+
+    text += "".join(variable_labels_tooltip(var, label_keys))
+    return text
+
+
+@variable_tooltip.register(ContinuousVariable)
+def continuous_variable_tooltip(var, label_keys=None):
+    text = "<b>{}</b><br/>Numeric".format(escape(var.name))
+    text += "".join(variable_labels_tooltip(var, label_keys))
+    return text
+
+
+@variable_tooltip.register(TimeVariable)
+def time_variable_tooltip(var, label_keys=None):
+    text = "<b>{}</b><br/>Time".format(escape(var.name))
+    text += "".join(variable_labels_tooltip(var, label_keys))
+    return text
+
+
+@variable_tooltip.register(StringVariable)
+def string_variable_tooltip(var):
+    text = "<b>%s</b><br/>String" % escape(var.name)
+    text += "".join(variable_labels_tooltip(var))
     return text
 
 
@@ -1209,7 +1284,6 @@ class TableModel(AbstractSortTableModel):
             return instance[coldesc.var]
         elif role == _Qt_BackgroundRole:
             return coldesc.background
-            return self.color_for_role[coldesc.role]
         elif role == _ValueRole and isinstance(coldesc, TableModel.Column):
             return instance[coldesc.var]
         elif role == _ClassValueRole:
@@ -1282,6 +1356,8 @@ class TableModel(AbstractSortTableModel):
         """
         if isinstance(coldesc, TableModel.Basket):
             return None
+
+        return variable_tooltip(coldesc.var, self._labels)
 
         labels = self._labels
         variable = coldesc.var
