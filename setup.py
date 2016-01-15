@@ -56,6 +56,7 @@ INSTALL_REQUIRES = (
     'chardet>=2.3.0',   # encoding detection
     'xlrd>=0.9.2',      # reading Excel files
     'docutils',         # parsing docs for addon installation
+    'pyqtgraph>=0.9.10',
 )
 
 if sys.version_info < (3, 4):
