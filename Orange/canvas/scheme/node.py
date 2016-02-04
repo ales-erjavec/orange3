@@ -5,9 +5,8 @@ Scheme Node
 
 """
 
-from PyQt4.QtCore import QObject
-from PyQt4.QtCore import pyqtSignal as Signal
-from PyQt4.QtCore import pyqtProperty as Property
+from AnyQt.QtCore import QObject
+from AnyQt.QtCore import Signal, Property
 
 
 class UserMessage(object):

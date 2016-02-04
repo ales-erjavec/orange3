@@ -10,14 +10,11 @@ transitions between widgets.
 
 import logging
 
-from PyQt4.QtGui import QWidget, QFrame, QStackedLayout, QPixmap, \
-                        QPainter, QSizePolicy
-
-from PyQt4.QtCore import Qt, QPoint, QRect, QSize, QPropertyAnimation, \
+from AnyQt.QtWidgets import QWidget, QFrame, QStackedLayout, QSizePolicy
+from AnyQt.QtGui import QPixmap, QPainter
+from AnyQt.QtCore import Qt, QPoint, QRect, QSize, QPropertyAnimation, \
                          QT_VERSION
-
-from PyQt4.QtCore import pyqtSignal as Signal
-from PyQt4.QtCore import pyqtProperty as Property
+from AnyQt.QtCore import Signal, Property
 
 from .utils import updates_disabled
 

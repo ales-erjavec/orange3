@@ -22,18 +22,22 @@ try:
 except ImportError:
     docutils = None
 
-from PyQt4.QtGui import (
+from AnyQt.QtWidgets import (
     QWidget, QDialog, QLabel, QLineEdit, QTreeView, QHeaderView,
-    QTextBrowser, QTextOption, QDialogButtonBox, QProgressDialog,
-    QVBoxLayout, QPalette, QStandardItemModel, QStandardItem,
-    QSortFilterProxyModel, QItemSelectionModel, QStyle, QStyledItemDelegate,
-    QStyleOptionViewItemV4, QApplication, QHBoxLayout
+    QTextBrowser, QDialogButtonBox, QProgressDialog,
+    QVBoxLayout, QStyle, QStyledItemDelegate, QStyleOptionViewItem,
+    QApplication, QHBoxLayout
 )
 
-from PyQt4.QtCore import (
+from AnyQt.QtGui import (
+    QStandardItemModel, QStandardItem, QPalette, QTextOption
+)
+
+from AnyQt.QtCore import (
+    QSortFilterProxyModel, QItemSelectionModel,
     Qt, QObject, QMetaObject, QEvent, QSize, QTimer, QThread, Q_ARG
 )
-from PyQt4.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
+from AnyQt.QtCore import Signal, Slot
 
 from ..gui.utils import message_warning, message_information, \
                         message_critical as message_error
@@ -120,7 +124,7 @@ class TristateCheckItemDelegate(QStyledItemDelegate):
         if event.type() in {QEvent.MouseButtonPress, QEvent.MouseButtonRelease,
                             QEvent.MouseButtonDblClick}:
             pos = event.pos()
-            opt = QStyleOptionViewItemV4(option)
+            opt = QStyleOptionViewItem(option)
             self.initStyleOption(opt, index)
             rect = style.subElementRect(
                 QStyle.SE_ItemViewItemCheckIndicator, opt, widget)

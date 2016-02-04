@@ -22,12 +22,11 @@ import concurrent.futures
 from collections import namedtuple
 
 import sip
-from PyQt4.QtGui import (
-    QShortcut, QKeySequence, QWhatsThisClickedEvent, QWidget
-)
+from AnyQt.QtWidgets import QWidget, QShortcut
+from AnyQt.QtGui import QKeySequence, QWhatsThisClickedEvent
 
-from PyQt4.QtCore import Qt, QObject, QCoreApplication, QTimer, QEvent
-from PyQt4.QtCore import pyqtSignal as Signal
+from AnyQt.QtCore import Qt, QObject, QCoreApplication, QTimer, QEvent
+from AnyQt.QtCore import Signal
 
 from .signalmanager import SignalManager, compress_signals, can_enable_dynamic
 from .scheme import Scheme, SchemeNode

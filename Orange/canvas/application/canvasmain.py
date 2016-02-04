@@ -11,24 +11,33 @@ from io import BytesIO, StringIO
 
 import pkg_resources
 
-from PyQt4.QtGui import (
+from AnyQt.QtWidgets import (
     QMainWindow, QWidget, QAction, QActionGroup, QMenu, QMenuBar, QDialog,
-    QFileDialog, QMessageBox, QVBoxLayout, QSizePolicy, QColor, QKeySequence,
-    QIcon, QToolBar, QToolButton, QDockWidget, QDesktopServices, QApplication,
+    QFileDialog, QMessageBox, QVBoxLayout, QSizePolicy, QToolBar, QToolButton,
+    QDockWidget, QApplication
+)
+from AnyQt.QtGui import QColor, QIcon, QDesktopServices, QKeySequence
+
+from AnyQt.QtCore import (
+    Qt, QEvent, QSize, QUrl, QTimer, QFile, QByteArray, QSettings, QT_VERSION
 )
 
-from PyQt4.QtCore import (
-    Qt, QEvent, QSize, QUrl, QTimer, QFile, QByteArray, QT_VERSION
-)
+from AnyQt.QtNetwork import QNetworkDiskCache
 
-from PyQt4.QtNetwork import QNetworkDiskCache
+from AnyQt.QtWebKitWidgets import QWebView
 
-from PyQt4.QtWebKit import QWebView
+from AnyQt.QtCore import Property
 
-from PyQt4.QtCore import pyqtProperty as Property
-
-# Compatibility with PyQt < v4.8.3
-from ..utils.qtcompat import QSettings
+if QT_VERSION >= 0x50000:
+    from AnyQt.QtCore import QStandardPaths
+    def user_documents_path():
+        """Return the users 'Documents' folder path."""
+        return QStandardPaths.writableLocation(
+            QStandardPaths.DocumentsLocation)
+else:
+    def user_documents_path():
+        return QDesktopServices.storageLocation(
+            QDesktopServices.DocumentsLocation)
 
 from ..gui.dropshadow import DropShadowFrame
 from ..gui.dock import CollapsibleDockWidget
@@ -191,9 +200,7 @@ class CanvasMainWindow(QMainWindow):
 
         self.widget_registry = None
 
-        self.last_scheme_dir = QDesktopServices.StandardLocation(
-            QDesktopServices.DocumentsLocation
-        )
+        self.last_scheme_dir = user_documents_path()
         try:
             self.recent_schemes = config.recent_schemes()
         except Exception:
@@ -725,9 +732,7 @@ class CanvasMainWindow(QMainWindow):
             settings.value("scheme-margins-enabled", False, type=bool)
         )
 
-        default_dir = QDesktopServices.storageLocation(
-            QDesktopServices.DocumentsLocation
-        )
+        default_dir = user_documents_path()
 
         self.last_scheme_dir = settings.value("last-scheme-dir", default_dir,
                                               type=str)
@@ -900,15 +905,14 @@ class CanvasMainWindow(QMainWindow):
 
         if self.last_scheme_dir is None:
             # Get user 'Documents' folder
-            start_dir = QDesktopServices.storageLocation(
-                            QDesktopServices.DocumentsLocation)
+            start_dir = user_documents_path()
         else:
             start_dir = self.last_scheme_dir
 
         # TODO: Use a dialog instance and use 'addSidebarUrls' to
         # set one or more extra sidebar locations where Schemes are stored.
         # Also use setHistory
-        filename = QFileDialog.getOpenFileName(
+        filename, _ = QFileDialog.getOpenFileName(
             self, self.tr("Open Orange Workflow File"),
             start_dir, self.tr("Orange Workflow (*.ows)"),
         )
@@ -1159,13 +1163,11 @@ class CanvasMainWindow(QMainWindow):
             if self.last_scheme_dir is not None:
                 start_dir = self.last_scheme_dir
             else:
-                start_dir = QDesktopServices.storageLocation(
-                    QDesktopServices.DocumentsLocation
-                )
+                start_dir = user_documents_path()
 
             start_dir = os.path.join(str(start_dir), title + ".ows")
 
-        filename = QFileDialog.getSaveFileName(
+        filename, _ = QFileDialog.getSaveFileName(
             self, self.tr("Save Orange Workflow File"),
             start_dir, self.tr("Orange Workflow (*.ows)")
         )
