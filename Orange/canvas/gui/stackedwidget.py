@@ -13,12 +13,20 @@ import logging
 from PyQt4.QtGui import QWidget, QFrame, QStackedLayout, QPixmap, \
                         QPainter, QSizePolicy
 
-from PyQt4.QtCore import Qt, QPoint, QRect, QSize, QPropertyAnimation
+from PyQt4.QtCore import Qt, QPoint, QRect, QSize, QPropertyAnimation, \
+                         QT_VERSION
 
 from PyQt4.QtCore import pyqtSignal as Signal
 from PyQt4.QtCore import pyqtProperty as Property
 
 from .utils import updates_disabled
+
+if QT_VERSION < 0x50000:
+    def qwidget_grab(widget):
+        return QPixmap.grabWidget(widget)
+else:
+    def qwidget_grab(widget):
+        return widget.grab()
 
 log = logging.getLogger(__name__)
 
@@ -230,8 +238,8 @@ class AnimatedStackedWidget(QFrame):
         current = self.__widgets[self.__currentIndex]
         next_widget = self.__widgets[index]
 
-        current_pix = QPixmap.grabWidget(current)
-        next_pix = QPixmap.grabWidget(next_widget)
+        current_pix = qwidget_grab(current)
+        next_pix = qwidget_grab(next_widget)
 
         with updates_disabled(self):
             self.__fadeWidget.setPixmap(current_pix)
