@@ -16,8 +16,8 @@ from operator import attrgetter, add
 from functools import partial
 
 
-from PyQt4.QtCore import QObject, QCoreApplication, QEvent
-from PyQt4.QtCore import pyqtSignal as Signal
+from AnyQt.QtCore import QObject, QCoreApplication, QEvent
+from AnyQt.QtCore import pyqtSignal as Signal
 
 
 from .scheme import SchemeNode
