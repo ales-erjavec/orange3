@@ -235,8 +235,14 @@ class AnimatedStackedWidget(QFrame):
         current = self.__widgets[self.__currentIndex]
         next_widget = self.__widgets[index]
 
-        current_pix = qwidget_grab(current)
-        next_pix = qwidget_grab(next_widget)
+        def has_pending_resize(widget):
+            return widget.testAttribute(Qt.WA_PendingResizeEvent) or \
+                   not widget.testAttribute(Qt.WA_WState_Created)
+        current_pix = next_pix = None
+        if not has_pending_resize(current):
+            current_pix = qwidget_grab(current)
+        if not has_pending_resize(next_widget):
+            next_pix = qwidget_grab(next_widget)
 
         with updates_disabled(self):
             self.__fadeWidget.setPixmap(current_pix)
