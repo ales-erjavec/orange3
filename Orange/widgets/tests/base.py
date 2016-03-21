@@ -1,7 +1,9 @@
 import unittest
 
-from PyQt4.QtGui import (QApplication, QComboBox, QSpinBox, QDoubleSpinBox,
-                         QSlider)
+from AnyQt.QtWidgets import (
+    QApplication, QComboBox, QSpinBox, QDoubleSpinBox, QSlider
+)
+
 import sip
 
 from Orange.data import Table

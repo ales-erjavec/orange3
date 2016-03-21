@@ -1,7 +1,17 @@
 from itertools import chain
 
-from PyQt4.QtCore import *
-from PyQt4.QtGui import *
+from AnyQt.QtGui import (
+    QBrush, QPen, QColor, QPainter, QPainterPath, QTransform
+)
+from AnyQt.QtWidgets import (
+    QGraphicsItem, QGraphicsEllipseItem, QGraphicsRectItem, QGraphicsTextItem,
+    QGraphicsLineItem, QGraphicsScene, QGraphicsView, QStyle, QSizePolicy,
+    QFormLayout
+)
+from AnyQt.QtCore import (
+    Qt, QRectF, QSize, QSizeF, QPointF, QLineF, QTimer,
+    pyqtSignal, pyqtProperty
+)
 
 from Orange.widgets import gui
 from Orange.widgets.widget import OWWidget
@@ -410,7 +420,7 @@ class OWTreeViewer2D(OWWidget):
         self.resize(800, 500)
 
     def send_report(self):
-        from PyQt4.QtSvg import QSvgGenerator
+        from AnyQt.QtSvg import QSvgGenerator
 
         if self.tree:
             self.reportSection("Tree")

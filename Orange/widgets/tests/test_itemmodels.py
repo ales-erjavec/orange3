@@ -3,7 +3,7 @@
 
 from unittest import TestCase
 
-from PyQt4.QtCore import Qt
+from AnyQt.QtCore import Qt
 from Orange.widgets.utils.itemmodels import PyTableModel, PyListModel
 
 

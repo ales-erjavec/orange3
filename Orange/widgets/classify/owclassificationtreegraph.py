@@ -4,11 +4,16 @@ import numpy
 
 from sklearn.tree._tree import TREE_LEAF
 
-# This is not needed yet because it is imported from owtreeviewer2d :(
-from PyQt4.QtCore import Qt
+from AnyQt.QtWidgets import (
+    QGraphicsView, QGraphicsRectItem, QGraphicsTextItem, QSizePolicy, QStyle
+)
+from AnyQt.QtGui import QColor, QBrush, QPen, QFontMetrics
+from AnyQt.QtCore import Qt, QPointF, QSizeF, QRectF
 
-from Orange.widgets.classify.owtreeviewer2d import *
-
+from Orange.widgets.classify.owtreeviewer2d import (
+    OWTreeViewer2D, TreeGraphicsScene, TreeGraphicsView, GraphicsNode,
+    GraphicsEdge
+)
 from Orange.data import Table
 from Orange.classification.tree import TreeClassifier
 from Orange.preprocess.transformation import Indicator
@@ -518,6 +523,7 @@ class OWClassificationTreeGraph(OWTreeGraph):
 
 
 if __name__ == "__main__":
+    from AnyQt.QtWidgets import QApplication
     from Orange.classification.tree import TreeLearner
     a = QApplication(sys.argv)
     ow = OWClassificationTreeGraph()

@@ -16,9 +16,14 @@ to be used, and the methods need to be implemented, then it should work for any
 kind of trees.
 
 """
+import sys
 from math import sqrt, log
 
 import numpy as np
+
+from AnyQt.QtWidgets import QLabel, QSizePolicy
+from AnyQt.QtGui import QColor, QPainter
+
 from Orange.widgets.visualize.utils.scene import \
     UpdateItemsOnSelectGraphicsScene
 from Orange.widgets.visualize.utils.view import (
@@ -26,7 +31,6 @@ from Orange.widgets.visualize.utils.view import (
     ZoomableGraphicsView,
     PreventDefaultWheelEvent
 )
-from PyQt4 import QtGui
 
 from Orange.base import Tree
 from Orange.classification.tree import TreeClassifier
@@ -100,7 +104,7 @@ class OWPythagorasTree(OWWidget):
 
         # Color modes for regression trees
         self.REGRESSION_COLOR_CALC = [
-            ('None', lambda _, __: QtGui.QColor(255, 255, 255)),
+            ('None', lambda _, __: QColor(255, 255, 255)),
             ('Class mean', self._color_class_mean),
             ('Standard deviation', self._color_stddev),
         ]
@@ -142,7 +146,7 @@ class OWPythagorasTree(OWWidget):
         gui.rubber(self.controlArea)
 
         self.controlArea.setSizePolicy(
-            QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Expanding)
+            QSizePolicy.Preferred, QSizePolicy.Expanding)
 
         # MAIN AREA
         # The QGraphicsScene doesn't actually require a parent, but not linking
@@ -151,7 +155,7 @@ class OWPythagorasTree(OWWidget):
         self.scene = TreeGraphicsScene(self)
         self.scene.selectionChanged.connect(self.commit)
         self.view = TreeGraphicsView(self.scene, padding=(150, 150))
-        self.view.setRenderHint(QtGui.QPainter.Antialiasing, True)
+        self.view.setRenderHint(QPainter.Antialiasing, True)
         self.mainArea.layout().addWidget(self.view)
 
         self.ptree = PythagorasTreeViewer()
@@ -388,7 +392,7 @@ class OWPythagorasTree(OWWidget):
     def _classification_update_target_class_combo(self):
         self._clear_target_class_combo()
         list(filter(
-            lambda x: isinstance(x, QtGui.QLabel),
+            lambda x: isinstance(x, QLabel),
             self.target_class_combo.parent().children()
         ))[0].setText('Target class')
         self.target_class_combo.addItem('None')
@@ -407,7 +411,7 @@ class OWPythagorasTree(OWWidget):
             items = (
                 (self.target_class_combo.itemText(self.target_class_index),
                  self.color_palette[self.target_class_index - 1]),
-                ('other', QtGui.QColor('#ffffff'))
+                ('other', QColor('#ffffff'))
             )
             self.legend = OWDiscreteLegend(items=items, **self.LEGEND_OPTIONS)
 
@@ -415,7 +419,7 @@ class OWPythagorasTree(OWWidget):
         self.scene.addItem(self.legend)
 
     def _classification_get_color_palette(self):
-        return [QtGui.QColor(*c) for c in self.model.domain.class_var.colors]
+        return [QColor(*c) for c in self.model.domain.class_var.colors]
 
     def _classification_get_node_color(self, adapter, tree_node):
         # this is taken almost directly from the existing classification tree
@@ -472,7 +476,7 @@ class OWPythagorasTree(OWWidget):
     def _regression_update_target_class_combo(self):
         self._clear_target_class_combo()
         list(filter(
-            lambda x: isinstance(x, QtGui.QLabel),
+            lambda x: isinstance(x, QLabel),
             self.target_class_combo.parent().children()
         ))[0].setText('Node color')
         self.target_class_combo.addItems(
@@ -487,10 +491,10 @@ class OWPythagorasTree(OWWidget):
             class_var = domain.class_var
             start, end, pass_through_black = class_var.colors
             if pass_through_black:
-                lst_colors = [QtGui.QColor(*c) for c
+                lst_colors = [QColor(*c) for c
                               in [start, (0, 0, 0), end]]
             else:
-                lst_colors = [QtGui.QColor(*c) for c in [start, end]]
+                lst_colors = [QColor(*c) for c in [start, end]]
             return lst_colors
 
         # Currently, the first index just draws the outline without any color
@@ -595,18 +599,18 @@ class TreeGraphicsScene(UpdateItemsOnSelectGraphicsScene):
     pass
 
 
-def main():
-    import sys
+def main(argv=sys.argv):
+    from AnyQt.QtWidgets import QApplication
     import Orange
     from Orange.classification.tree import TreeLearner
+    app = QApplication(list(argv))
+    argv = app.arguments()
 
-    argv = sys.argv
     if len(argv) > 1:
         filename = argv[1]
     else:
         filename = 'iris'
 
-    app = QtGui.QApplication(argv)
     ow = OWPythagorasTree()
     data = Orange.data.Table(filename)
     clf = TreeLearner(max_depth=1000)(data)
@@ -615,10 +619,14 @@ def main():
     ow.show()
     ow.raise_()
     ow.handleNewSignals()
+
     app.exec_()
 
-    sys.exit(0)
-
+    ow.set_tree(None)
+    ow.handleNewSignals()
+    ow.saveSettings()
+    ow.onDeleteWidget()
+    return 0
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
