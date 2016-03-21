@@ -120,7 +120,7 @@ class OWClassificationTree(OWProvidesLearner, widget.OWWidget):
 
 if __name__ == "__main__":
     import sys
-    from PyQt4.QtGui import QApplication
+    from AnyQt.QtWidgets import QApplication
 
     a = QApplication(sys.argv)
     ow = OWClassificationTree()

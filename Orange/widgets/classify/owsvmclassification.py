@@ -1,8 +1,8 @@
 import numpy as np
 from collections import OrderedDict
 
-from PyQt4 import QtGui
-from PyQt4.QtCore import Qt
+from AnyQt import QtWidgets
+from AnyQt.QtCore import Qt
 
 from Orange.data import Table
 from Orange.classification.svm import SVMLearner, SVMClassifier, NuSVMLearner
@@ -150,7 +150,7 @@ class OWSVMClassification(SVMBaseMixin, widget.OWWidget):
         self.apply()
 
     def _add_type_box(self):
-        form = QtGui.QGridLayout()
+        form = QtWidgets.QGridLayout()
         self.type_box = box = gui.radioButtonsInBox(
                 self.controlArea, self, "svmtype", [], box="SVM Type",
                 orientation=form)
@@ -238,7 +238,7 @@ class OWSVMClassification(SVMBaseMixin, widget.OWWidget):
             self.report_data("Data", self.data)
 
 if __name__ == "__main__":
-    app = QtGui.QApplication([])
+    app = QtWidgets.QApplication([])
     w = OWSVMClassification()
     w.set_data(Table("iris")[:50])
     w.show()

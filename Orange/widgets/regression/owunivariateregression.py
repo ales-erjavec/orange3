@@ -1,9 +1,8 @@
 from collections import OrderedDict
-from PyQt4.QtGui import QLayout
-from PyQt4 import QtCore
-from PyQt4 import QtGui
-from PyQt4.QtGui import QColor, QPen
-from PyQt4.QtCore import QRectF
+
+from AnyQt.QtWidgets import QSizePolicy
+from AnyQt.QtGui import QColor, QPen, QFont, QPalette
+from AnyQt.QtCore import QRectF
 
 import pyqtgraph as pg
 import numpy as np
@@ -64,7 +63,7 @@ class OWUnivariateRegression(OWProvidesLearner, widget.OWWidget):
             callback=self.apply,
             contentsLength=12)
         self.comboBoxAttributesX.setSizePolicy(
-            QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Fixed)
+            QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
         self.comboBoxAttributesX.setModel(self.x_var_model)
         gui.doubleSpin(
             gui.indentedBox(box),
@@ -79,7 +78,7 @@ class OWUnivariateRegression(OWProvidesLearner, widget.OWWidget):
             callback=self.apply,
             contentsLength=12)
         self.comboBoxAttributesY.setSizePolicy(
-            QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Fixed)
+            QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
         self.comboBoxAttributesY.setModel(self.y_var_model)
 
         gui.rubber(self.controlArea)
@@ -88,10 +87,10 @@ class OWUnivariateRegression(OWProvidesLearner, widget.OWWidget):
         self.plotview = pg.PlotWidget(background="w")
         self.plot = self.plotview.getPlotItem()
 
-        axis_color = self.palette().color(QtGui.QPalette.Text)
-        axis_pen = QtGui.QPen(axis_color)
+        axis_color = self.palette().color(QPalette.Text)
+        axis_pen = QPen(axis_color)
 
-        tickfont = QtGui.QFont(self.font())
+        tickfont = QFont(self.font())
         tickfont.setPixelSize(max(int(tickfont.pixelSize() * 2 // 3), 11))
 
         axis = self.plot.getAxis("bottom")
@@ -237,7 +236,7 @@ class OWUnivariateRegression(OWProvidesLearner, widget.OWWidget):
 
 if __name__ == "__main__":
     import sys
-    from PyQt4.QtGui import QApplication
+    from AnyQt.QtWidgets import QApplication
 
     a = QApplication(sys.argv)
     ow = OWUnivariateRegression()

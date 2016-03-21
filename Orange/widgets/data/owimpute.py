@@ -2,13 +2,14 @@ import sys
 
 from collections import namedtuple
 
-from PyQt4 import QtGui
-from PyQt4.QtGui import (
+from AnyQt.QtWidgets import (
     QWidget, QGroupBox, QRadioButton, QPushButton, QHBoxLayout,
     QVBoxLayout, QStackedLayout, QComboBox, QLineEdit,
-    QDoubleValidator, QButtonGroup
+    QButtonGroup, QStyledItemDelegate, QListView
 )
-from PyQt4.QtCore import Qt, QMargins
+from AnyQt.QtGui import QDoubleValidator
+
+from AnyQt.QtCore import Qt, QMargins
 
 import Orange.data
 import Orange.preprocess.impute as impute
@@ -85,7 +86,7 @@ def push_button(text="", checked=False, checkable=False,
     return button
 
 
-class DisplayFormatDelegate(QtGui.QStyledItemDelegate):
+class DisplayFormatDelegate(QStyledItemDelegate):
     def initStyleOption(self, option, index):
         super().initStyleOption(option, index)
         state = index.data(Qt.UserRole)
@@ -209,8 +210,8 @@ class OWImpute(OWWidget):
                         layout=layout(Qt.Horizontal))
         self.controlArea.layout().addWidget(box)
 
-        self.varview = QtGui.QListView(
-            selectionMode=QtGui.QListView.ExtendedSelection
+        self.varview = QListView(
+            selectionMode=QListView.ExtendedSelection
         )
         self.varview.setItemDelegate(DisplayFormatDelegate())
         self.varmodel = itemmodels.VariableListModel()
@@ -512,8 +513,9 @@ def unique(iterable):
 
 
 def main(argv=sys.argv):
-    app = QtGui.QApplication(list(argv))
-    argv = app.argv()
+    from AnyQt.QtWidgets import QApplication
+    app = QApplication(list(argv))
+    argv = app.arguments()
     if len(argv) > 1:
         filename = argv[1]
     else:

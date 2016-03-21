@@ -1,8 +1,10 @@
 import os
 from warnings import catch_warnings
 
-from PyQt4 import QtGui, QtCore
-from PyQt4.QtGui import QSizePolicy as Policy
+from AnyQt.QtWidgets import \
+    QStyle, QComboBox, QMessageBox, QFileDialog, QGridLayout
+from AnyQt.QtWidgets import QSizePolicy as Policy
+from AnyQt.QtCore import Qt, QTimer
 
 from Orange.widgets import widget, gui
 from Orange.widgets.settings import Setting
@@ -33,7 +35,7 @@ class NamedURLModel(PyListModel):
 
     def data(self, index, role):
         data = super().data(index, role)
-        if role == QtCore.Qt.DisplayRole:
+        if role == Qt.DisplayRole:
             return self.mapping.get(data, data)
         return data
 
@@ -81,13 +83,13 @@ class OWFile(widget.OWWidget, RecentPathsWComboMixin):
         self.data = None
         self.loaded_file = ""
 
-        layout = QtGui.QGridLayout()
+        layout = QGridLayout()
         gui.widgetBox(self.controlArea, margin=0, orientation=layout)
         vbox = gui.radioButtons(None, self, "source", box=True, addSpace=True,
                                 callback=self.load_data, addToLayout=False)
 
         rb_button = gui.appendRadioButton(vbox, "File", addToLayout=False)
-        layout.addWidget(rb_button, 0, 0, QtCore.Qt.AlignVCenter)
+        layout.addWidget(rb_button, 0, 0, Qt.AlignVCenter)
 
         box = gui.hBox(None, addToLayout=False, margin=0)
         box.setSizePolicy(Policy.MinimumExpanding, Policy.Fixed)
@@ -96,19 +98,19 @@ class OWFile(widget.OWWidget, RecentPathsWComboMixin):
         box.layout().addWidget(self.file_combo)
         button = gui.button(
             box, self, '...', callback=self.browse_file, autoDefault=False)
-        button.setIcon(self.style().standardIcon(QtGui.QStyle.SP_DirOpenIcon))
+        button.setIcon(self.style().standardIcon(QStyle.SP_DirOpenIcon))
         button.setSizePolicy(Policy.Maximum, Policy.Fixed)
         button = gui.button(
             box, self, "Reload", callback=self.reload, autoDefault=False)
-        button.setIcon(self.style().standardIcon(QtGui.QStyle.SP_BrowserReload))
+        button.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
         button.setSizePolicy(Policy.Fixed, Policy.Fixed)
-        layout.addWidget(box, 0, 1,  QtCore.Qt.AlignVCenter)
+        layout.addWidget(box, 0, 1,  Qt.AlignVCenter)
 
         rb_button = gui.appendRadioButton(vbox, "URL", addToLayout=False)
-        layout.addWidget(rb_button, 1, 0, QtCore.Qt.AlignVCenter)
+        layout.addWidget(rb_button, 1, 0, Qt.AlignVCenter)
 
         box = gui.hBox(vbox, addToLayout=False)
-        self.url_combo = url_combo = QtGui.QComboBox()
+        self.url_combo = url_combo = QComboBox()
         url_model = NamedURLModel(self.sheet_names)
         url_model.wrap(self.recent_urls)
         url_combo.setModel(url_model)
@@ -121,7 +123,7 @@ class OWFile(widget.OWWidget, RecentPathsWComboMixin):
         url_edit.setTextMargins(l + 5, t, r, b)
         box.layout().addWidget(url_combo)
         url_combo.activated.connect(self._url_set)
-        layout.addWidget(box, 1, 1, QtCore.Qt.AlignVCenter)
+        layout.addWidget(box, 1, 1, Qt.AlignVCenter)
 
         box = gui.vBox(self.controlArea, "Info")
         self.info = gui.widgetLabel(box, 'No data loaded.')
@@ -142,7 +144,7 @@ class OWFile(widget.OWWidget, RecentPathsWComboMixin):
         self.set_file_list()
         # Must not call open_file from within __init__. open_file
         # explicitly re-enters the event loop (by a progress bar)
-        QtCore.QTimer.singleShot(0, self.load_data)
+        QTimer.singleShot(0, self.load_data)
 
     def reload(self):
         if self.recent_paths:
@@ -183,14 +185,14 @@ class OWFile(widget.OWWidget, RecentPathsWComboMixin):
         if in_demos:
             start_file = get_sample_datasets_dir()
             if not os.path.exists(start_file):
-                QtGui.QMessageBox.information(
+                QMessageBox.information(
                     None, "File",
                     "Cannot find the directory with documentation data sets")
                 return
         else:
             start_file = self.last_path() or os.path.expanduser("~/")
 
-        filename = QtGui.QFileDialog.getOpenFileName(
+        filename, _ = QFileDialog.getOpenFileName(
             self, 'Open Orange Data File', start_file, self.dlg_formats)
         if not filename:
             return
@@ -230,8 +232,7 @@ class OWFile(widget.OWWidget, RecentPathsWComboMixin):
             combo = self.url_combo
             model = combo.model()
             # combo.currentText does not work when the widget is initialized
-            url = model.data(model.index(combo.currentIndex()),
-                             QtCore.Qt.EditRole)
+            url = model.data(model.index(combo.currentIndex()), Qt.EditRole)
             if not url:
                 return None, ""
             elif "://" not in url:
@@ -333,7 +334,8 @@ class OWFile(widget.OWWidget, RecentPathsWComboMixin):
 
 if __name__ == "__main__":
     import sys
-    a = QtGui.QApplication(sys.argv)
+    from AnyQt.QtWidgets import QApplication
+    a = QApplication(sys.argv)
     ow = OWFile()
     ow.show()
     a.exec_()

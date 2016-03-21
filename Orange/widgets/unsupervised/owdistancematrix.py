@@ -2,9 +2,11 @@ from math import isnan
 import itertools
 
 import numpy as np
-from PyQt4.QtGui import QTableView, QColor, QItemSelectionModel, \
-    QItemDelegate, QPen, QBrush, QItemSelection, QHeaderView
-from PyQt4.QtCore import Qt, QAbstractTableModel, QModelIndex, QSize
+
+from AnyQt.QtWidgets import QTableView, QItemDelegate, QHeaderView
+from AnyQt.QtGui import QColor, QPen, QBrush
+from AnyQt.QtCore import Qt, QAbstractTableModel, QModelIndex, \
+    QItemSelectionModel, QItemSelection, QSize
 
 from Orange.data import Table, Variable, ContinuousVariable, DiscreteVariable
 from Orange.misc import DistMatrix

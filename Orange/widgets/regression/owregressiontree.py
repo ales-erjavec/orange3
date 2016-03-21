@@ -29,7 +29,7 @@ del OWClassificationTree
 
 if __name__ == "__main__":
     import sys
-    from PyQt4.QtGui import QApplication
+    from AnyQt.QtWidgets import QApplication
     from Orange.data import Table
 
     a = QApplication(sys.argv)

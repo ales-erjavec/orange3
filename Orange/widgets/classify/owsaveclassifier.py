@@ -1,12 +1,14 @@
 import os
 import pickle
 
-from PyQt4 import QtGui
-
+from AnyQt.QtWidgets import (
+    QComboBox, QStyle, QSizePolicy, QHBoxLayout, QFileDialog, QApplication
+)
 from Orange.base import Model
 
 from Orange.widgets import widget, gui
 from Orange.widgets.settings import Setting
+from Orange.widgets.utils import stdpaths
 
 
 class OWSaveClassifier(widget.OWWidget):
@@ -36,21 +38,20 @@ class OWSaveClassifier(widget.OWWidget):
         self.model = None
 
         box = gui.widgetBox(self.controlArea, self.tr("File"),
-                            orientation=QtGui.QHBoxLayout())
+                            orientation=QHBoxLayout())
         self.filesCB = gui.comboBox(box, self, "selectedIndex",
                                     callback=self._on_recent)
         self.filesCB.setMinimumContentsLength(20)
         self.filesCB.setSizeAdjustPolicy(
-            QtGui.QComboBox.AdjustToMinimumContentsLength)
+            QComboBox.AdjustToMinimumContentsLength)
 
         button = gui.button(
             box, self, "...", callback=self.browse, default=True
         )
         button.setIcon(
-            self.style().standardIcon(QtGui.QStyle.SP_DirOpenIcon)
+            self.style().standardIcon(QStyle.SP_DirOpenIcon)
         )
-        button.setSizePolicy(QtGui.QSizePolicy.Maximum,
-                             QtGui.QSizePolicy.Fixed)
+        button.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
 
         self.savebutton = gui.button(
             self.controlArea, self, "Save", callback=self.savecurrent,
@@ -103,13 +104,11 @@ class OWSaveClassifier(widget.OWWidget):
     def browse(self):
         """Select a filename using a Save file dialog."""
         if self.filename is None:
-            startdir = QtGui.QDesktopServices.storageLocation(
-                QtGui.QDesktopServices.DocumentsLocation
-            )
+            startdir = stdpaths.Documents
         else:
             startdir = os.path.dirname(self.filename)
 
-        filename = QtGui.QFileDialog.getSaveFileName(
+        filename, _ = QFileDialog.getSaveFileName(
             self, self.tr("Save"), directory=startdir, filter=self.FILTER
         )
         if filename:
@@ -141,7 +140,7 @@ class OWSaveClassifier(widget.OWWidget):
 
 
 def main():
-    app = QtGui.QApplication([])
+    app = QApplication([])
     w = OWSaveClassifier()
     w.show()
     return app.exec_()

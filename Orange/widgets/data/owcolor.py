@@ -1,6 +1,8 @@
-from PyQt4.QtCore import Qt, QAbstractTableModel
-from PyQt4.QtGui import QStyledItemDelegate, QColor, QHeaderView, QFont, \
-    QColorDialog, QTableView, qRgb, QImage
+from AnyQt.QtCore import Qt, QAbstractTableModel
+from AnyQt.QtGui import QColor, QFont, QImage, qRgb
+from AnyQt.QtWidgets import (
+    QStyledItemDelegate, QHeaderView, QColorDialog, QTableView
+)
 import numpy as np
 
 import Orange
@@ -384,8 +386,8 @@ class OWColor(widget.OWWidget):
 
 
 if __name__ == "__main__":
-    from PyQt4 import QtGui
-    a = QtGui.QApplication([])
+    from AnyQt.QtWidgets import QApplication
+    a = QApplication([])
     ow = OWColor()
     ow.set_data(Orange.data.Table("heart_disease.tab"))
     ow.show()

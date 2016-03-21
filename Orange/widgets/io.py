@@ -1,5 +1,5 @@
-from PyQt4 import QtGui, QtCore, QtSvg
-from PyQt4.QtGui import QGraphicsScene, QGraphicsView, QWidget
+from AnyQt import QtGui, QtCore, QtSvg
+from AnyQt.QtWidgets import QGraphicsScene, QGraphicsView, QWidget
 
 from Orange.util import abstract
 from Orange.data.io import FileFormat

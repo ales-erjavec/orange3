@@ -1,7 +1,7 @@
 import numpy as np
 from itertools import chain
-from PyQt4 import QtGui
-from PyQt4.QtCore import Qt
+from AnyQt import QtWidgets
+from AnyQt.QtCore import Qt
 
 from Orange.data import Table, Domain, ContinuousVariable, StringVariable
 from Orange.classification import logistic_regression as lr
@@ -148,7 +148,7 @@ def create_coef_table(classifier):
 
 
 if __name__ == "__main__":
-    app = QtGui.QApplication([])
+    app = QtWidgets.QApplication([])
     w = OWLogisticRegression()
     w.set_data(Table("zoo"))
     w.show()

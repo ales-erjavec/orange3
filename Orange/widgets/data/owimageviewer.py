@@ -13,18 +13,19 @@ from itertools import zip_longest
 
 import numpy
 
-from PyQt4.QtGui import (
+from AnyQt.QtWidgets import (
     QGraphicsScene, QGraphicsView, QGraphicsWidget, QGraphicsItem,
     QGraphicsTextItem, QGraphicsRectItem, QGraphicsLinearLayout,
-    QGraphicsGridLayout, QSizePolicy, QPixmap, QPen, QBrush, QColor,
-    QPainter, QPainterPath, QApplication, QImageReader
+    QGraphicsGridLayout, QSizePolicy, QApplication
 )
-from PyQt4.QtCore import (
+from AnyQt.QtGui import (
+    QPixmap, QPen, QBrush, QColor, QPainter, QPainterPath, QImageReader
+)
+from AnyQt.QtCore import (
     Qt, QObject, QEvent, QThread, QSizeF, QRectF, QPointF, QUrl, QDir
 )
-
-from PyQt4.QtCore import pyqtSignal as Signal
-from PyQt4.QtNetwork import (
+from AnyQt.QtCore import pyqtSignal as Signal
+from AnyQt.QtNetwork import (
     QNetworkAccessManager, QNetworkDiskCache, QNetworkRequest, QNetworkReply
 )
 

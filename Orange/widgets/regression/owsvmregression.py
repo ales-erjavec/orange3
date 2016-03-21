@@ -1,8 +1,7 @@
 from collections import OrderedDict
 
-from PyQt4 import QtGui
-from PyQt4.QtGui import QLabel
-from PyQt4.QtCore import Qt
+from AnyQt.QtWidgets import QLabel, QGridLayout
+from AnyQt.QtCore import Qt
 
 from Orange.data import Table
 from Orange.regression import SVRLearner, NuSVRLearner, SklModel
@@ -49,14 +48,14 @@ class OWSVMRegression(SVMBaseMixin, widget.OWWidget):
         self.apply()
 
     def _add_type_box(self):
-        form = QtGui.QGridLayout()
+        form = QGridLayout()
         self.type_box = box = gui.radioButtonsInBox(
                 self.controlArea, self, "svrtype", [], box="SVR Type",
                 orientation=form)
 
         form.addWidget(gui.appendRadioButton(box, "ε-SVR", addToLayout=False),
                        0, 0, Qt.AlignLeft)
-        form.addWidget(QtGui.QLabel("Cost (C)"),
+        form.addWidget(QLabel("Cost (C)"),
                        0, 1, Qt.AlignRight)
         form.addWidget(gui.doubleSpin(box, self, "epsilon_C", 0.1, 512.0, 0.1,
                                       decimals=2, addToLayout=False),
@@ -139,7 +138,7 @@ class OWSVMRegression(SVMBaseMixin, widget.OWWidget):
 
 if __name__ == "__main__":
     import sys
-    from PyQt4.QtGui import QApplication
+    from AnyQt.QtWidgets import QApplication
 
     a = QApplication(sys.argv)
     ow = OWSVMRegression()

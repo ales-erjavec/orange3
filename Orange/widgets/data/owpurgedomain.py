@@ -1,5 +1,3 @@
-from PyQt4 import QtGui
-
 from Orange.data import Table
 from Orange.preprocess.remove import Remove
 from Orange.widgets import gui, widget
@@ -138,7 +136,8 @@ class OWPurgeDomain(widget.OWWidget):
 
 
 if __name__ == "__main__":
-    appl = QtGui.QApplication([])
+    from AnyQt.QtWidgets import QApplication
+    appl = QApplication([])
     ow = OWPurgeDomain()
     data = Table("car.tab")
     subset = [inst for inst in data

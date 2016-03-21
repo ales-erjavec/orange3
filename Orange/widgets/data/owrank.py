@@ -10,8 +10,11 @@ from collections import namedtuple
 
 import numpy as np
 
-from PyQt4 import QtGui
-from PyQt4.QtCore import Qt
+from AnyQt.QtWidgets import (
+    QTableView, QRadioButton, QButtonGroup, QGridLayout, QStackedLayout)
+from AnyQt.QtGui import QStandardItemModel, QStandardItem
+from AnyQt.QtCore import (
+    Qt, QItemSelection, QItemSelectionModel, QSortFilterProxyModel)
 
 import Orange
 from Orange.base import Learner
@@ -92,13 +95,13 @@ class OWRank(widget.OWWidget):
         selMethBox = gui.widgetBox(
             self.controlArea, "Select attributes", addSpace=True)
 
-        grid = QtGui.QGridLayout()
+        grid = QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
-        self.selectButtons = QtGui.QButtonGroup()
+        self.selectButtons = QButtonGroup()
         self.selectButtons.buttonClicked[int].connect(self.setSelectMethod)
 
         def button(text, buttonid, toolTip=None):
-            b = QtGui.QRadioButton(text)
+            b = QRadioButton(text)
             self.selectButtons.addButton(b, buttonid)
             if toolTip is not None:
                 b.setToolTip(toolTip)
@@ -128,17 +131,17 @@ class OWRank(widget.OWWidget):
         gui.rubber(self.controlArea)
 
         # Discrete and continuous table views are stacked
-        self.ranksViewStack = QtGui.QStackedLayout()
+        self.ranksViewStack = QStackedLayout()
         self.mainArea.layout().addLayout(self.ranksViewStack)
 
-        self.discRanksView = QtGui.QTableView()
+        self.discRanksView = QTableView()
         self.ranksViewStack.addWidget(self.discRanksView)
-        self.discRanksView.setSelectionBehavior(QtGui.QTableView.SelectRows)
-        self.discRanksView.setSelectionMode(QtGui.QTableView.MultiSelection)
+        self.discRanksView.setSelectionBehavior(QTableView.SelectRows)
+        self.discRanksView.setSelectionMode(QTableView.MultiSelection)
         self.discRanksView.setSortingEnabled(True)
 
         self.discRanksLabels = ["#"] + [m.shortname for m in self.discMeasures]
-        self.discRanksModel = QtGui.QStandardItemModel(self)
+        self.discRanksModel = QStandardItemModel(self)
         self.discRanksModel.setHorizontalHeaderLabels(self.discRanksLabels)
 
         self.discRanksProxyModel = MySortProxyModel(self)
@@ -160,14 +163,14 @@ class OWRank(widget.OWWidget):
             self.headerState[0]
         )
 
-        self.contRanksView = QtGui.QTableView()
+        self.contRanksView = QTableView()
         self.ranksViewStack.addWidget(self.contRanksView)
-        self.contRanksView.setSelectionBehavior(QtGui.QTableView.SelectRows)
-        self.contRanksView.setSelectionMode(QtGui.QTableView.MultiSelection)
+        self.contRanksView.setSelectionBehavior(QTableView.SelectRows)
+        self.contRanksView.setSelectionMode(QTableView.MultiSelection)
         self.contRanksView.setSortingEnabled(True)
 
         self.contRanksLabels = ["#"] + [m.shortname for m in self.contMeasures]
-        self.contRanksModel = QtGui.QStandardItemModel(self)
+        self.contRanksModel = QStandardItemModel(self)
         self.contRanksModel.setHorizontalHeaderLabels(self.contRanksLabels)
 
         self.contRanksProxyModel = MySortProxyModel(self)
@@ -252,7 +255,7 @@ class OWRank(widget.OWWidget):
                 item = ScoreValueItem()
                 item.setData(v, Qt.DisplayRole)
                 self.ranksModel.setItem(i, 0, item)
-                item = QtGui.QStandardItem(a.name)
+                item = QStandardItem(a.name)
                 item.setData(gui.attributeIconDict[a], Qt.DecorationRole)
                 self.ranksModel.setVerticalHeaderItem(i, item)
 
@@ -402,24 +405,23 @@ class OWRank(widget.OWWidget):
         model = self.ranksProxyModel
 
         if self.selectMethod == OWRank.SelectNone:
-            selection = QtGui.QItemSelection()
+            selection = QItemSelection()
         elif self.selectMethod == OWRank.SelectAll:
-            selection = QtGui.QItemSelection(
+            selection = QItemSelection(
                 model.index(0, 0),
                 model.index(rowCount - 1, columnCount - 1)
             )
-            selModel.select(selection,
-                            QtGui.QItemSelectionModel.ClearAndSelect)
+            selModel.select(selection, QItemSelectionModel.ClearAndSelect)
         elif self.selectMethod == OWRank.SelectNBest:
             nSelected = min(self.nSelected, rowCount)
-            selection = QtGui.QItemSelection(
+            selection = QItemSelection(
                 model.index(0, 0),
                 model.index(nSelected - 1, columnCount - 1)
             )
         else:
-            selection = QtGui.QItemSelection()
+            selection = QItemSelection()
 
-        selModel.select(selection, QtGui.QItemSelectionModel.ClearAndSelect)
+        selModel.select(selection, QItemSelectionModel.ClearAndSelect)
 
     def headerClick(self, index):
         if index >= 1 and self.selectMethod == OWRank.SelectNBest:
@@ -512,7 +514,7 @@ class OWRank(widget.OWWidget):
         return table
 
 
-class ScoreValueItem(QtGui.QStandardItem):
+class ScoreValueItem(QStandardItem):
     """A StandardItem subclass for python objects.
     """
     def __init__(self, *args):
@@ -532,7 +534,7 @@ class ScoreValueItem(QtGui.QStandardItem):
         return my < other
 
 
-class MySortProxyModel(QtGui.QSortFilterProxyModel):
+class MySortProxyModel(QSortFilterProxyModel):
     def lessThan(self, left, right):
         role = self.sortRole()
         left_data = left.data(role)
@@ -544,7 +546,8 @@ class MySortProxyModel(QtGui.QSortFilterProxyModel):
 
 
 if __name__ == "__main__":
-    a = QtGui.QApplication([])
+    from AnyQt.QtWidgets import QApplication
+    a = QApplication([])
     ow = OWRank()
     ow.setData(Orange.data.Table("wine.tab"))
     ow.setData(Orange.data.Table("zoo.tab"))

@@ -8,9 +8,14 @@ from types import SimpleNamespace as namespace
 import numpy
 import sklearn.metrics
 
-from PyQt4 import QtGui, QtCore
-from PyQt4.QtCore import Qt, QEvent, QRectF, QSizeF
-from PyQt4.QtCore import pyqtSignal as Signal
+from AnyQt.QtWidgets import (
+    QGraphicsScene, QGraphicsView, QGraphicsWidget, QGraphicsGridLayout,
+    QGraphicsProxyWidget, QGraphicsItemGroup, QGraphicsSimpleTextItem,
+    QGraphicsRectItem, QFrame, QSizePolicy
+)
+from AnyQt.QtGui import QColor, QPen, QBrush, QPainter, QFont, QFontMetrics
+from AnyQt.QtCore import Qt, QEvent, QRectF, QSizeF, QSize, QPointF
+from AnyQt.QtCore import pyqtSignal as Signal
 
 import pyqtgraph as pg
 
@@ -94,15 +99,15 @@ class OWSilhouettePlot(widget.OWWidget):
         gui.checkBox(box, self, "add_scores", "Add silhouette scores",)
         gui.auto_commit(box, self, "auto_commit", "Commit", box=False)
 
-        self.scene = QtGui.QGraphicsScene()
-        self.view = QtGui.QGraphicsView(self.scene)
-        self.view.setRenderHint(QtGui.QPainter.Antialiasing, True)
+        self.scene = QGraphicsScene()
+        self.view = QGraphicsView(self.scene)
+        self.view.setRenderHint(QPainter.Antialiasing, True)
         self.view.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.mainArea.layout().addWidget(self.view)
 
     def sizeHint(self):
         sh = self.controlArea.sizeHint()
-        return sh.expandedTo(QtCore.QSize(600, 720))
+        return sh.expandedTo(QSize(600, 720))
 
     @check_sql_input
     def set_data(self, data):
@@ -241,7 +246,7 @@ class OWSilhouettePlot(widget.OWWidget):
             silplot.selectionChanged.connect(self.commit)
 
             self.scene.setSceneRect(
-                QRectF(QtCore.QPointF(0, 0),
+                QRectF(QPointF(0, 0),
                        self._silplot.effectiveSizeHint(Qt.PreferredSize)))
 
     def _update_bar_size(self):
@@ -250,7 +255,7 @@ class OWSilhouettePlot(widget.OWWidget):
             self._silplot.setRowNamesVisible(self.bar_size >= 5)
 
             self.scene.setSceneRect(
-                QRectF(QtCore.QPointF(0, 0),
+                QRectF(QPointF(0, 0),
                        self._silplot.effectiveSizeHint(Qt.PreferredSize)))
 
     def _update_annotations(self):
@@ -316,7 +321,7 @@ class SelectAction(enum.IntEnum):
     NoUpdate, Clear, Select, Deselect, Toogle, Current = 1, 2, 4, 8, 16, 32
 
 
-class SilhouettePlot(QtGui.QGraphicsWidget):
+class SilhouettePlot(QGraphicsWidget):
     """
     A silhouette plot widget.
     """
@@ -332,9 +337,9 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
         self.__selectionRect = None
         self.__selection = numpy.asarray([], dtype=int)
         self.__selstate = None
-        self.__pen = QtGui.QPen(Qt.NoPen)
-        self.__brush = QtGui.QBrush(QtGui.QColor("#3FCFCF"))
-        self.__layout = QtGui.QGraphicsGridLayout()
+        self.__pen = QPen(Qt.NoPen)
+        self.__brush = QBrush(QColor("#3FCFCF"))
+        self.__layout = QGraphicsGridLayout()
         self.__hoveredItem = None
         self.setLayout(self.__layout)
         self.layout().setColumnSpacing(0, 1.)
@@ -466,7 +471,7 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
 
         font = self.font()
         font.setPixelSize(self.__barHeight)
-        axispen = QtGui.QPen(Qt.black)
+        axispen = QPen(Qt.black)
 
         ax = pg.AxisItem(parent=self, orientation="top", maxTickLength=7,
                          pen=axispen)
@@ -484,11 +489,11 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
             self.layout().addItem(silhouettegroup, i + 1, 2)
 
             if group.label:
-                line = QtGui.QFrame(frameShape=QtGui.QFrame.VLine)
-                proxy = QtGui.QGraphicsProxyWidget(self)
+                line = QFrame(frameShape=QFrame.VLine)
+                proxy = QGraphicsProxyWidget(self)
                 proxy.setWidget(line)
                 self.layout().addItem(proxy, i + 1, 1)
-                label = QtGui.QGraphicsSimpleTextItem(self)
+                label = QGraphicsSimpleTextItem(self)
                 label.setText("{} ({})".format(escape(group.label),
                                                len(group.scores)))
                 item = WrapperLayoutItem(label, Qt.Vertical, parent=self)
@@ -496,7 +501,7 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
 
             textlist = TextListWidget(self, font=font)
             sp = textlist.sizePolicy()
-            sp.setVerticalPolicy(QtGui.QSizePolicy.Ignored)
+            sp.setVerticalPolicy(QSizePolicy.Ignored)
             textlist.setSizePolicy(sp)
             textlist.setParent(self)
             if group.rownames is not None:
@@ -532,10 +537,10 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
         # Set the current hovered `item` (:class:`QGraphicsRectItem`)
         if self.__hoveredItem is not item:
             if self.__hoveredItem is not None:
-                self.__hoveredItem.setPen(QtGui.QPen(Qt.NoPen))
+                self.__hoveredItem.setPen(QPen(Qt.NoPen))
             self.__hoveredItem = item
             if item is not None:
-                item.setPen(QtGui.QPen(Qt.lightGray))
+                item.setPen(QPen(Qt.lightGray))
 
     def hoverEnterEvent(self, event):
         # Reimplemented
@@ -579,7 +584,7 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
         if event.buttons() & Qt.LeftButton:
             assert self.__selstate is not None
             if self.__selectionRect is None:
-                self.__selectionRect = QtGui.QGraphicsRectItem(self)
+                self.__selectionRect = QGraphicsRectItem(self)
 
             rect = (QRectF(event.buttonDownPos(Qt.LeftButton),
                            event.pos()).normalized())
@@ -751,13 +756,13 @@ class SilhouettePlot(QtGui.QGraphicsWidget):
         return numpy.asarray(self.__selection, dtype=int)
 
 
-class BarPlotItem(QtGui.QGraphicsWidget):
+class BarPlotItem(QGraphicsWidget):
     def __init__(self, parent=None, **kwargs):
         super().__init__(parent, **kwargs)
         self.__barsize = 5
         self.__spacing = 1
-        self.__pen = QtGui.QPen(Qt.NoPen)
-        self.__brush = QtGui.QBrush(QtGui.QColor("#3FCFCF"))
+        self.__pen = QPen(Qt.NoPen)
+        self.__brush = QBrush(QColor("#3FCFCF"))
         self.__range = (0., 1.)
         self.__data = numpy.array([], dtype=float)
         self.__items = []
@@ -795,24 +800,24 @@ class BarPlotItem(QtGui.QGraphicsWidget):
             self.updateGeometry()
 
     def setPen(self, pen):
-        pen = QtGui.QPen(pen)
+        pen = QPen(pen)
         if self.__pen != pen:
             self.__pen = pen
             for item in self.__items:
                 item.setPen(pen)
 
     def pen(self):
-        return QtGui.QPen(self.__pen)
+        return QPen(self.__pen)
 
     def setBrush(self, brush):
-        brush = QtGui.QBrush(brush)
+        brush = QBrush(brush)
         if self.__brush != brush:
             self.__brush = brush
             for item in self.__items:
                 item.setBrush(brush)
 
     def brush(self):
-        return QtGui.QBrush(self.__brush)
+        return QBrush(self.__brush)
 
     def setPlotData(self, values):
         self.__data = numpy.array(values, copy=True)
@@ -839,7 +844,7 @@ class BarPlotItem(QtGui.QGraphicsWidget):
         pen = self.pen()
         brush = self.brush()
         for i in range(self.count()):
-            item = QtGui.QGraphicsRectItem(self)
+            item = QGraphicsRectItem(self)
             item.setPen(pen)
             item.setBrush(brush)
             self.__items.append(item)
@@ -876,17 +881,17 @@ class BarPlotItem(QtGui.QGraphicsWidget):
 from Orange.widgets.visualize.owheatmap import scaled
 
 
-class TextListWidget(QtGui.QGraphicsWidget):
+class TextListWidget(QGraphicsWidget):
     def __init__(self, parent=None, items=None, **kwargs):
         super().__init__(parent, **kwargs)
-        self.setFlag(QtGui.QGraphicsWidget.ItemClipsChildrenToShape, True)
+        self.setFlag(QGraphicsWidget.ItemClipsChildrenToShape, True)
         self.__items = []
         self.__textitems = []
         self.__group = None
         self.__spacing = 0
 
-        sp = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred,
-                               QtGui.QSizePolicy.Preferred)
+        sp = QSizePolicy(QSizePolicy.Preferred,
+                               QSizePolicy.Preferred)
         sp.setWidthForHeight(True)
         self.setSizePolicy(sp)
 
@@ -915,7 +920,7 @@ class TextListWidget(QtGui.QGraphicsWidget):
         return super().sizeHint(which, constraint)
 
     def __naturalsh(self):
-        fm = QtGui.QFontMetrics(self.font())
+        fm = QFontMetrics(self.font())
         spacing = self.__spacing
         N = len(self.__items)
         width = max((fm.width(text) for text in self.__items),
@@ -941,10 +946,10 @@ class TextListWidget(QtGui.QGraphicsWidget):
     def __setup(self):
         self.__clear()
         font = self.font()
-        group = QtGui.QGraphicsItemGroup(self)
+        group = QGraphicsItemGroup(self)
 
         for text in self.__items:
-            t = QtGui.QGraphicsSimpleTextItem(text, group)
+            t = QGraphicsSimpleTextItem(text, group)
             t.setData(0, text)
             t.setFont(font)
             t.setToolTip(text)
@@ -958,7 +963,7 @@ class TextListWidget(QtGui.QGraphicsWidget):
         if not N:
             return
 
-        fm = QtGui.QFontMetrics(self.font())
+        fm = QFontMetrics(self.font())
         naturalheight = fm.height()
         th = (crect.height() - (N - 1) * spacing) / N
         if th > naturalheight:
@@ -983,7 +988,8 @@ class TextListWidget(QtGui.QGraphicsWidget):
 
 
 def main(argv=sys.argv):
-    app = QtGui.QApplication(list(argv))
+    from AnyQt.QtWidgets import QApplication
+    app = QApplication(list(argv))
     argv = app.arguments()
     if len(argv) > 1:
         filename = argv[1]

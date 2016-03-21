@@ -1,7 +1,7 @@
 from itertools import chain
 import numpy as np
-from PyQt4.QtGui import QLayout
-from PyQt4.QtCore import Qt
+from AnyQt.QtWidgets import QLayout
+from AnyQt.QtCore import Qt
 
 from Orange.data import Table, Domain, ContinuousVariable, StringVariable
 from Orange.regression.linear import (
@@ -194,7 +194,7 @@ class OWLinearRegression(OWProvidesLearner, widget.OWWidget):
 
 if __name__ == "__main__":
     import sys
-    from PyQt4.QtGui import QApplication
+    from AnyQt.QtWidgets import QApplication
 
     a = QApplication(sys.argv)
     ow = OWLinearRegression()

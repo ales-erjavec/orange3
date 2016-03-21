@@ -82,7 +82,7 @@ class OWKNNLearner(OWProvidesLearner, widget.OWWidget):
 
 if __name__ == "__main__":
     import sys
-    from PyQt4.QtGui import QApplication
+    from AnyQt.QtWidgest import QApplication
 
     a = QApplication(sys.argv)
     ow = OWKNNLearner()

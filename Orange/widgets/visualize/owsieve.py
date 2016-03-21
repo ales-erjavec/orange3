@@ -2,9 +2,9 @@ from collections import defaultdict
 from itertools import product, chain
 from math import sqrt, floor, ceil
 
-from PyQt4.QtCore import Qt, QSize
-from PyQt4.QtGui import (QGraphicsScene, QGraphicsView, QColor, QPen, QBrush,
-                         QDialog, QApplication, QSizePolicy)
+from AnyQt.QtCore import Qt, QSize
+from AnyQt.QtGui import QColor, QPen, QBrush
+from AnyQt.QtWidgets import QGraphicsScene, QGraphicsView, QDialog, QSizePolicy
 
 import Orange
 from Orange.data import Table, filter
@@ -419,6 +419,7 @@ class OWSieveDiagram(OWWidget):
 
 # test widget appearance
 if __name__=="__main__":
+    from AnyQt.QtWidgets import QApplication
     import sys
     a=QApplication(sys.argv)
     ow=OWSieveDiagram()

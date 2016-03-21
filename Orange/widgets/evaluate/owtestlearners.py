@@ -6,12 +6,10 @@ from collections import OrderedDict, namedtuple
 
 import numpy as np
 
-from PyQt4 import QtGui
-from PyQt4.QtGui import (
-    QTreeView, QStandardItemModel, QStandardItem, QHeaderView,
-    QStyledItemDelegate
-)
-from PyQt4.QtCore import Qt, QSize
+from AnyQt import QtGui
+from AnyQt.QtWidgets import QTreeView,QHeaderView, QStyledItemDelegate
+from AnyQt.QtGui import QStandardItemModel, QStandardItem
+from AnyQt.QtCore import Qt, QSize
 
 from Orange.data import Table
 from Orange.data.sql.table import SqlTable, AUTO_DL_LIMIT
@@ -209,7 +207,7 @@ class OWTestLearners(widget.OWWidget):
             editTriggers=QTreeView.NoEditTriggers
         )
         header = self.view.header()
-        header.setResizeMode(QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
         header.setDefaultAlignment(Qt.AlignCenter)
         header.setStretchLastSection(False)
 
@@ -690,10 +688,11 @@ def results_one_vs_rest(results, pos_index):
 
 
 def main(argv=None):
+    from AnyQt.QtWidgets import QApplication
     if argv is None:
         argv = sys.argv
     argv = list(argv)
-    app = QtGui.QApplication(argv)
+    app = QApplication(argv)
     if len(argv) > 1:
         filename = argv[1]
     else:

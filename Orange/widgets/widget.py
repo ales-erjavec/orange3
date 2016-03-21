@@ -6,11 +6,16 @@ import warnings
 import types
 from functools import reduce
 
-from PyQt4.QtCore import QByteArray, Qt, pyqtSignal as Signal, pyqtProperty,\
-    QEventLoop, QSettings, QUrl
-from PyQt4.QtGui import QDialog, QPixmap, QLabel, QVBoxLayout, QSizePolicy, \
-    qApp, QFrame, QStatusBar, QHBoxLayout, QStyle, QIcon, QApplication, \
-    QShortcut, QKeySequence, QDesktopServices, QSplitter, QSplitterHandle
+from AnyQt.QtWidgets import (
+    QDialog, QLabel, QVBoxLayout, QSizePolicy, QApplication, QFrame,
+    QStatusBar, QHBoxLayout, QStyle, QShortcut, QSplitter, QSplitterHandle
+)
+
+from AnyQt.QtCore import (
+    Qt, QByteArray,QEventLoop, QSettings, QUrl, Signal, Property
+)
+
+from AnyQt.QtGui import QPixmap, QIcon, QKeySequence, QDesktopServices
 
 from Orange.data import FileFormat
 from Orange.widgets import settings, gui
@@ -336,7 +341,7 @@ class OWWidget(QDialog, Report, metaclass=WidgetMetaClass):
 
             if restored and not self.windowState() & \
                     (Qt.WindowMaximized | Qt.WindowFullScreen):
-                space = qApp.desktop().availableGeometry(self)
+                space = QApplication.desktop().availableGeometry(self)
                 frame, geometry = self.frameGeometry(), self.geometry()
 
                 #Fix the widget size to fit inside the available space
@@ -554,15 +559,15 @@ class OWWidget(QDialog, Report, metaclass=WidgetMetaClass):
             self.progressBarValueChanged.emit(value)
 
         if processEvents is not None and processEvents is not False:
-            qApp.processEvents(processEvents)
+            QApplication.processEvents(processEvents)
 
     def progressBarValue(self):
         return self.__progressBarValue
 
-    progressBarValue = pyqtProperty(float, fset=progressBarSet,
-                                    fget=progressBarValue)
+    progressBarValue = Property(float, fset=progressBarSet,
+                                fget=progressBarValue)
 
-    processingState = pyqtProperty(int, fget=lambda self: self.__progressState)
+    processingState = Property(int, fget=lambda self: self.__progressState)
 
     def progressBarAdvance(self, value, processEvents=QEventLoop.AllEvents):
         self.progressBarSet(self.progressBarValue + value, processEvents)
@@ -585,7 +590,7 @@ class OWWidget(QDialog, Report, metaclass=WidgetMetaClass):
             self.processingStateChanged.emit(0)
 
         if processEvents is not None and processEvents is not False:
-            qApp.processEvents(processEvents)
+            QApplication.processEvents(processEvents)
 
     @contextlib.contextmanager
     def progressBar(self, iterations=0):

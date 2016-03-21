@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from PyQt4 import QtGui
-from PyQt4.QtGui import QLabel, QGridLayout
-from PyQt4.QtCore import Qt
+from AnyQt.QtWidgets import QLabel, QGridLayout
+from AnyQt.QtCore import Qt
 
 from Orange.data import Table
 from Orange.classification.random_forest import (RandomForestLearner,
@@ -185,7 +184,8 @@ class OWRandomForest(OWProvidesLearner, widget.OWWidget):
 
 
 if __name__ == "__main__":
-    app = QtGui.QApplication([])
+    from AnyQt.QtWidgets import QApplication
+    app = QApplication([])
     w = OWRandomForest()
     w.set_data(Table("iris"))
     w.show()

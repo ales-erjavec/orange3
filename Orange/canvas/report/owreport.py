@@ -2,10 +2,14 @@ import os
 import pkg_resources
 import pickle
 from enum import IntEnum
-from PyQt4.QtCore import Qt, pyqtSlot
-from PyQt4.QtGui import (QApplication, QDialog, QPrinter, QIcon, QCursor,
-                         QPrintDialog, QFileDialog, QTableView,
-                         QStandardItemModel, QStandardItem, QHeaderView)
+
+from AnyQt.QtCore import Qt, pyqtSlot
+from AnyQt.QtGui import QIcon, QCursor, QStandardItemModel, QStandardItem
+from AnyQt.QtWidgets import (
+    QApplication, QDialog, QFileDialog, QTableView, QHeaderView
+)
+from AnyQt.QtPrintSupport import QPrinter, QPrintDialog
+
 from Orange.widgets import gui
 from Orange.widgets.widget import OWWidget
 from Orange.widgets.settings import Setting
@@ -121,7 +125,7 @@ class OWReport(OWWidget):
         self.table.setSelectionMode(QTableView.SingleSelection)
         self.table.setWordWrap(False)
         self.table.setMouseTracking(True)
-        self.table.verticalHeader().setResizeMode(QHeaderView.Fixed)
+        self.table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
         self.table.verticalHeader().setDefaultSectionSize(20)
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setVisible(False)
@@ -261,7 +265,7 @@ class OWReport(OWWidget):
                 canvas.load_scheme_xml(self.last_scheme)
 
     def _save_report(self):
-        filename = QFileDialog.getSaveFileName(
+        filename, _ = QFileDialog.getSaveFileName(
             self, "Save Report", self.save_dir,
             "HTML (*.html);;PDF (*.pdf);;Report (*.report)")
         if not filename:
@@ -293,7 +297,7 @@ class OWReport(OWWidget):
         self.report_view.print_(printer)
 
     def open_report(self):
-        filename = QFileDialog.getOpenFileName(
+        filename, _ = QFileDialog.getOpenFileName(
             self, "Open Report", self.open_dir, "Report (*.report)")
         if not filename:
             return

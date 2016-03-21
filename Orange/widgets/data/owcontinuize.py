@@ -1,4 +1,4 @@
-from PyQt4 import QtGui
+from AnyQt import QtWidgets
 
 import Orange.data
 from Orange.statistics import distribution
@@ -380,7 +380,7 @@ class DomainContinuizer:
 
 if __name__ == "__main__":
     import sys
-    a = QtGui.QApplication(sys.argv)
+    a = QtWidgets.QApplication(sys.argv)
     ow = OWContinuize()
     data = Table("lenses")
     ow.setData(data)

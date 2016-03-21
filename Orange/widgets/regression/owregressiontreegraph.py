@@ -1,4 +1,4 @@
-from PyQt4.QtGui import QBrush
+from AnyQt.QtGui import QBrush
 from Orange.regression.tree import TreeRegressor
 from Orange.widgets import gui
 from Orange.widgets.settings import Setting, ClassValuesContextHandler
@@ -94,7 +94,7 @@ class OWRegressionTreeGraph(OWTreeGraph):
 
 if __name__ == "__main__":
     import sys
-    from PyQt4.QtGui import QApplication
+    from AnyQt.QtWidgets import QApplication
     from Orange.data import Table
     from Orange.regression.tree import TreeRegressionLearner
 

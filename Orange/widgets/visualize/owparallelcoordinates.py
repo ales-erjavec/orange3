@@ -1,7 +1,5 @@
 import sys
 
-from PyQt4.QtGui import QApplication
-
 from Orange.canvas.registry.description import Default
 import Orange.data
 from Orange.data import Table
@@ -210,6 +208,7 @@ class OWParallelCoordinates(OWVisWidget):
 
 #test widget appearance
 if __name__ == "__main__":
+    from AnyQt.QtWidgets import QApplication
     a = QApplication(sys.argv)
     ow = OWParallelCoordinates()
     ow.show()

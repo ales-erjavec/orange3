@@ -2,10 +2,14 @@ from bisect import bisect_left
 import sys
 
 import numpy as np
-from PyQt4.QtCore import QSize, Qt, QTimer
-from PyQt4 import QtGui
-from PyQt4.QtGui import QApplication, QTableView, QStandardItemModel, \
-    QStandardItem
+
+from AnyQt.QtCore import QSize, Qt, QTimer
+from AnyQt.QtGui import (
+    QPen, QFont, QFontInfo, QPalette, QKeySequence,
+    QStandardItemModel, QStandardItem
+)
+from AnyQt.QtWidgets import QApplication, QTableView, QAction
+
 from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics import r2_score
 
@@ -24,8 +28,8 @@ from Orange.widgets.widget import OWWidget, Default, AttributeList
 
 
 def font_resize(font, factor, minsize=None, maxsize=None):
-    font = QtGui.QFont(font)
-    fontinfo = QtGui.QFontInfo(font)
+    font = QFont(font)
+    fontinfo = QFontInfo(font)
     size = fontinfo.pointSizeF() * factor
 
     if minsize is not None:
@@ -73,7 +77,7 @@ class OWScatterPlot(OWWidget):
         box.layout().addWidget(self.graph.plot_widget)
         plot = self.graph.plot_widget
 
-        axispen = QtGui.QPen(self.palette().color(QtGui.QPalette.Text))
+        axispen = QPen(self.palette().color(QPalette.Text))
         axis = plot.getAxis("bottom")
         axis.setPen(axispen)
 
@@ -180,18 +184,18 @@ class OWScatterPlot(OWWidget):
             viewbox = plot.getViewBox()
             viewbox.autoRange()
 
-        zoom_in = QtGui.QAction(
+        zoom_in = QAction(
             "Zoom in", self, triggered=lambda: zoom(1.25)
         )
-        zoom_in.setShortcuts([QtGui.QKeySequence(QtGui.QKeySequence.ZoomIn),
-                              QtGui.QKeySequence(self.tr("Ctrl+="))])
-        zoom_out = QtGui.QAction(
-            "Zoom out", self, shortcut=QtGui.QKeySequence.ZoomOut,
+        zoom_in.setShortcuts([QKeySequence(QKeySequence.ZoomIn),
+                              QKeySequence(self.tr("Ctrl+="))])
+        zoom_out = QAction(
+            "Zoom out", self, shortcut=QKeySequence.ZoomOut,
             triggered=lambda: zoom(1 / 1.25)
         )
-        zoom_fit = QtGui.QAction(
+        zoom_fit = QAction(
             "Fit in view", self,
-            shortcut=QtGui.QKeySequence(Qt.ControlModifier | Qt.Key_0),
+            shortcut=QKeySequence(Qt.ControlModifier | Qt.Key_0),
             triggered=fit_to_view
         )
         self.addActions([zoom_in, zoom_out, zoom_fit])

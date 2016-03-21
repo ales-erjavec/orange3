@@ -1,5 +1,5 @@
 from unittest import TestCase
-from PyQt4.QtGui import QApplication
+from AnyQt.QtWidgets import QApplication
 from Orange.widgets.gui import CONTROLLED_ATTRIBUTES, ATTRIBUTE_CONTROLLERS, OWComponent
 from Orange.widgets.widget import OWWidget
 

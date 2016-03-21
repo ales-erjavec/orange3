@@ -2,9 +2,11 @@ from collections import OrderedDict
 import sys
 
 import psycopg2
-from PyQt4 import QtGui
-from PyQt4.QtCore import Qt, QTimer
-from PyQt4.QtGui import QApplication, QCursor, QMessageBox
+
+from AnyQt.QtWidgets import (
+    QLineEdit, QComboBox, QTextEdit, QMessageBox, QSizePolicy,QApplication)
+from AnyQt.QtGui import QCursor
+from AnyQt.QtCore import Qt, QTimer
 
 from Orange.data import Table
 from Orange.data.sql.table import SqlTable, LARGE_TABLE, AUTO_DL_LIMIT
@@ -60,14 +62,14 @@ class OWSql(widget.OWWidget):
 
         vbox = gui.widgetBox(self.controlArea, "Server", addSpace=True)
         box = gui.widgetBox(vbox)
-        self.servertext = QtGui.QLineEdit(box)
+        self.servertext = QLineEdit(box)
         self.servertext.setPlaceholderText('Server')
         self.servertext.setToolTip('Server')
         if self.host:
             self.servertext.setText(self.host if not self.port else
                                     '{}:{}'.format(self.host, self.port))
         box.layout().addWidget(self.servertext)
-        self.databasetext = QtGui.QLineEdit(box)
+        self.databasetext = QLineEdit(box)
         self.databasetext.setPlaceholderText('Database[/Schema]')
         self.databasetext.setToolTip('Database or optionally Database/Schema')
         if self.database:
@@ -75,25 +77,25 @@ class OWSql(widget.OWWidget):
                 self.database if not self.schema else
                 '{}/{}'.format(self.database, self.schema))
         box.layout().addWidget(self.databasetext)
-        self.usernametext = QtGui.QLineEdit(box)
+        self.usernametext = QLineEdit(box)
         self.usernametext.setPlaceholderText('Username')
         self.usernametext.setToolTip('Username')
         if self.username:
             self.usernametext.setText(self.username)
         box.layout().addWidget(self.usernametext)
-        self.passwordtext = QtGui.QLineEdit(box)
+        self.passwordtext = QLineEdit(box)
         self.passwordtext.setPlaceholderText('Password')
         self.passwordtext.setToolTip('Password')
-        self.passwordtext.setEchoMode(QtGui.QLineEdit.Password)
+        self.passwordtext.setEchoMode(QLineEdit.Password)
         if self.password:
             self.passwordtext.setText(self.password)
         box.layout().addWidget(self.passwordtext)
 
         tables = gui.widgetBox(box, orientation='horizontal')
-        self.tablecombo = QtGui.QComboBox(
+        self.tablecombo = QComboBox(
             tables,
             minimumContentsLength=35,
-            sizeAdjustPolicy=QtGui.QComboBox.AdjustToMinimumContentsLength
+            sizeAdjustPolicy=QComboBox.AdjustToMinimumContentsLength
         )
         self.tablecombo.setToolTip('table')
         tables.layout().addWidget(self.tablecombo)
@@ -101,12 +103,12 @@ class OWSql(widget.OWWidget):
         self.connectbutton = gui.button(
             tables, self, '↻', callback=self.connect)
         self.connectbutton.setSizePolicy(
-            QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
+            QSizePolicy.Fixed, QSizePolicy.Fixed)
         tables.layout().addWidget(self.connectbutton)
 
         self.custom_sql = gui.widgetBox(box, orientation='vertical')
         self.custom_sql.setVisible(False)
-        self.sqltext = QtGui.QTextEdit(self.custom_sql)
+        self.sqltext = QTextEdit(self.custom_sql)
         self.sqltext.setPlainText(self.sql)
         self.custom_sql.layout().addWidget(self.sqltext)
 
@@ -329,7 +331,7 @@ class OWSql(widget.OWWidget):
 if __name__ == "__main__":
     import os
 
-    a = QtGui.QApplication(sys.argv)
+    a = QApplication(sys.argv)
     ow = OWSql()
     ow.show()
     a.exec_()

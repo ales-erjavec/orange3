@@ -4,7 +4,13 @@ import numpy
 
 from sklearn.tree._tree import TREE_LEAF
 
-from Orange.widgets.classify.owtreeviewer2d import *
+from AnyQt.QtWidgets import \
+    QGraphicsView, QGraphicsRectItem, QGraphicsTextItem, QSizePolicy, QStyle
+from AnyQt.QtGui import QColor, QBrush, QPen, QFontMetrics
+from AnyQt.QtCore import Qt, QPointF, QSizeF, QRectF
+
+from Orange.widgets.classify.owtreeviewer2d import \
+    OWTreeViewer2D, TreeGraphicsScene, TreeGraphicsView, GraphicsNode, GraphicsEdge
 
 from Orange.data import Table
 from Orange.classification.tree import TreeClassifier
@@ -506,6 +512,7 @@ class OWClassificationTreeGraph(OWTreeGraph):
 
 
 if __name__ == "__main__":
+    from AnyQt.QtWidgets import QApplication
     from Orange.classification.tree import TreeLearner
     a = QApplication(sys.argv)
     ow = OWClassificationTreeGraph()

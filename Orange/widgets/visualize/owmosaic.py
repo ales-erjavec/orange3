@@ -6,13 +6,13 @@ from itertools import product, chain
 from math import sqrt
 
 import numpy
-from PyQt4.QtCore import QPoint, Qt, QRectF
-from PyQt4.QtGui import (QGraphicsRectItem, QGraphicsView, QColor,
-                         QGraphicsScene, QPainter, QIcon, QDialog, QPen,
-                         QVBoxLayout, QListWidget, QSizePolicy, QApplication,
-                         QGraphicsTextItem, QBrush, QGraphicsLineItem,
-                         QGraphicsEllipseItem)
-
+from AnyQt.QtCore import QPoint, Qt, QRectF
+from AnyQt.QtGui import QColor, QPainter, QIcon, QPen, QBrush
+from AnyQt.QtWidgets import (
+    QDialog, QListWidget, QVBoxLayout, QSizePolicy, QGraphicsView,
+    QGraphicsScene, QGraphicsTextItem, QGraphicsLineItem, QGraphicsRectItem,
+    QGraphicsEllipseItem, QApplication
+)
 from Orange.data import Table, filter
 from Orange.data.sql.table import SqlTable, LARGE_TABLE, DEFAULT_SAMPLE_TIME
 from Orange.statistics.distribution import get_distribution

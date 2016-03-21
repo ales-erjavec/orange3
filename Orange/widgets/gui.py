@@ -7,9 +7,14 @@ from types import LambdaType
 import pkg_resources
 import numpy
 
-from PyQt4 import QtGui, QtCore, QtWebKit
-from PyQt4.QtCore import Qt, pyqtSignal as Signal
-from PyQt4.QtGui import QCursor, QApplication
+from AnyQt import QtWidgets, QtCore, QtGui, QtWebKitWidgets
+from AnyQt.QtCore import Qt, Signal, Slot
+from AnyQt.QtGui import QCursor
+from AnyQt.QtWidgets import (
+    QApplication, QStyle, QSizePolicy, QWidget, QLabel, QGroupBox, QSlider,
+    QComboBox, QLineEdit, QVBoxLayout, QHBoxLayout,
+    QTableWidget, QTableWidgetItem, QItemDelegate, QStyledItemDelegate
+)
 
 import Orange.data
 from Orange.widgets.utils import getdeepattr
@@ -36,19 +41,19 @@ def resource_filename(path):
     return pkg_resources.resource_filename(__name__, path)
 
 
-class TableWidget(QtGui.QTableWidget):
+class TableWidget(QTableWidget):
     """ An easy to use, row-oriented table widget """
 
-    ROW_DATA_ROLE = QtCore.Qt.UserRole + 1
+    ROW_DATA_ROLE = Qt.UserRole + 1
     ITEM_DATA_ROLE = ROW_DATA_ROLE + 1
 
-    class TableWidgetNumericItem(QtGui.QTableWidgetItem):
+    class TableWidgetNumericItem(QTableWidgetItem):
         """TableWidgetItem that sorts numbers correctly!"""
         def __lt__(self, other):
             return (self.data(TableWidget.ITEM_DATA_ROLE) <
                     other.data(TableWidget.ITEM_DATA_ROLE))
 
-    def selectionChanged(self, selected:[QtGui.QItemSelectionRange], deselected:[QtGui.QItemSelectionRange]):
+    def selectionChanged(self, selected:[QtCore.QItemSelectionRange], deselected:[QtCore.QItemSelectionRange]):
         """Override or monkey-patch this method to catch selection changes"""
         super().selectionChanged(selected, deselected)
 
@@ -60,7 +65,7 @@ class TableWidget(QtGui.QTableWidget):
         """
         if attr == 'selectionChanged':
             func = value
-            @QtCore.pyqtSlot(QtGui.QItemSelection, QtGui.QItemSelection)
+            @Slot(QtCore.QItemSelection, QtCore.QItemSelection)
             def _f(selected, deselected):
                 super(self.__class__, self).selectionChanged(selected, deselected)
                 func(selected, deselected)
@@ -149,7 +154,7 @@ class TableWidget(QtGui.QTableWidget):
             if isinstance(item_data, (float, int, numpy.number)):
                 item = self.TableWidgetNumericItem(name)
             else:
-                item = QtGui.QTableWidgetItem(name)
+                item = QTableWidgetItem(name)
             item.setData(self.ITEM_DATA_ROLE, item_data)
             if col in self._column_filter:
                 item = self._column_filter[col](item) or item
@@ -185,7 +190,7 @@ class TableWidget(QtGui.QTableWidget):
             self.selectRow(0)
 
     def selectRowsWhere(self, col, value, n_hits=-1,
-                        flags=QtCore.Qt.MatchExactly, _select=True):
+                        flags=Qt.MatchExactly, _select=True):
         """
         Select (also return) at most `n_hits` rows where column `col`
         has value (``data()``) `value`.
@@ -204,7 +209,7 @@ class TableWidget(QtGui.QTableWidget):
         return matches
 
     def deselectRowsWhere(self, col, value, n_hits=-1,
-                          flags=QtCore.Qt.MatchExactly):
+                          flags=Qt.MatchExactly):
         """
         Deselect (also return) at most `n_hits` rows where column `col`
         has value (``data()``) `value`.
@@ -212,7 +217,7 @@ class TableWidget(QtGui.QTableWidget):
         return self.selectRowsWhere(col, value, n_hits, flags, False)
 
 
-class WebviewWidget(QtWebKit.QWebView):
+class WebviewWidget(QtWebKitWidgets.QWebView):
     """WebKit window in a window"""
     def __init__(self, parent=None, bridge=None, html=None, debug=None):
         """
@@ -230,8 +235,8 @@ class WebviewWidget(QtWebKit.QWebView):
             If True, enable context menu and webkit inspector.
         """
         super().__init__(parent)
-        self.setSizePolicy(QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding,
-                                             QtGui.QSizePolicy.Expanding))
+        self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding,
+                                       QSizePolicy.Expanding))
         self._bridge = bridge
         try: parent.layout().addWidget(self)
         except (AttributeError, TypeError): pass
@@ -243,7 +248,7 @@ class WebviewWidget(QtWebKit.QWebView):
         if debug:
             settings.setAttribute(settings.DeveloperExtrasEnabled, True)
         else:
-            self.setContextMenuPolicy(QtCore.Qt.NoContextMenu)
+            self.setContextMenuPolicy(Qt.NoContextMenu)
         if html:
             self.setHtml(html)
 
@@ -385,7 +390,7 @@ def miscellanea(control, box, parent,
     elif box and box is not control and not hasattr(control, "box"):
         control.box = box
     if box and box.layout() is not None and \
-            isinstance(control, QtGui.QWidget) and \
+            isinstance(control, QtWidgets.QWidget) and \
             box.layout().indexOf(control) == -1:
         box.layout().addWidget(control)
     if sizePolicy is not None:
@@ -408,12 +413,12 @@ def setLayout(widget, orientation):
     :param orientation: orientation for the layout
     :type orientation: str or bool or PyQt4.QtGui.QLayout
     """
-    if isinstance(orientation, QtGui.QLayout):
+    if isinstance(orientation, QtWidgets.QLayout):
         widget.setLayout(orientation)
     elif orientation == 'horizontal' or not orientation:
-        widget.setLayout(QtGui.QHBoxLayout())
+        widget.setLayout(QtWidgets.QHBoxLayout())
     else:
-        widget.setLayout(QtGui.QVBoxLayout())
+        widget.setLayout(QtWidgets.QVBoxLayout())
 
 
 def _enterButton(parent, control, placeholder=True):
@@ -440,7 +445,7 @@ def _enterButton(parent, control, placeholder=True):
     if not _enter_icon:
         _enter_icon = QtGui.QIcon(
             os.path.dirname(__file__) + "/icons/Dlg_enter.png")
-    button = QtGui.QPushButton(parent)
+    button = QtWidgets.QPushButton(parent)
     button.setAutoDefault(True)
     button.setDefault(True)
     height = control.sizeHint().height()
@@ -450,7 +455,7 @@ def _enterButton(parent, control, placeholder=True):
         parent.layout().addWidget(button)
     if placeholder:
         button.hide()
-        holder = QtGui.QWidget(parent)
+        holder = QtWidgets.QWidget(parent)
         holder.setFixedSize(height, height)
         if parent.layout() is not None:
             parent.layout().addWidget(holder)
@@ -491,7 +496,7 @@ def separator(widget, width=4, height=4):
     :return: separator
     :rtype: PyQt4.QtGui.QWidget
     """
-    sep = QtGui.QWidget(widget)
+    sep = QtWidgets.QWidget(widget)
     if widget.layout() is not None:
         widget.layout().addWidget(sep)
     sep.setFixedSize(width, height)
@@ -535,13 +540,13 @@ def widgetBox(widget, box=None, orientation='vertical', margin=None, spacing=4,
     :rtype: PyQt4.QtGui.QGroupBox or PyQt4.QtGui.QWidget
     """
     if box:
-        b = QtGui.QGroupBox(widget)
+        b = QtWidgets.QGroupBox(widget)
         if isinstance(box, str):
             b.setTitle(" " + box.strip() + " ")
         if margin is None:
             margin = 7
     else:
-        b = QtGui.QWidget(widget)
+        b = QtWidgets.QWidget(widget)
         b.setContentsMargins(0, 0, 0, 0)
         if margin is None:
             margin = 0
@@ -601,7 +606,7 @@ def widgetLabel(widget, label="", labelWidth=None, **misc):
     :return: Constructed label
     :rtype: PyQt4.QtGui.QLabel
     """
-    lbl = QtGui.QLabel(label, widget)
+    lbl = QtWidgets.QLabel(label, widget)
     if labelWidth:
         lbl.setFixedSize(labelWidth, lbl.sizeHint().height())
     miscellanea(lbl, None, widget, **misc)
@@ -638,7 +643,7 @@ def label(widget, master, label, labelWidth=None, box=None,
     else:
         b = widget
 
-    lbl = QtGui.QLabel("", b)
+    lbl = QtWidgets.QLabel("", b)
     reprint = CallFrontLabel(lbl, label, master)
     for mo in __re_label.finditer(label):
         getattr(master, CONTROLLED_ATTRIBUTES)[mo.group("value")] = reprint
@@ -649,7 +654,7 @@ def label(widget, master, label, labelWidth=None, box=None,
     return lbl
 
 
-class SpinBoxWFocusOut(QtGui.QSpinBox):
+class SpinBoxWFocusOut(QtWidgets.QSpinBox):
     """
     A class derived from QtGui.QSpinBox, which postpones the synchronization
     of the control's value with the master's attribute until the user presses
@@ -736,7 +741,7 @@ class SpinBoxWFocusOut(QtGui.QSpinBox):
         self.inSetValue = False
 
 
-class DoubleSpinBoxWFocusOut(QtGui.QDoubleSpinBox):
+class DoubleSpinBoxWFocusOut(QtWidgets.QDoubleSpinBox):
     """
     Same as :obj:`SpinBoxWFocusOut`, except that it is derived from
     :obj:`~PyQt4.QtGui.QDoubleSpinBox`"""
@@ -827,8 +832,8 @@ def spin(widget, master, value, minv, maxv, step=1, box=None, label=None,
     :type checkCallback: function
     :param posttext: a text that is put to the right of the spin box
     :type posttext: str
-    :param alignment: alignment of the spin box (e.g. `QtCore.Qt.AlignLeft`)
-    :type alignment: PyQt4.QtCore.Qt.Alignment
+    :param alignment: alignment of the spin box (e.g. `Qt.AlignLeft`)
+    :type alignment: Qt.Alignment
     :param keyboardTracking: If `True`, the valueChanged signal is emitted
         when the user is typing (default: True)
     :type keyboardTracking: bool
@@ -974,7 +979,7 @@ def checkBox(widget, master, value, label, box=None,
         b = widgetBox(widget, box, orientation=None, addToLayout=False)
     else:
         b = widget
-    cbox = QtGui.QCheckBox(label, b)
+    cbox = QtWidgets.QCheckBox(label, b)
 
     if labelWidth:
         cbox.setFixedSize(labelWidth, cbox.sizeHint().height())
@@ -985,7 +990,7 @@ def checkBox(widget, master, value, label, box=None,
                    cfunc=callback and FunctionCallback(
                        master, callback, widget=cbox, getwidget=getwidget,
                        id=id_))
-    if isinstance(disables, QtGui.QWidget):
+    if isinstance(disables, QtWidgets.QWidget):
         disables = [disables]
     cbox.disables = disables or []
     cbox.makeConsistent = Disabler(cbox, master, value)
@@ -995,7 +1000,7 @@ def checkBox(widget, master, value, label, box=None,
     return cbox
 
 
-class LineEditWFocusOut(QtGui.QLineEdit):
+class LineEditWFocusOut(QtWidgets.QLineEdit):
     """
     A class derived from QtGui.QLineEdit, which postpones the synchronization
     of the control's value with the master's attribute until the user leaves
@@ -1141,7 +1146,7 @@ def lineEdit(widget, master, value, label=None, labelWidth=None,
         ledit = LineEditWFocusOut(outer, callback, focusInCallback,
                                   enterPlaceholder)
     else:
-        ledit = QtGui.QLineEdit(b)
+        ledit = QtWidgets.QLineEdit(b)
         ledit.enterButton = None
         if b is not widget:
             b.layout().addWidget(ledit)
@@ -1164,7 +1169,7 @@ def lineEdit(widget, master, value, label=None, labelWidth=None,
 
 def button(widget, master, label, callback=None, width=None, height=None,
            toggleButton=False, value="", default=False, autoDefault=True,
-           buttonType=QtGui.QPushButton, **misc):
+           buttonType=QtWidgets.QPushButton, **misc):
     """
     Insert a button (QPushButton, by default)
 
@@ -1209,7 +1214,7 @@ def button(widget, master, label, callback=None, width=None, height=None,
         button.setFixedHeight(height)
     if toggleButton or value:
         button.setCheckable(True)
-    if buttonType == QtGui.QPushButton:
+    if buttonType == QtWidgets.QPushButton:
         button.setDefault(default)
         button.setAutoDefault(autoDefault)
 
@@ -1247,7 +1252,7 @@ def toolButton(widget, master, label="", callback=None,
     :rtype: PyQt4.QtGui.QToolButton
     """
     return button(widget, master, label, callback, width, height,
-                  buttonType=QtGui.QToolButton, tooltip=tooltip)
+                  buttonType=QtWidgets.QToolButton, tooltip=tooltip)
 
 
 def createAttributePixmap(char, background=Qt.black, color=Qt.white):
@@ -1319,7 +1324,7 @@ def attributeItem(var):
 
 
 def listBox(widget, master, value=None, labels=None, box=None, callback=None,
-            selectionMode=QtGui.QListWidget.SingleSelection,
+            selectionMode=QtWidgets.QListWidget.SingleSelection,
             enableDragDrop=False, dragDropCallback=None,
             dataValidityCallback=None, sizeHint=None, **misc):
     """
@@ -1420,7 +1425,7 @@ def radioButtons(widget, master, value, btnLabels=(), tooltips=None,
     if not label is None:
         widgetLabel(bg, label)
 
-    rb = QtGui.QButtonGroup(bg)
+    rb = QtWidgets.QButtonGroup(bg)
     if bg is not widget:
         bg.group = rb
     bg.buttons = []
@@ -1460,9 +1465,9 @@ def appendRadioButton(group, label, insertInto=None,
     """
     i = len(group.buttons)
     if isinstance(label, str):
-        w = QtGui.QRadioButton(label)
+        w = QtWidgets.QRadioButton(label)
     else:
-        w = QtGui.QRadioButton(str(i))
+        w = QtWidgets.QRadioButton(str(i))
         w.setIcon(QtGui.QIcon(label))
     if not hasattr(group, "buttons"):
         group.buttons = []
@@ -1535,7 +1540,7 @@ def hSlider(widget, master, value, box=None, minValue=0, maxValue=10, step=1,
         widgetLabel(sliderBox, label)
     sliderOrient = Qt.Vertical if vertical else Qt.Horizontal
     if intOnly:
-        slider = QtGui.QSlider(sliderOrient, sliderBox)
+        slider = QSlider(sliderOrient, sliderBox)
         slider.setRange(minValue, maxValue)
         if step:
             slider.setSingleStep(step)
@@ -1550,11 +1555,11 @@ def hSlider(widget, master, value, box=None, minValue=0, maxValue=10, step=1,
     if width:
         slider.setFixedWidth(width)
     if ticks:
-        slider.setTickPosition(QtGui.QSlider.TicksBelow)
+        slider.setTickPosition(QSlider.TicksBelow)
         slider.setTickInterval(ticks)
 
     if createLabel:
-        label = QtGui.QLabel(sliderBox)
+        label = QLabel(sliderBox)
         sliderBox.layout().addWidget(label)
         label.setText(labelFormat % minValue)
         width1 = label.sizeHint().width()
@@ -1607,7 +1612,7 @@ def labeledSlider(widget, master, value, box=None,
     if label:
         widgetLabel(sliderBox, label)
     sliderOrient = Qt.Vertical if vertical else Qt.Horizontal
-    slider = QtGui.QSlider(sliderOrient, sliderBox)
+    slider = QSlider(sliderOrient, sliderBox)
     slider.ogValue = value
     slider.setRange(0, len(labels) - 1)
     slider.setSingleStep(1)
@@ -1618,11 +1623,11 @@ def labeledSlider(widget, master, value, box=None,
     if width:
         slider.setFixedWidth(width)
     if ticks:
-        slider.setTickPosition(QtGui.QSlider.TicksBelow)
+        slider.setTickPosition(QSlider.TicksBelow)
         slider.setTickInterval(ticks)
 
     max_label_size = 0
-    slider.value_label = value_label = QtGui.QLabel(sliderBox)
+    slider.value_label = value_label = QLabel(sliderBox)
     value_label.setAlignment(Qt.AlignRight)
     sliderBox.layout().addWidget(value_label)
     for lb in labels:
@@ -1684,7 +1689,7 @@ def valueSlider(widget, master, value, box=None, label=None,
     if label:
         widgetLabel(sliderBox, label)
     slider_orient = Qt.Vertical if vertical else Qt.Horizontal
-    slider = QtGui.QSlider(slider_orient, sliderBox)
+    slider = QSlider(slider_orient, sliderBox)
     slider.ogValue = value
     slider.setRange(0, len(values) - 1)
     slider.setSingleStep(1)
@@ -1695,11 +1700,11 @@ def valueSlider(widget, master, value, box=None, label=None,
     if width:
         slider.setFixedWidth(width)
     if ticks:
-        slider.setTickPosition(QtGui.QSlider.TicksBelow)
+        slider.setTickPosition(QSlider.TicksBelow)
         slider.setTickInterval(ticks)
 
     max_label_size = 0
-    slider.value_label = value_label = QtGui.QLabel(sliderBox)
+    slider.value_label = value_label = QLabel(sliderBox)
     value_label.setAlignment(Qt.AlignRight)
     sliderBox.layout().addWidget(value_label)
     for lb in values:
@@ -1718,7 +1723,7 @@ def valueSlider(widget, master, value, box=None, label=None,
     return slider
 
 
-class OrangeComboBox(QtGui.QComboBox):
+class OrangeComboBox(QtWidgets.QComboBox):
     """
     A QtGui.QComboBox subclass extened to support bounded contents width hint.
     """
@@ -1850,7 +1855,7 @@ def comboBox(widget, master, value, box=None, label=None, labelWidth=None,
 
     if contentsLength is not None:
         combo.setSizeAdjustPolicy(
-            QtGui.QComboBox.AdjustToMinimumContentsLengthWithIcon)
+            QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)
         combo.setMinimumContentsLength(contentsLength)
 
     combo.box = hb
@@ -1890,7 +1895,7 @@ def comboBox(widget, master, value, box=None, label=None, labelWidth=None,
     return combo
 
 
-class OrangeListBox(QtGui.QListWidget):
+class OrangeListBox(QtWidgets.QListWidget):
     """
     List box with drag and drop functionality. Function :obj:`listBox`
     constructs instances of this class; do not use the class directly.
@@ -2002,7 +2007,7 @@ class OrangeListBox(QtGui.QListWidget):
 
 # TODO: SmallWidgetButton is used only in OWkNNOptimization.py. (Re)Move.
 # eliminated?
-class SmallWidgetButton(QtGui.QPushButton):
+class SmallWidgetButton(QtWidgets.QPushButton):
     def __init__(self, widget, text="", pixmap=None, box=None,
                  orientation='vertical', autoHideWidget=None, **misc):
         #self.parent = parent
@@ -2041,7 +2046,7 @@ class SmallWidgetButton(QtGui.QPushButton):
             self.autohideWidget.show()
 
 
-class SmallWidgetLabel(QtGui.QLabel):
+class SmallWidgetLabel(QLabel):
     def __init__(self, widget, text="", pixmap=None, box=None,
                  orientation='vertical', **misc):
         super().__init__(widget)
@@ -2076,7 +2081,7 @@ class SmallWidgetLabel(QtGui.QLabel):
             self.autohideWidget.show()
 
 
-class AutoHideWidget(QtGui.QWidget):
+class AutoHideWidget(QWidget):
     def leaveEvent(self, _):
         self.hide()
 
@@ -2084,7 +2089,7 @@ class AutoHideWidget(QtGui.QWidget):
 # creates a widget box with a button in the top right edge that shows/hides all
 # widgets in the box and collapse the box to its minimum height
 # TODO collapsableWidgetBox is used only in OWMosaicDisplay.py; (re)move
-class collapsableWidgetBox(QtGui.QGroupBox):
+class collapsableWidgetBox(QGroupBox):
     def __init__(self, widget, box="", master=None, value="",
                  orientation="vertical", callback=None):
         super().__init__(widget)
@@ -2114,7 +2119,7 @@ class collapsableWidgetBox(QtGui.QGroupBox):
         self.setFlat(not val)
         self.setMinimumSize(QtCore.QSize(width if not val else 0, 0))
         for c in self.children():
-            if isinstance(c, QtGui.QLayout):
+            if isinstance(c, QtWidgets.QLayout):
                 continue
             if val:
                 c.show()
@@ -2124,7 +2129,7 @@ class collapsableWidgetBox(QtGui.QGroupBox):
 
 # creates an icon that allows you to show/hide the widgets in the widgets list
 # TODO Class widgetHider doesn't seem to be used anywhere; remove?
-class widgetHider(QtGui.QWidget):
+class widgetHider(QWidget):
     def __init__(self, widget, master, value, _=(19, 19), widgets=None,
                  tooltip=None):
         super().__init__(widget)
@@ -2243,28 +2248,28 @@ def auto_commit(widget, master, value, label, auto_label=None, box=True,
             auto_label = label
         else:
             auto_label = "Auto " + label.lower() + " is on"
-    if isinstance(box, QtGui.QWidget):
+    if isinstance(box, QWidget):
         b = box
     else:
         if orientation is None:
             orientation = bool(checkbox_label)
         b = widgetBox(widget, box=box, orientation=orientation,
                       addToLayout=False)
-        b.setSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Maximum)
+        b.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
 
     b.checkbox = cb = checkBox(b, master, value, checkbox_label,
                                callback=checkbox_toggled, tooltip=auto_label)
     if checkbox_label and orientation == 'horizontal' or not orientation:
         b.layout().insertSpacing(-1, 10)
-    cb.setSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
+    cb.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
     b.button = btn = button(b, master, label, callback=lambda: do_commit())
     if not checkbox_label:
-        btn.setSizePolicy(QtGui.QSizePolicy.Expanding,
-                          QtGui.QSizePolicy.Preferred)
+        btn.setSizePolicy(QSizePolicy.Expanding,
+                          QSizePolicy.Preferred)
     checkbox_toggled()
     setattr(master, commit_name, unconditional_commit)
     miscellanea(b, widget, widget,
-                addToLayout=not isinstance(box, QtGui.QWidget), **misc)
+                addToLayout=not isinstance(box, QtWidgets.QWidget), **misc)
     return b
 
 
@@ -2659,13 +2664,13 @@ class CallFrontListBoxLabels(ControlledCallFront):
                 if isinstance(value, tuple):
                     text, icon = value
                     if isinstance(icon, int):
-                        item = QtGui.QListWidgetItem(attributeIconDict[icon], text)
+                        item = QtWidgets.QListWidgetItem(attributeIconDict[icon], text)
                     else:
-                        item = QtGui.QListWidgetItem(icon, text)
+                        item = QtWidgets.QListWidgetItem(icon, text)
                 elif isinstance(value, Variable):
-                    item = QtGui.QListWidgetItem(*attributeItem(value))
+                    item = QtWidgets.QListWidgetItem(*attributeItem(value))
                 else:
-                    item = QtGui.QListWidgetItem(value)
+                    item = QtWidgets.QListWidgetItem(value)
 
                 item.setData(Qt.UserRole, value)
                 self.control.addItem(item)
@@ -2745,9 +2750,9 @@ class Disabler:
 
 
 # noinspection PyShadowingBuiltins
-class tableItem(QtGui.QTableWidgetItem):
+class tableItem(QTableWidgetItem):
     def __init__(self, table, x, y, text, editType=None, backColor=None,
-                 icon=None, type=QtGui.QTableWidgetItem.Type):
+                 icon=None, type=QTableWidgetItem.Type):
         super().__init__(type)
         if icon:
             self.setIcon(QtGui.QIcon(icon))
@@ -2775,7 +2780,7 @@ BarBrushRole = next(OrangeUserRole)  # Brush for distribution bar
 SortOrderRole = next(OrangeUserRole)  # Used for sorting
 
 
-class TableBarItem(QtGui.QItemDelegate):
+class TableBarItem(QItemDelegate):
     BarRole = next(OrangeUserRole)
     ColorRole = next(OrangeUserRole)
 
@@ -2836,7 +2841,7 @@ class TableBarItem(QtGui.QItemDelegate):
         painter.restore()
 
 
-class BarItemDelegate(QtGui.QStyledItemDelegate):
+class BarItemDelegate(QtWidgets.QStyledItemDelegate):
     def __init__(self, parent, brush=QtGui.QBrush(QtGui.QColor(255, 170, 127)),
                  scale=(0.0, 1.0)):
         super().__init__(parent)
@@ -2847,13 +2852,13 @@ class BarItemDelegate(QtGui.QStyledItemDelegate):
         if option.widget is not None:
             style = option.widget.style()
         else:
-            style = QtGui.QApplication.style()
+            style = QApplication.style()
 
         style.drawPrimitive(
-            QtGui.QStyle.PE_PanelItemViewRow, option, painter,
+            QStyle.PE_PanelItemViewRow, option, painter,
             option.widget)
         style.drawPrimitive(
-            QtGui.QStyle.PE_PanelItemViewItem, option, painter,
+            QStyle.PE_PanelItemViewItem, option, painter,
             option.widget)
 
         rect = option.rect
@@ -2862,7 +2867,7 @@ class BarItemDelegate(QtGui.QStyledItemDelegate):
             minv, maxv = self.scale
             val = (val - minv) / (maxv - minv)
             painter.save()
-            if option.state & QtGui.QStyle.State_Selected:
+            if option.state & QStyle.State_Selected:
                 painter.setOpacity(0.75)
             painter.setBrush(self.brush)
             painter.drawRect(
@@ -2870,7 +2875,7 @@ class BarItemDelegate(QtGui.QStyledItemDelegate):
             painter.restore()
 
 
-class IndicatorItemDelegate(QtGui.QStyledItemDelegate):
+class IndicatorItemDelegate(QtWidgets.QStyledItemDelegate):
     IndicatorRole = next(OrangeUserRole)
 
     def __init__(self, parent, role=IndicatorRole, indicatorSize=2):
@@ -2892,7 +2897,7 @@ class IndicatorItemDelegate(QtGui.QStyledItemDelegate):
             painter.restore()
 
 
-class LinkStyledItemDelegate(QtGui.QStyledItemDelegate):
+class LinkStyledItemDelegate(QStyledItemDelegate):
     LinkRole = next(OrangeUserRole)
 
     def __init__(self, parent):
@@ -2908,18 +2913,18 @@ class LinkStyledItemDelegate(QtGui.QStyledItemDelegate):
         if option.widget is not None:
             style = option.widget.style()
         else:
-            style = QtGui.QApplication.style()
+            style = QApplication.style()
 
         text = self.displayText(index.data(Qt.DisplayRole),
                                 QtCore.QLocale.system())
         self.initStyleOption(option, index)
         textRect = style.subElementRect(
-            QtGui.QStyle.SE_ItemViewItemText, option, option.widget)
+            QStyle.SE_ItemViewItemText, option, option.widget)
 
         if not textRect.isValid():
             textRect = option.rect
         margin = style.pixelMetric(
-            QtGui.QStyle.PM_FocusFrameHMargin, option, option.widget) + 1
+            QStyle.PM_FocusFrameHMargin, option, option.widget) + 1
         textRect = textRect.adjusted(margin, 0, -margin, 0)
         font = index.data(Qt.FontRole)
         if not isinstance(font, QtGui.QFont):
@@ -2979,22 +2984,22 @@ class LinkStyledItemDelegate(QtGui.QStyledItemDelegate):
             if option.widget is not None:
                 style = option.widget.style()
             else:
-                style = QtGui.QApplication.style()
+                style = QApplication.style()
             style.drawPrimitive(
-                QtGui.QStyle.PE_PanelItemViewRow, option, painter,
+                QStyle.PE_PanelItemViewRow, option, painter,
                 option.widget)
             style.drawPrimitive(
-                QtGui.QStyle.PE_PanelItemViewItem, option, painter,
+                QStyle.PE_PanelItemViewItem, option, painter,
                 option.widget)
 
             text = self.displayText(index.data(Qt.DisplayRole),
                                     QtCore.QLocale.system())
             textRect = style.subElementRect(
-                QtGui.QStyle.SE_ItemViewItemText, option, option.widget)
+                QStyle.SE_ItemViewItemText, option, option.widget)
             if not textRect.isValid():
                 textRect = option.rect
             margin = style.pixelMetric(
-                QtGui.QStyle.PM_FocusFrameHMargin, option, option.widget) + 1
+                QStyle.PM_FocusFrameHMargin, option, option.widget) + 1
             textRect = textRect.adjusted(margin, 0, -margin, 0)
             elideText = QtGui.QFontMetrics(option.font).elidedText(
                 text, option.textElideMode, textRect.width())
@@ -3003,7 +3008,7 @@ class LinkStyledItemDelegate(QtGui.QStyledItemDelegate):
             if not isinstance(font, QtGui.QFont):
                 font = option.font
             painter.setFont(font)
-            if option.state & QtGui.QStyle.State_Selected:
+            if option.state & QStyle.State_Selected:
                 color = option.palette.highlightedText().color()
             else:
                 color = option.palette.link().color()
@@ -3017,7 +3022,7 @@ class LinkStyledItemDelegate(QtGui.QStyledItemDelegate):
 LinkRole = LinkStyledItemDelegate.LinkRole
 
 
-class ColoredBarItemDelegate(QtGui.QStyledItemDelegate):
+class ColoredBarItemDelegate(QtWidgets.QStyledItemDelegate):
     """ Item delegate that can also draws a distribution bar
     """
     def __init__(self, parent=None, decimals=3, color=Qt.red):
@@ -3064,17 +3069,17 @@ class ColoredBarItemDelegate(QtGui.QStyledItemDelegate):
         if option.widget is not None:
             style = option.widget.style()
         else:
-            style = QtGui.QApplication.style()
+            style = QApplication.style()
 
         style.drawPrimitive(
-            QtGui.QStyle.PE_PanelItemViewRow, option, painter,
+            QStyle.PE_PanelItemViewRow, option, painter,
             option.widget)
         style.drawPrimitive(
-            QtGui.QStyle.PE_PanelItemViewItem, option, painter,
+            QStyle.PE_PanelItemViewItem, option, painter,
             option.widget)
 
         # TODO: Check ForegroundRole.
-        if option.state & QtGui.QStyle.State_Selected:
+        if option.state & QStyle.State_Selected:
             color = option.palette.highlightedText().color()
         else:
             color = option.palette.text().color()
@@ -3125,11 +3130,11 @@ class ColoredBarItemDelegate(QtGui.QStyledItemDelegate):
         return QtGui.QBrush(bar_brush)
 
 
-class VerticalLabel(QtGui.QLabel):
+class VerticalLabel(QLabel):
     def __init__(self, text, parent=None):
         super().__init__(text, parent)
-        self.setSizePolicy(QtGui.QSizePolicy.Preferred,
-                           QtGui.QSizePolicy.MinimumExpanding)
+        self.setSizePolicy(QSizePolicy.Preferred,
+                           QSizePolicy.MinimumExpanding)
         self.setMaximumWidth(self.sizeHint().width() + 2)
         self.setMargin(4)
 
@@ -3157,7 +3162,7 @@ class VerticalLabel(QtGui.QLabel):
         painter.end()
 
 
-class VerticalItemDelegate(QtGui.QStyledItemDelegate):
+class VerticalItemDelegate(QStyledItemDelegate):
     # Extra text top/bottom margin.
     Margin = 6
 
@@ -3166,7 +3171,7 @@ class VerticalItemDelegate(QtGui.QStyledItemDelegate):
         return QtCore.QSize(sh.height() + self.Margin * 2, sh.width())
 
     def paint(self, painter, option, index):
-        option = QtGui.QStyleOptionViewItemV4(option)
+        option = QtWidgets.QStyleOptionViewItem(option)
         self.initStyleOption(option, index)
 
         if not option.text:
@@ -3175,16 +3180,16 @@ class VerticalItemDelegate(QtGui.QStyledItemDelegate):
         if option.widget is not None:
             style = option.widget.style()
         else:
-            style = QtGui.QApplication.style()
+            style = QApplication.style()
         style.drawPrimitive(
-            QtGui.QStyle.PE_PanelItemViewRow, option, painter,
+            QStyle.PE_PanelItemViewRow, option, painter,
             option.widget)
         cell_rect = option.rect
         itemrect = QtCore.QRect(0, 0, cell_rect.height(), cell_rect.width())
-        opt = QtGui.QStyleOptionViewItemV4(option)
+        opt = QtWidgets.QStyleOptionViewItem(option)
         opt.rect = itemrect
         textrect = style.subElementRect(
-            QtGui.QStyle.SE_ItemViewItemText, opt, opt.widget)
+            QStyle.SE_ItemViewItemText, opt, opt.widget)
 
         painter.save()
         painter.setFont(option.font)
@@ -3229,7 +3234,7 @@ class ProgressBar:
 ##############################################################################
 
 def tabWidget(widget):
-    w = QtGui.QTabWidget(widget)
+    w = QtWidgets.QTabWidget(widget)
     if widget.layout() is not None:
         widget.layout().addWidget(w)
     return w
@@ -3239,7 +3244,7 @@ def createTabPage(tabWidget, name, widgetToAdd=None, canScroll=False):
     if widgetToAdd is None:
         widgetToAdd = widgetBox(tabWidget, addToLayout=0, margin=4)
     if canScroll:
-        scrollArea = QtGui.QScrollArea()
+        scrollArea = QtWidgets.QScrollArea()
         tabWidget.addTab(scrollArea, name)
         scrollArea.setWidget(widgetToAdd)
         scrollArea.setWidgetResizable(1)
@@ -3251,12 +3256,12 @@ def createTabPage(tabWidget, name, widgetToAdd=None, canScroll=False):
 
 
 def table(widget, rows=0, columns=0, selectionMode=-1, addToLayout=True):
-    w = QtGui.QTableWidget(rows, columns, widget)
+    w = QtWidgets.QTableWidget(rows, columns, widget)
     if widget and addToLayout and widget.layout() is not None:
         widget.layout().addWidget(w)
     if selectionMode != -1:
         w.setSelectionMode(selectionMode)
-    w.setHorizontalScrollMode(QtGui.QTableWidget.ScrollPerPixel)
+    w.setHorizontalScrollMode(QtWidgets.QTableWidget.ScrollPerPixel)
     w.horizontalHeader().setMovable(True)
     return w
 
@@ -3274,10 +3279,10 @@ class VisibleHeaderSectionContextEventFilter(QtCore.QObject):
         headers = [(view.isSectionHidden(i),
                     model.headerData(i, view.orientation(), Qt.DisplayRole)
                     ) for i in range(view.count())]
-        menu = QtGui.QMenu("Visible headers", view)
+        menu = QtWidgets.QMenu("Visible headers", view)
 
         for i, (checked, name) in enumerate(headers):
-            action = QtGui.QAction(name, menu)
+            action = QtWidgets.QAction(name, menu)
             action.setCheckable(True)
             action.setChecked(not checked)
             menu.addAction(action)
@@ -3298,38 +3303,38 @@ class VisibleHeaderSectionContextEventFilter(QtCore.QObject):
 
 
 def checkButtonOffsetHint(button, style=None):
-    option = QtGui.QStyleOptionButton()
+    option = QtWidgets.QStyleOptionButton()
     option.initFrom(button)
     if style is None:
         style = button.style()
-    if isinstance(button, QtGui.QCheckBox):
-        pm_spacing = QtGui.QStyle.PM_CheckBoxLabelSpacing
-        pm_indicator_width = QtGui.QStyle.PM_IndicatorWidth
+    if isinstance(button, QtWidgets.QCheckBox):
+        pm_spacing = QStyle.PM_CheckBoxLabelSpacing
+        pm_indicator_width = QStyle.PM_IndicatorWidth
     else:
-        pm_spacing = QtGui.QStyle.PM_RadioButtonLabelSpacing
-        pm_indicator_width = QtGui.QStyle.PM_ExclusiveIndicatorWidth
+        pm_spacing = QStyle.PM_RadioButtonLabelSpacing
+        pm_indicator_width = QStyle.PM_ExclusiveIndicatorWidth
     space = style.pixelMetric(pm_spacing, option, button)
     width = style.pixelMetric(pm_indicator_width, option, button)
     # TODO: add other styles (Maybe load corrections from .cfg file?)
     style_correction = {"macintosh (aqua)": -2, "macintosh(aqua)": -2,
                         "plastique": 1, "cde": 1, "motif": 1}
     return space + width + \
-        style_correction.get(QtGui.qApp.style().objectName().lower(), 0)
+        style_correction.get(QApplication.style().objectName().lower(), 0)
 
 
 def toolButtonSizeHint(button=None, style=None):
     if button is None and style is None:
-        style = QtGui.qApp.style()
+        style = QApplication.style()
     elif style is None:
         style = button.style()
 
     button_size = \
-        style.pixelMetric(QtGui.QStyle.PM_SmallIconSize) + \
-        style.pixelMetric(QtGui.QStyle.PM_ButtonMargin)
+        style.pixelMetric(QStyle.PM_SmallIconSize) + \
+        style.pixelMetric(QStyle.PM_ButtonMargin)
     return button_size
 
 
-class FloatSlider(QtGui.QSlider):
+class FloatSlider(QSlider):
     valueChangedFloat = Signal(float)
 
     def __init__(self, orientation, min_value, max_value, step, parent=None):

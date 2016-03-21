@@ -1,8 +1,8 @@
 import sys
 import math
 
-from PyQt4 import QtGui
-from PyQt4.QtCore import Qt
+from AnyQt.QtWidgets import QFormLayout, QApplication
+from AnyQt.QtCore import Qt
 
 import numpy as np
 import sklearn.cross_validation as skl_cross_validation
@@ -84,10 +84,10 @@ class OWDataSampler(widget.OWWidget):
             addSpace=12)
 
         gui.appendRadioButton(sampling, "Cross Validation:")
-        form = QtGui.QFormLayout(
+        form = QFormLayout(
             formAlignment=Qt.AlignLeft | Qt.AlignTop,
             labelAlignment=Qt.AlignLeft,
-            fieldGrowthPolicy=QtGui.QFormLayout.AllNonFixedFieldsGrow)
+            fieldGrowthPolicy=QFormLayout.AllNonFixedFieldsGrow)
         ibox = gui.indentedBox(sampling, addSpace=True, orientation=form)
         form.addRow("Number of folds",
                     gui.spin(
@@ -354,7 +354,7 @@ def sample_bootstrap(size, random_state=None):
 
 
 def test_main():
-    app = QtGui.QApplication([])
+    app = QApplication([])
     data = Table("iris")
     w = OWDataSampler()
     w.set_data(data)

@@ -1,10 +1,10 @@
 from collections import namedtuple
 
-from PyQt4 import QtGui
-from PyQt4.QtGui import (
-    QListView, QHBoxLayout, QStyledItemDelegate, QDialogButtonBox
+from AnyQt.QtWidgets import (
+    QListView, QHBoxLayout, QStyledItemDelegate, QDialogButtonBox,
+    QApplication
 )
-from PyQt4.QtCore import Qt
+from AnyQt.QtCore import Qt
 
 import Orange.data
 import Orange.preprocess.discretize as disc
@@ -460,7 +460,7 @@ class OWDiscretize(widget.OWWidget):
 
 
 def main():
-    app = QtGui.QApplication([])
+    app = QApplication([])
     w = OWDiscretize()
     data = Orange.data.Table("brown-selected")
     w.set_data(data)

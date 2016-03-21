@@ -2,7 +2,7 @@ import math
 import itertools
 from collections import defaultdict
 
-from PyQt4 import QtGui
+from AnyQt.QtWidgets import QWidget, QListView, QGridLayout
 import numpy
 
 import Orange
@@ -33,9 +33,9 @@ class OWMergeData(widget.OWWidget):
         self.dataB = None
 
         # GUI
-        w = QtGui.QWidget(self)
+        w = QWidget(self)
         self.controlArea.layout().addWidget(w)
-        grid = QtGui.QGridLayout()
+        grid = QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
         w.setLayout(grid)
 
@@ -43,8 +43,8 @@ class OWMergeData(widget.OWWidget):
         boxAttrA = gui.widgetBox(
             self, self.tr("Attribute A"), addToLayout=False)
         grid.addWidget(boxAttrA, 0, 0)
-        self.attrViewA = QtGui.QListView(
-            selectionMode=QtGui.QListView.SingleSelection
+        self.attrViewA = QListView(
+            selectionMode=QListView.SingleSelection
         )
 
         self.attrModelA = itemmodels.VariableListModel()
@@ -58,8 +58,8 @@ class OWMergeData(widget.OWWidget):
         boxAttrB = gui.widgetBox(
             self, self.tr("Attribute B"), addToLayout=False)
         grid.addWidget(boxAttrB, 0, 1)
-        self.attrViewB = QtGui.QListView(
-            selectionMode=QtGui.QListView.SingleSelection
+        self.attrViewB = QListView(
+            selectionMode=QListView.SingleSelection
         )
 
         self.attrModelB = itemmodels.VariableListModel()
@@ -294,7 +294,8 @@ def join_array_by_indices(left, right, indices, masked=float("nan")):
 
 
 def test():
-    app = QtGui.QApplication([])
+    from AnyQt.QtWidgets import QApplication
+    app = QApplication([])
 
     w = OWMergeData()
     zoo = Orange.data.Table("zoo")

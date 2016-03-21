@@ -7,14 +7,13 @@ A widget for manual editing of a domain's attributes.
 """
 import unicodedata
 
-from PyQt4 import QtGui
-from PyQt4.QtGui import (
-    QWidget, QListView, QTreeView, QStandardItemModel, QStandardItem,
-    QVBoxLayout, QHBoxLayout, QFormLayout, QToolButton, QLineEdit,
-    QAction, QKeySequence
+from AnyQt.QtWidgets import (
+    QWidget, QListView, QTreeView, QVBoxLayout, QHBoxLayout, QFormLayout,
+    QToolButton, QLineEdit, QAction, QStackedWidget
 )
-from PyQt4.QtCore import Qt, QSize
-from PyQt4.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
+from AnyQt.QtGui import QStandardItemModel, QStandardItem, QKeySequence
+from AnyQt.QtCore import Qt, QSize
+from AnyQt.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
 
 import Orange.data
 import Orange.preprocess.transformation
@@ -388,7 +387,7 @@ class OWEditDomain(widget.OWWidget):
                         "Commit on change is on")
 
         box = gui.widgetBox(self.mainArea, "Edit")
-        self.editor_stack = QtGui.QStackedWidget()
+        self.editor_stack = QStackedWidget()
 
         self.editor_stack.addWidget(DiscreteVariableEditor())
         self.editor_stack.addWidget(ContinuousVariableEditor())
@@ -540,7 +539,7 @@ class OWEditDomain(widget.OWWidget):
 
 
 def main():
-    from PyQt4.QtGui import QApplication
+    from AnyQt.QtWidgets import QApplication
     app = QApplication([])
     w = OWEditDomain()
     data = Orange.data.Table("iris")

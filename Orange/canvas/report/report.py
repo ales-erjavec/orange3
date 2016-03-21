@@ -2,8 +2,11 @@ import itertools
 import time
 from collections import OrderedDict
 from itertools import chain
-from PyQt4.QtCore import Qt, QAbstractItemModel, QByteArray, QBuffer, QIODevice
-from PyQt4.QtGui import QGraphicsScene, QStandardItemModel, QColor
+
+from AnyQt.QtCore import Qt, QAbstractItemModel, QByteArray, QBuffer, QIODevice
+from AnyQt.QtGui import QStandardItemModel, QColor
+from AnyQt.QtWidgets import QGraphicsScene
+
 from Orange.widgets.io import PngFormat
 from Orange.data.sql.table import SqlTable
 from Orange.widgets.utils import getdeepattr

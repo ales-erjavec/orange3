@@ -1,4 +1,3 @@
-from PyQt4 import QtGui
 from Orange.data import Table
 from Orange.regression.random_forest import (RandomForestRegressionLearner,
                                              RandomForestRegressor)
@@ -30,7 +29,8 @@ class OWRandomForestRegression(OWRandomForest):
 del OWRandomForest
 
 if __name__ == "__main__":
-    app = QtGui.QApplication([])
+    from AnyQt.QtWidgets import QApplication
+    app = QApplication([])
     w = OWRandomForestRegression()
     w.set_data(Table("housing"))
     w.show()

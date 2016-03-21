@@ -1,7 +1,7 @@
 import unittest
 import pickle
 import sys
-from PyQt4.QtGui import QApplication
+from AnyQt.QtWidgets import QApplication
 from Orange.data.table import Table
 from Orange.classification import LogisticRegressionLearner
 from Orange.classification.tree import TreeLearner
