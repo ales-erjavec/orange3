@@ -1079,7 +1079,7 @@ class PlotTool(QObject):
 
     See Also
     --------
-    PyQt4.QtCore.QObject.eventFilter
+    QObject.eventFilter
 
     """
     def __init__(self, parent=None, **kwargs):
