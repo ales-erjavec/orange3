@@ -222,12 +222,12 @@ def miscellanea(control, box, parent,
     `miscallenea` will call `control.setSizePolicy(some_policy)`.
 
     :param control: the control, e.g. a `QCheckBox`
-    :type control: PyQt4.QtGui.QWidget
+    :type control: QWidget
     :param box: the box into which the widget was inserted
-    :type box: PyQt4.QtGui.QWidget or None
+    :type box: QWidget or None
     :param parent: the parent into whose layout the box or the control will be
         inserted
-    :type parent: PyQt4.QtGui.QWidget
+    :type parent: QWidget
     :param addSpace: the amount of space to add after the widget
     :type addSpace: bool or int
     :param disabled: If set to `True`, the widget is initially disabled
@@ -240,7 +240,7 @@ def miscellanea(control, box, parent,
     :param tooltip: tooltip that is attached to the widget
     :type tooltip: str or None
     :param sizePolicy: the size policy for the box or the control
-    :type sizePolicy: PyQt4.QtQui.QSizePolicy
+    :type sizePolicy: QSizePolicy
     """
     for prop, val in kwargs.items():
         if prop == "sizePolicy":
@@ -286,14 +286,12 @@ def setLayout(widget, layout):
     Set the layout of the widget.
 
     If `layout` is given as `Qt.Vertical` or `Qt.Horizontal`, the function
-    sets the layout to :obj:`~PyQt4.QtGui.QVBoxLayout` or
-    :obj:`~PyQt4.QtGui.QVBoxLayout`.
+    sets the layout to :obj:`~QVBoxLayout` or :obj:`~QVBoxLayout`.
 
     :param widget: the widget for which the layout is being set
-    :type widget: PyQt4.QtGui.QWidget
+    :type widget: QWidget
     :param layout: layout
-    :type layout: `Qt.Horizontal`, `Qt.Vertical` or
-        instance of `PyQt4.QtGui.QLayout`
+    :type layout: `Qt.Horizontal`, `Qt.Vertical` or instance of `QLayout`
     """
     if not isinstance(layout, QtWidgets.QLayout):
         if _is_horizontal(layout):
@@ -314,14 +312,14 @@ def _enterButton(parent, control, placeholder=True):
     as argument `control`.
 
     :param parent: parent widget into which the button is inserted
-    :type parent: PyQt4.QtGui.QWidget
+    :type parent: QWidget
     :param control: a widget for determining the height of the button
-    :type control: PyQt4.QtGui.QWidget
+    :type control: QWidget
     :param placeholder: a flag telling whether to construct a placeholder
         (default: True)
     :type placeholder: bool
     :return: a tuple with a button and a place holder (or `None`)
-    :rtype: PyQt4.QtGui.QToolButton or tuple
+    :rtype: QToolButton or tuple
     """
     global _enter_icon
     if not _enter_icon:
@@ -352,7 +350,7 @@ def _addSpace(widget, space):
     The function is called by functions that have the `addSpace` argument.
 
     :param widget: Widget into which to insert the space
-    :type widget: PyQt4.QtGui.QWidget
+    :type widget: QWidget
     :param space: Amount of space to insert. If False, the function does
         nothing. If the argument is an `int`, the specified space is inserted.
         Otherwise, the default space is inserted by calling a :obj:`separator`.
@@ -370,13 +368,13 @@ def separator(widget, width=4, height=4):
     Add a separator of the given size into the widget.
 
     :param widget: the widget into whose layout the separator is added
-    :type widget: PyQt4.QtGui.QWidget
+    :type widget: QWidget
     :param width: width of the separator
     :type width: int
     :param height: height of the separator
     :type height: int
     :return: separator
-    :rtype: PyQt4.QtGui.QWidget
+    :rtype: QWidget
     """
     sep = QtWidgets.QWidget(widget)
     if widget.layout() is not None:
@@ -402,21 +400,20 @@ def widgetBox(widget, box=None, orientation=Qt.Vertical, margin=None, spacing=4,
     explicitly disabled.
 
     :param widget: the widget into which the box is inserted
-    :type widget: PyQt4.QtGui.QWidget or None
+    :type widget: QWidget or None
     :param box: tells whether the widget has a border, and its label
     :type box: int or str or None
     :param orientation: orientation of the box
-    :type orientation: `Qt.Horizontal`, `Qt.Vertical` or
-            instance of `PyQt4.QtGui.QLayout`
+    :type orientation: `Qt.Horizontal`, `Qt.Vertical` or instance of `QLayout`
     :param sizePolicy: The size policy for the widget (default: None)
-    :type sizePolicy: :obj:`~PyQt4.QtGui.QSizePolicy`
+    :type sizePolicy: :obj:`~QSizePolicy`
     :param margin: The margin for the layout. Default is 7 if the widget has
         a border, and 0 if not.
     :type margin: int
     :param spacing: Spacing within the layout (default: 4)
     :type spacing: int
     :return: Constructed box
-    :rtype: PyQt4.QtGui.QGroupBox or PyQt4.QtGui.QWidget
+    :rtype: QGroupBox or QWidget
     """
     if box:
         b = QtWidgets.QGroupBox(widget)
@@ -456,14 +453,14 @@ def indentedBox(widget, sep=20, orientation=Qt.Vertical, **misc):
         gui.hSlider(gui.indentedBox(self.interBox), self, "intervals")
 
     :param widget: the widget into which the box is inserted
-    :type widget: PyQt4.QtGui.QWidget
+    :type widget: QWidget
     :param sep: Indent size (default: 20)
     :type sep: int
     :param orientation: orientation of the inserted box
     :type orientation: `Qt.Vertical` (default), `Qt.Horizontal` or
-            instance of `PyQt4.QtGui.QLayout`
+            instance of `QLayout`
     :return: Constructed box
-    :rtype: PyQt4.QtGui.QGroupBox or PyQt4.QtGui.QWidget
+    :rtype: QGroupBox or QWidget
     """
     outer = hBox(widget, spacing=0)
     separator(outer, sep, 0)
@@ -478,13 +475,13 @@ def widgetLabel(widget, label="", labelWidth=None, **misc):
     Construct a simple, constant label.
 
     :param widget: the widget into which the box is inserted
-    :type widget: PyQt4.QtGui.QWidget or None
+    :type widget: QWidget or None
     :param label: The text of the label (default: None)
     :type label: str
     :param labelWidth: The width of the label (default: None)
     :type labelWidth: int
     :return: Constructed label
-    :rtype: PyQt4.QtGui.QLabel
+    :rtype: QLabel
     """
     lbl = QtWidgets.QLabel(label, widget)
     if labelWidth:
@@ -507,7 +504,7 @@ def label(widget, master, label, labelWidth=None, box=None,
     `%(mm)i`.
 
     :param widget: the widget into which the box is inserted
-    :type widget: PyQt4.QtGui.QWidget or None
+    :type widget: QWidget or None
     :param master: master widget
     :type master: OWWidget or OWComponent
     :param label: The text of the label, including attribute names
@@ -516,9 +513,9 @@ def label(widget, master, label, labelWidth=None, box=None,
     :type labelWidth: int
     :param orientation: layout of the inserted box
     :type orientation: `Qt.Vertical` (default), `Qt.Horizontal` or
-        instance of `PyQt4.QtGui.QLayout`
+        instance of `QLayout`
     :return: label
-    :rtype: PyQt4.QtGui.QLabel
+    :rtype: QLabel
     """
     if box:
         b = hBox(widget, box, addToLayout=False)
@@ -538,7 +535,7 @@ def label(widget, master, label, labelWidth=None, box=None,
 
 class SpinBoxWFocusOut(QtWidgets.QSpinBox):
     """
-    A class derived from QtGui.QSpinBox, which postpones the synchronization
+    A class derived from QSpinBox, which postpones the synchronization
     of the control's value with the master's attribute until the user presses
     Enter or clicks an icon that appears beside the spin box when the value
     is changed.
@@ -571,7 +568,7 @@ class SpinBoxWFocusOut(QtWidgets.QSpinBox):
         :param step: Step
         :type step: int
         :param parent: Parent widget
-        :type parent: PyQt4.QtGui.QWidget
+        :type parent: QWidget
         """
         super().__init__(parent)
         self.setRange(minv, maxv)
@@ -626,7 +623,7 @@ class SpinBoxWFocusOut(QtWidgets.QSpinBox):
 class DoubleSpinBoxWFocusOut(QtWidgets.QDoubleSpinBox):
     """
     Same as :obj:`SpinBoxWFocusOut`, except that it is derived from
-    :obj:`~PyQt4.QtGui.QDoubleSpinBox`"""
+    :obj:`~QDoubleSpinBox`"""
     def __init__(self, minv, maxv, step, parent):
         super().__init__(parent)
         self.setDecimals(math.ceil(-math.log10(step)))
@@ -675,7 +672,7 @@ def spin(widget, master, value, minv, maxv, step=1, box=None, label=None,
     :obj:`DoubleSpinBoxWFocusOut`.
 
     :param widget: the widget into which the box is inserted
-    :type widget: PyQt4.QtGui.QWidget or None
+    :type widget: QWidget or None
     :param master: master widget
     :type master: OWWidget or OWComponent
     :param value: the master's attribute with which the value is synchronized
@@ -694,7 +691,7 @@ def spin(widget, master, value, minv, maxv, step=1, box=None, label=None,
     :type labelWidth: int
     :param orientation: tells whether to put the label above or to the left
     :type orientation: `Qt.Horizontal` (default), `Qt.Vertical` or
-        instance of `PyQt4.QtGui.QLayout`
+        instance of `QLayout`
     :param callback: a function that is called when the value is entered; if
         :obj:`callbackOnReturn` is `True`, the function is called when the
         user commits the value by pressing Enter or clicking the icon
@@ -831,7 +828,7 @@ def checkBox(widget, master, value, label, box=None,
     A simple checkbox.
 
     :param widget: the widget into which the box is inserted
-    :type widget: PyQt4.QtGui.QWidget or None
+    :type widget: QWidget or None
     :param master: master widget
     :type master: OWWidget or OWComponent
     :param value: the master's attribute with which the value is synchronized
@@ -853,10 +850,10 @@ def checkBox(widget, master, value, label, box=None,
     :type labelWidth: int
     :param disables: a list of widgets that are disabled if the check box is
         unchecked
-    :type disables: list or PyQt4.QtGui.QWidget or None
+    :type disables: list or QWidget or None
     :return: constructed check box; if is is placed within a box, the box is
         return in the attribute `box`
-    :rtype: PyQt4.QtGui.QCheckBox
+    :rtype: QCheckBox
     """
     if box:
         b = hBox(widget, box, addToLayout=False)
@@ -885,7 +882,7 @@ def checkBox(widget, master, value, label, box=None,
 
 class LineEditWFocusOut(QtWidgets.QLineEdit):
     """
-    A class derived from QtGui.QLineEdit, which postpones the synchronization
+    A class derived from QLineEdit, which postpones the synchronization
     of the control's value with the master's attribute until the user leaves
     the line edit, presses Enter or clicks an icon that appears beside the
     line edit when the value is changed.
@@ -970,7 +967,7 @@ def lineEdit(widget, master, value, label=None, labelWidth=None,
     Insert a line edit.
 
     :param widget: the widget into which the box is inserted
-    :type widget: PyQt4.QtGui.QWidget or None
+    :type widget: QWidget or None
     :param master: master widget
     :type master: OWWidget or OWComponent
     :param value: the master's attribute with which the value is synchronized
@@ -990,7 +987,7 @@ def lineEdit(widget, master, value, label=None, labelWidth=None,
         when synchronizing to `value`
     :type valueType: type
     :param validator: the validator for the input
-    :type validator: PyQt4.QtGui.QValidator
+    :type validator: QValidator
     :param controlWidth: the width of the line edit
     :type controlWidth: int
     :param callbackOnType: if set to `True`, the callback is called at each
@@ -1003,7 +1000,7 @@ def lineEdit(widget, master, value, label=None, labelWidth=None,
         left empty to the right for the icon that shows that the value is
         changed but has not been committed yet
     :type enterPlaceholder: bool
-    :rtype: PyQt4.QtGui.QLineEdit or a box
+    :rtype: QLineEdit or a box
     """
     if box or label:
         b = widgetBox(widget, box, orientation, addToLayout=False)
@@ -1058,7 +1055,7 @@ def button(widget, master, label, callback=None, width=None, height=None,
     Insert a button (QPushButton, by default)
 
     :param widget: the widget into which the button is inserted
-    :type widget: PyQt4.QtGui.QWidget or None
+    :type widget: QWidget or None
     :param master: master widget
     :type master: OWWidget or OWComponent
     :param label: label
@@ -1086,8 +1083,8 @@ def button(widget, master, label, callback=None, width=None, height=None,
         activated on pressing Return.
     :type autoDefault: bool
     :param buttonType: the button type (default: `QPushButton`)
-    :type buttonType: PyQt4.QtGui.QPushButton
-    :rtype: PyQt4.QtGui.QPushButton
+    :type buttonType: QPushButton
+    :rtype: QPushButton
     """
     button = buttonType(widget)
     if label:
@@ -1122,7 +1119,7 @@ def toolButton(widget, master, label="", callback=None,
     Insert a tool button. Calls :obj:`button`
 
     :param widget: the widget into which the button is inserted
-    :type widget: PyQt4.QtGui.QWidget or None
+    :type widget: QWidget or None
     :param master: master widget
     :type master: OWWidget or OWComponent
     :param label: label
@@ -1133,7 +1130,7 @@ def toolButton(widget, master, label="", callback=None,
     :type width: int
     :param height: the height of the button
     :type height: int
-    :rtype: PyQt4.QtGui.QToolButton
+    :rtype: QToolButton
     """
     return button(widget, master, label, callback, width, height,
                   buttonType=QtWidgets.QToolButton, tooltip=tooltip)
@@ -1146,10 +1143,10 @@ def createAttributePixmap(char, background=Qt.black, color=Qt.white):
     :param char: The character that is printed in the icon
     :type char: str
     :param background: the background color (default: black)
-    :type background: PyQt4.QtGui.QColor
+    :type background: QColor
     :param color: the character color (default: white)
-    :type color: PyQt4.QtGui.QColor
-    :rtype: PyQt4.QtGui.QIcon
+    :type color: QColor
+    :rtype: QIcon
     """
     pixmap = QtGui.QPixmap(13, 13)
     pixmap.fill(QtGui.QColor(0, 0, 0, 0))
@@ -1202,7 +1199,7 @@ def attributeItem(var):
 
     :param var: variable
     :type var: Orange.data.Variable
-    :rtype: tuple with PyQt4.QtGui.QIcon and str
+    :rtype: tuple with QIcon and str
     """
     return attributeIconDict[var], var.name
 
@@ -1218,7 +1215,7 @@ def listBox(widget, master, value=None, labels=None, box=None, callback=None,
     is a list of indices of selected items.
 
     :param widget: the widget into which the box is inserted
-    :type widget: PyQt4.QtGui.QWidget or None
+    :type widget: QWidget or None
     :param master: master widget
     :type master: OWWidget or OWComponent
     :param value: the name of the master's attribute with which the value is
@@ -1233,7 +1230,7 @@ def listBox(widget, master, value=None, labels=None, box=None, callback=None,
         changed
     :type callback: function
     :param selectionMode: selection mode - single, multiple etc
-    :type selectionMode: PyQt4.QtGui.QAbstractItemView.SelectionMode
+    :type selectionMode: QAbstractItemView.SelectionMode
     :param enableDragDrop: flag telling whether drag and drop is available
     :type enableDragDrop: bool
     :param dragDropCallback: callback function on drop event
@@ -1242,7 +1239,7 @@ def listBox(widget, master, value=None, labels=None, box=None, callback=None,
         and move event; it should return either `ev.accept()` or `ev.ignore()`.
     :type dataValidityCallback: function
     :param sizeHint: size hint
-    :type sizeHint: PyQt4.QtGui.QSize
+    :type sizeHint: QSize
     :rtype: OrangeListBox
     """
     if box:
@@ -1284,7 +1281,7 @@ def radioButtons(widget, master, value, btnLabels=(), tooltips=None,
     button.
 
     :param widget: the widget into which the box is inserted
-    :type widget: PyQt4.QtGui.QWidget or None
+    :type widget: QWidget or None
     :param master: master widget
     :type master: OWWidget or OWComponent
     :param value: the master's attribute with which the value is synchronized
@@ -1301,8 +1298,8 @@ def radioButtons(widget, master, value, btnLabels=(), tooltips=None,
     :type callback: function
     :param orientation: orientation of the box
     :type orientation: `Qt.Vertical` (default), `Qt.Horizontal` or an
-        instance of `PyQt4.QtGui.QLayout`
-    :rtype: PyQt4.QtQui.QButtonGroup
+        instance of `QLayout`
+    :rtype: QButtonGroup
     """
     bg = widgetBox(widget, box, orientation, addToLayout=False)
     if not label is None:
@@ -1330,7 +1327,7 @@ def appendRadioButton(group, label, insertInto=None,
                       addToLayout=True, stretch=0, addSpace=False, id=None):
     """
     Construct a radio button and add it to the group. The group must be
-    constructed with :obj:`radioButtonsInBox` since it adds additional
+    constructed with :obj:`radioButtons` since it adds additional
     attributes need for the call backs.
 
     The radio button is inserted into `insertInto` or, if omitted, into the
@@ -1339,12 +1336,12 @@ def appendRadioButton(group, label, insertInto=None,
     boxes.
 
     :param group: the button group
-    :type group: PyQt4.QtCore.QButtonGroup
+    :type group: QButtonGroup
     :param label: string label or a pixmap for the button
-    :type label: str or PyQt4.QtGui.QPixmap
+    :type label: str or QPixmap
     :param insertInto: the widget into which the radio button is inserted
-    :type insertInto: PyQt4.QtGui.QWidget
-    :rtype: PyQt4.QtGui.QRadioButton
+    :type insertInto: QWidget
+    :rtype: QRadioButton
     """
     i = len(group.buttons)
     if isinstance(label, str):
@@ -1385,7 +1382,7 @@ def hSlider(widget, master, value, box=None, minValue=0, maxValue=10, step=1,
     Construct a slider.
 
     :param widget: the widget into which the box is inserted
-    :type widget: PyQt4.QtGui.QWidget or None
+    :type widget: QWidget or None
     :param master: master widget
     :type master: OWWidget or OWComponent
     :param value: the master's attribute with which the value is synchronized
@@ -1417,10 +1414,10 @@ def hSlider(widget, master, value, box=None, minValue=0, maxValue=10, step=1,
     :param width: the width of the slider
     :type width: int
     :param intOnly: if `True`, the slider value is integer (the slider is
-        of type :obj:`PyQt4.QtGui.QSlider`) otherwise it is float
-        (:obj:`FloatSlider`, derived in turn from :obj:`PyQt4.QtQui.QSlider`).
+        of type :obj:`QSlider`) otherwise it is float
+        (:obj:`FloatSlider`, derived in turn from :obj:`QSlider`).
     :type intOnly: bool
-    :rtype: :obj:`PyQt4.QtGui.QSlider` or :obj:`FloatSlider`
+    :rtype: :obj:`QSlider` or :obj:`FloatSlider`
     """
     sliderBox = hBox(widget, box, addToLayout=False)
     if label:
@@ -1472,7 +1469,7 @@ def labeledSlider(widget, master, value, box=None,
     Construct a slider with labels instead of numbers.
 
     :param widget: the widget into which the box is inserted
-    :type widget: PyQt4.QtGui.QWidget or None
+    :type widget: QWidget or None
     :param master: master widget
     :type master: OWWidget or OWComponent
     :param value: the master's attribute with which the value is synchronized
@@ -1492,7 +1489,7 @@ def labeledSlider(widget, master, value, box=None,
     :type vertical: bool
     :param width: the width of the slider
     :type width: int
-    :rtype: :obj:`PyQt4.QtGui.QSlider`
+    :rtype: :obj:`QSlider`
     """
     sliderBox = hBox(widget, box, addToLayout=False)
     if label:
@@ -1543,7 +1540,7 @@ def valueSlider(widget, master, value, box=None, label=None,
     Construct a slider with different values.
 
     :param widget: the widget into which the box is inserted
-    :type widget: PyQt4.QtGui.QWidget or None
+    :type widget: QWidget or None
     :param master: master widget
     :type master: OWWidget or OWComponent
     :param value: the master's attribute with which the value is synchronized
@@ -1565,7 +1562,7 @@ def valueSlider(widget, master, value, box=None, label=None,
     :type vertical: bool
     :param width: the width of the slider
     :type width: int
-    :rtype: :obj:`PyQt4.QtGui.QSlider`
+    :rtype: :obj:`QSlider`
     """
     if isinstance(labelFormat, str):
         labelFormat = lambda x, f=labelFormat: f % x
@@ -1610,7 +1607,7 @@ def valueSlider(widget, master, value, box=None, label=None,
 
 class OrangeComboBox(QtWidgets.QComboBox):
     """
-    A QtGui.QComboBox subclass extened to support bounded contents width hint.
+    A QComboBox subclass extended to support bounded contents width hint.
     """
     def __init__(self, parent=None, maximumContentsLength=-1, **kwargs):
         # Forward-declared for sizeHint()
@@ -1685,7 +1682,7 @@ def comboBox(widget, master, value, box=None, label=None, labelWidth=None,
     `control2attributeDict`.
 
     :param widget: the widget into which the box is inserted
-    :type widget: PyQt4.QtGui.QWidget or None
+    :type widget: QWidget or None
     :param master: master widget
     :type master: OWWidget or OWComponent
     :param value: the master's attribute with which the value is synchronized
@@ -1694,7 +1691,7 @@ def comboBox(widget, master, value, box=None, label=None, labelWidth=None,
     :type box: int or str or None
     :param orientation: tells whether to put the label above or to the left
     :type orientation: `Qt.Horizontal` (default), `Qt.Vertical` or
-        instance of `PyQt4.QtGui.QLayout`
+        instance of `QLayout`
     :param label: a label that is inserted into the box
     :type label: str
     :param labelWidth: the width of the label
@@ -1726,7 +1723,7 @@ def comboBox(widget, master, value, box=None, label=None, labelWidth=None,
     :param int maximumContentsLength: Specifies the upper bound on the
         `sizeHint` and `minimumSizeHint` width specified in character
         length (default: 25, use 0 to disable)
-    :rtype: PyQt4.QtGui.QComboBox
+    :rtype: QComboBox
     """
     if box or label:
         hb = widgetBox(widget, box, orientation, addToLayout=False)
@@ -1830,7 +1827,7 @@ class OrangeListBox(QtWidgets.QListWidget):
             and dragMove events
         :type dataValidityCallback: function with one argument (event)
         :param sizeHint: size hint
-        :type sizeHint: PyQt4.QtGui.QSize
+        :type sizeHint: QSize
         :param args: optional arguments for the inherited constructor
         """
         self.master = master
@@ -2078,7 +2075,7 @@ def auto_commit(widget, master, value, label, auto_label=None, box=True,
     auto_commit.
 
     :param widget: the widget into which the box with the button is inserted
-    :type widget: PyQt4.QtGui.QWidget or None
+    :type widget: QWidget or None
     :param value: the master's attribute which stores whether the auto-commit
         is on
     :type value:  str
@@ -2163,7 +2160,7 @@ def auto_commit(widget, master, value, label, auto_label=None, box=True,
 class ControlledList(list):
     """
     A class derived from a list that is connected to a
-    :obj:`PyQt4.QtGui.QListBox`: the list contains indices of items that are
+    :obj:`QListBox`: the list contains indices of items that are
     selected in the list box. Changing the list content changes the
     selection in the list box.
     """
