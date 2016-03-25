@@ -22,9 +22,13 @@ from AnyQt.QtCore import (
     Qt, QEvent, QSize, QUrl, QTimer, QFile, QByteArray, QSettings, QT_VERSION
 )
 
-from AnyQt.QtNetwork import QNetworkDiskCache
-
-from AnyQt.QtWebKitWidgets import QWebView
+if QT_VERSION < 0x50500:
+    from AnyQt.QtWebKitWidgets import QWebView
+    from AnyQt.QtNetwork import QNetworkDiskCache
+    USE_WEB_ENGINE = False
+else:
+    from PyQt5.QtWebEngineWidgets import QWebEngineView
+    USE_WEB_ENGINE = True
 
 from AnyQt.QtCore import Property
 
@@ -377,13 +381,16 @@ class CanvasMainWindow(QMainWindow):
         self.help_dock = DockableWindow(self.tr("Help"), self,
                                         objectName="help-dock")
         self.help_dock.setAllowedAreas(Qt.NoDockWidgetArea)
-        self.help_view = QWebView()
-        manager = self.help_view.page().networkAccessManager()
-        cache = QNetworkDiskCache()
-        cache.setCacheDirectory(
-            os.path.join(config.cache_dir(), "help", "help-view-cache")
-        )
-        manager.setCache(cache)
+        if USE_WEB_ENGINE:
+            self.help_view = QWebEngineView()
+        else:
+            self.help_view = QWebView()
+            manager = self.help_view.page().networkAccessManager()
+            cache = QNetworkDiskCache()
+            cache.setCacheDirectory(
+                os.path.join(config.cache_dir(), "help", "help-view-cache")
+            )
+            manager.setCache(cache)
         self.help_dock.setWidget(self.help_view)
         self.help_dock.hide()
 
