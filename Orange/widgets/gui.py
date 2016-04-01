@@ -2,12 +2,13 @@ import math
 import os
 import re
 import itertools
+import warnings
 from types import LambdaType
 
 import pkg_resources
 import numpy
 
-from AnyQt import QtWidgets, QtCore, QtGui, QtWebKitWidgets
+from AnyQt import QtWidgets, QtCore, QtGui
 from AnyQt.QtCore import Qt, Signal, Slot
 from AnyQt.QtGui import QCursor
 from AnyQt.QtWidgets import (
@@ -217,8 +218,22 @@ class TableWidget(QTableWidget):
         return self.selectRowsWhere(col, value, n_hits, flags, False)
 
 
-class WebviewWidget(QtWebKitWidgets.QWebView):
-    """WebKit window in a window"""
+from .utils import webview
+
+if webview.HAVE_WEBENGINE:
+    _WebViewBase = webview.WebEngineView
+else:
+    _WebViewBase = webview.WebKitView
+
+
+class WebviewWidget(_WebViewBase):
+    """
+    Web view widget using either QWebView or QWebEngineView if available.
+
+    .. warning:
+        Deprecated use one of webview.WebEngineView or webview.WebKitView
+        instead.
+    """
     def __init__(self, parent=None, bridge=None, html=None, debug=None):
         """
         Parameters
@@ -226,45 +241,51 @@ class WebviewWidget(QtWebKitWidgets.QWebView):
         parent: QObject
             Parent QObject. If parent has layout(), this widget is added to it.
         bridge: QObject
-            The "bridge" object exposed as ``window.pybridge`` in JavaScript.
+            The "bridge" object exposed as ``pybridge`` in JavaScript.
             Any bridge methods desired to be accessible from JS need to be
             decorated ``@QtCore.pyqtSlot(<*args>, result=<type>)``.
         html: str
-            HTML content to set in the webview.
+            HTML content to set in the view.
+            Note: Prefer `setHtml` with an explicitly set base url.
         debug: bool
-            If True, enable context menu and webkit inspector.
+            Obsolete will be ignored when using QWebEngine backend
         """
-        super().__init__(parent)
+        super().__init__(parent, bridge=bridge)
         self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding,
                                        QSizePolicy.Expanding))
         self._bridge = bridge
         try: parent.layout().addWidget(self)
         except (AttributeError, TypeError): pass
-        settings = self.settings()
-        settings.setAttribute(settings.LocalContentCanAccessFileUrls, True)
-        if debug is None:
-            import logging
-            debug = logging.getLogger().level <= logging.DEBUG
-        if debug:
+
+        if debug is not None and webview.HAVE_WEBENGINE and \
+                issubclass(WebviewWidget, webview.WebEngineView):
+            warnings.warn(
+                "debug parameter is not supported with QWebEngineView and"
+                "will be ignored",
+                RuntimeWarning, stacklevel=2)
+            self.setContextMenuPolicy(Qt.NoContextMenu)
+        elif debug:
+            settings = self.settings()
             settings.setAttribute(settings.DeveloperExtrasEnabled, True)
         else:
             self.setContextMenuPolicy(Qt.NoContextMenu)
-        if html:
+
+        if html is not None:
             self.setHtml(html)
-
-    def setContent(self, data, mimetype, url=''):
-        super().setContent(data, mimetype, QtCore.QUrl(url))
-        if self._bridge:
-            self.page().mainFrame().addToJavaScriptWindowObject('pybridge', self._bridge)
-
-    def setHtml(self, html, url=''):
-        self.setContent(html.encode('utf-8'), 'text/html', url)
 
     def sizeHint(self):
         return QtCore.QSize(600, 500)
 
     def evalJS(self, javascript):
-        self.page().mainFrame().evaluateJavaScript(javascript)
+        warnings.warn(
+            "evalJS is deprecated, please use runJavaScript "
+            "or even better replace the use of gui.WebviewWidget with one "
+            "of the utils.webview.WebEngineView (preferred if available) or "
+            "utils.webview.WebKitView",
+            DeprecationWarning, stacklevel=2,
+        )
+        self.runJavaScript(javascript)
+        return None
 
 
 class ControlledAttributesDict(dict):
