@@ -10,12 +10,14 @@ import pickle as pickle
 import itertools
 import sysconfig
 
+from urllib.request import urlopen
+from collections import namedtuple
+
 import pkg_resources
 
 from AnyQt.QtGui import (
     QPainter, QFont, QFontMetrics, QColor, QPixmap, QIcon
 )
-
 from AnyQt.QtCore import Qt, QCoreApplication, QPoint, QRect, QSettings
 
 from .utils.settings import Settings, config_slot
@@ -127,6 +129,16 @@ spec = \
 
      ("error-reporting/machine-id", str, '',
      "Report custom name instead of machine ID"),
+
+     ("application.update/enabled", bool, False,
+      "Enable periodic 'Check for updates' functionality"),
+
+     ("application.update/check-period", int, 1,
+      "Check for updates every #N days (0 means check at every start, "
+      "negative value means never)"),
+
+     ("application.update/remind-period", int, 3,
+      "Remind the user every #N days after an update is discovered"),
      ]
 
 spec = [config_slot(*t) for t in spec]
@@ -307,3 +319,159 @@ def application_icon():
     )
     return QIcon(path)
 
+
+def application_name():
+    """
+    Return the application name
+    """
+    return "Orange Canvas"
+
+
+def application_distribution():
+    """
+    Return the `pkg_resources.Distribution` of the python project defining
+    this application
+
+    Returns
+    -------
+    dist: pkg_resources.Distribution
+    """
+    return pkg_resources.get_distribution("Orange3")
+
+
+def application_version():
+    """
+    Return the application version string
+    """
+    dist = pkg_resources.get_distribution("Orange3")
+    return dist.version
+
+
+def latest_application_version_url():
+    return "http://orange.biolab.si/version"
+
+
+def download_url():
+    """
+    Return the download landing page url
+    """
+    return "http://orange.biolab.si/download"
+
+
+# An example application configuration
+exampleconfig = """
+[application.update]
+
+# Enable disable periodic update checking (default is disabled)
+#enabled = false
+
+# Check period expressed in days
+#check-period = 1
+
+# Remind the user every #N days after an update is discovered
+#remind-period = 3
+"""
+
+
+def updateconf():
+    """
+    Return periodic update check configuration for the current environment
+
+    Updates must be specifically enabled on an per environment basis.
+
+    Returns
+    -------
+    conf : dict
+        A dictionary with at least one key `"enabled"` and corresponding
+        boolean value. Other entries include `"check-period"` and
+        `"remind-period"` if specified in the configuration file (see
+        `etc/xdg/biolab.si/Orange Canvas.ini` example in the source root).
+
+    """
+    init()
+    s = QSettings()
+    s.beginGroup("application.update")
+    conf = {
+        "enabled": s.value("enabled", defaultValue=False, type=bool),
+        "check-period": s.value("check-period", defaultValue=7, type=int),
+        "remind-period": s.value("remind-period", defaultValue=3, type=int),
+
+    }
+    conf.update({
+        "version-check-url": latest_application_version_url(),
+        "download-url": download_url()
+    })
+    return conf
+
+
+_Installable = namedtuple(
+    "Installable",
+    ["name",
+     "version",
+     "category",
+     "display_name",
+     "download_url",
+     "release_notes_url"]
+)
+
+
+class Installable(_Installable):
+    """
+    Attributes
+    ----------
+    name : str
+        A python distribution/project name of the installable item
+    version : str
+        Version string of the available item.
+    category : str
+        "core" or "add-on"
+    display_name : Optional[str]
+        A human friendlier name for use in GUI (if applicable; otherwise
+        `name` is used)
+    download_url : Optional[str]
+    release_notes_url : Optional[str]
+    """
+    def __new__(cls, name, version, category, display_name=None,
+                download_url=None, release_notes_url=None):
+        return super().__new__(
+            cls, name, version, category, display_name, download_url,
+            release_notes_url)
+
+
+def fetch_latest():
+    """
+    Fetch the latest installable application and/or add-ons meta info
+
+    Returns
+    -------
+    info : List[Installable]
+        A list of namespace like objects with (at least) the following fields:
+
+        * `name` : str
+        * `version` : str
+        * `category`: str
+        * `display_name` : Optional[str]
+        * `download_url` : Optional[str]
+        * `release_notes_url` : Optional[str]
+
+    `category` is one of "core" or "add-on"
+
+    """
+    cfg = updateconf()
+    if not cfg["enabled"]:
+        return []
+
+    with urlopen(cfg["version-check-url"], timeout=10) as s:
+        version = s.read().decode("ascii")
+
+    latest = [
+        Installable(
+            name=application_distribution().project_name,
+            version=version,
+            category="core",
+            display_name=application_name(),
+            download_url=cfg["download-url"],
+            release_notes_url=
+                "https://github.com/biolab/orange3/blob/master/CHANGELOG.md")
+    ]
+    return latest

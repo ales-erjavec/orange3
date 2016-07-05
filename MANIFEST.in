@@ -13,6 +13,7 @@ recursive-include Orange/widgets/tests/workflows *.ows
 recursive-include Orange/widgets/utils/plot *.fs *.vs *.gs *.obj
 
 recursive-include distribute *.svg *.desktop
+recursive-include etc/xdg/biolab.si *.ini
 
 include requirements*.txt
 

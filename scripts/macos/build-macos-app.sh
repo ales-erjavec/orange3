@@ -153,6 +153,18 @@ VERSION=$("${PYTHON}" -m pip show orange3 | grep -E '^Version:' |
 m4 -D__VERSION__="${VERSION:?}" "${APPDIR}"/Contents/Info.plist.in \
     > "${APPDIR}"/Contents/Info.plist
 
+PREFIX=$("${PYTHON}" -c 'import sysconfig as c; print(c.get_path("data"))')
+
+# enable automatic update checker
+if [[ -f "${PREFIX:?}/etc/xdg/biolab.si/Orange Canvas.ini" ]]; then
+    (
+        cd "${PREFIX}/etc/xdg/biolab.si"
+        sed -e 's/^#enabled[[:space:]]*=[[:space:]]*false/enabled = true/' \
+            < "Orange Canvas.ini"  > "Orange Canvas.ini.tmp"
+        mv "Orange Canvas.ini.tmp" "Orange Canvas.ini"
+    )
+fi
+
 # Sanity check
 (
     # run from an empty dir to avoid importing/finding any packages on ./

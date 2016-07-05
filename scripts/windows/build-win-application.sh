@@ -116,6 +116,12 @@ mkdir -p "$DISTDIR"
 
 touch "$BUILDBASE"/requirements.txt
 
+# enable automatic update checker
+mkdir -p "$BUILDBASE"/etc/xdg/biolab.si/
+cat "etc/xdg/biolab.si/Orange Canvas.ini" | \
+    sed -e 's/^#enabled[[:space:]]*=[[:space:]]*false/enabled = true/' > \
+    "$BUILDBASE/etc/xdg/biolab.si/Orange Canvas.ini"
+
 
 function __download_url {
     local url=${1:?}

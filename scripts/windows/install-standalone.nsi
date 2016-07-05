@@ -140,6 +140,8 @@ Section "Main"
 
 	${ExtractTemp} "${BASEDIR}\requirements.txt" ${TEMPDIR}\
 
+	${ExtractTempRec} "${BASEDIR}\etc\*.*" ${TEMPDIR}\etc\
+
 	# Update pip to minimum required version (pip>=6)
 	DetailPrint "Updating pip"
 	${PythonExec} '-m pip install --no-index -f "${TEMPDIR}\wheelhouse" -U pip'
@@ -237,6 +239,12 @@ Section "Main"
 	WriteRegStr SHELL_CONTEXT \
 				"Software\Microsoft\Windows\CurrentVersion\Uninstall\Orange3" \
 				"UninstallString" ${UNINSTALLER}
+
+	# Write a custom environment configuration file to enable
+	# automatic update checks
+	CreateDirectory "$PythonDir\etc\xdg\biolab.si"
+	CopyFiles /SILENT "${TEMPDIR}\etc\xdg\biolab.si\Orange Canvas.ini" \
+	            "$PythonDir\etc\xdg\biolab.si\Orange Canvas.ini"
 
 	DetailPrint "Cleanup"
 	RmDir /R ${TEMPDIR}

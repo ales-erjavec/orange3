@@ -16,6 +16,7 @@ except ImportError:
     have_numpy = False
 
 from distutils.command.build_ext import build_ext
+from distutils.command.install_data import install_data
 
 NAME = 'Orange3'
 
@@ -192,6 +193,9 @@ PACKAGE_DATA = {
     "Orange.tests": ["xlsx_files/*.xlsx", "*.tab", "*.basket", "*.csv"]
 }
 
+DATA_FILES = [
+    ("etc/xdg/biolab.si", ["etc/xdg/biolab.si/Orange Canvas.ini"])
+]
 
 class LintCommand(Command):
     """A setup.py lint subcommand developers can run locally."""
@@ -239,6 +243,8 @@ class build_ext_error(build_ext):
 def setup_package():
     write_version_py()
     cmdclass = {
+        # force use base distutils install_data command and not numpy.distutils
+        'install_data': install_data,
         'lint': LintCommand,
         'coverage': CoverageCommand,
     }
@@ -267,6 +273,7 @@ def setup_package():
         classifiers=CLASSIFIERS,
         packages=PACKAGES,
         package_data=PACKAGE_DATA,
+        data_files=DATA_FILES,
         install_requires=INSTALL_REQUIRES,
         entry_points=ENTRY_POINTS,
         zip_safe=False,

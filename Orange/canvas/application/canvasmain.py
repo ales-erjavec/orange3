@@ -6,6 +6,8 @@ import os
 import sys
 import logging
 import operator
+import traceback
+
 from functools import partial
 from io import BytesIO, StringIO
 
@@ -65,11 +67,14 @@ from ..scheme import widgetsscheme
 from ..scheme.readwrite import scheme_load, sniff_version
 
 from . import welcomedialog
+from .updater import UpdateManager
 from ..preview import previewdialog, previewmodel
 
 from .. import config
 
 from . import workflows
+
+from ..gui.overlay import MessageOverlayWidget
 
 log = logging.getLogger(__name__)
 
@@ -185,6 +190,14 @@ class CanvasMainWindow(QMainWindow):
         self.setup_menu()
 
         self.restore()
+
+        self._updatechecker = UpdateManager(parent=self)
+        self._updatechecker.updateNotificationRequested.connect(
+            self.__update_notification_request)
+        self._updatechecker.finished.connect(
+            self.__update_check_finished
+        )
+        self._updatechecker.autoStart()
 
     def setup_ui(self):
         """Setup main canvas ui
@@ -463,6 +476,24 @@ class CanvasMainWindow(QMainWindow):
                     menuRole=QAction.AboutRole,
                     )
 
+        self.check_updates_action = \
+            QAction(self.tr("Check for updates..."), self,
+                    objectName="check-update-action",
+                    toolTip=self.tr("Check if there is a newer version of "
+                                    "Orange and/or installed add-ons "
+                                    "available for installation"),
+                    triggered=self.check_updates,
+                    menuRole=QAction.ApplicationSpecificRole,
+                    )
+
+        # Disable check for updates action if not enabled for the current
+        # environment
+        s = QSettings()
+        s.beginGroup("application.update")
+        if not s.value("enabled", type=bool):
+            self.check_updates_action.setVisible(False)
+            self.check_updates_action.setEnabled(False)
+
         # Action group for for recent scheme actions
         self.recent_scheme_action_group = \
             QActionGroup(self, exclusive=False,
@@ -660,6 +691,7 @@ class CanvasMainWindow(QMainWindow):
         self.options_menu.addAction(self.canvas_settings_action)
         self.options_menu.addAction(self.reset_widget_settings_action)
         self.options_menu.addAction(self.canvas_addons_action)
+        self.options_menu.addAction(self.check_updates_action)
 
         # Widget menu
         menu_bar.addMenu(self.widget_menu)
@@ -1588,6 +1620,109 @@ class CanvasMainWindow(QMainWindow):
         dlg = AddonManagerDialog(self, windowTitle=self.tr("Add-ons"))
         dlg.setAttribute(Qt.WA_DeleteOnClose)
         return dlg.exec_()
+
+    def check_updates(self):
+        """
+        Start a background update check.
+
+        Once the check completes, the state will be reported using a modal
+        QMessageBox.
+        """
+        self._updatechecker.start()
+
+    def __update_notification_request(self):
+        # An update notification request was issued by the UpdateManager.
+        # Display an appropriate message.
+        showmodal = self._updatechecker.reason() & UpdateManager.NormalStart
+        items = self._updatechecker.allItems()
+        project_name = config.application_distribution().project_name
+        appupdate = [item for item in items if item.name == project_name]
+        appupdate = appupdate[0] if appupdate else None
+        if appupdate:
+            self.__update_notify(appupdate, modal=showmodal)
+
+    def __update_check_finished(self):
+        # Show an error message if the user requested update check did not
+        # complete due to an error
+        if self._updatechecker.reason() & UpdateManager.NormalStart \
+                and self._updatechecker.exception():
+            err = self._updatechecker.exception()
+            tb = getattr(err, "__traceback__", None)
+            if tb is not None:
+                tbtext = "".join(traceback.format_tb(tb))
+            else:
+                tbtext = ""
+            mb = QMessageBox(
+                parent=self,
+                windowTitle="Update check error",
+                text="Update check failed with an error",
+                detailedText=tbtext,
+                icon=QMessageBox.Critical,
+                windowIcon=QIcon()
+            )
+            mb.show()
+
+    def __update_notify(self, item, modal=False):
+        parse_version = pkg_resources.parse_version
+        selfver = parse_version(item.installed_version)
+        version = parse_version(item.latest_version)
+        download_url = item.meta.get("download-url", None)
+        release_notes_url = item.meta.get("release-notes-url", None)
+        has_newer = version > selfver
+        if not modal and has_newer:
+            # use a non-modal overlay message
+            text = ("{0.display_name} version {0.latest_version} is available."
+                    .format(item))
+            msg = MessageOverlayWidget(
+                parent=self, text=text, textFormat=Qt.PlainText,
+                icon=MessageOverlayWidget.Information)
+            msg.setAttribute(Qt.WA_DeleteOnClose)
+            msg.setWidget(self.centralWidget())
+            msg.setOverlayStyle(MessageOverlayWidget.DarkStyle)
+            if download_url is not None:
+                download = msg.addButton(
+                    "Download\N{HORIZONTAL ELLIPSIS}",
+                    MessageOverlayWidget.AcceptRole)
+                download.clicked.connect(
+                    lambda: QDesktopServices.openUrl(QUrl(download_url)))
+            skip = msg.addButton(
+                "Skip this version", MessageOverlayWidget.RejectRole)
+            msg.addButton(MessageOverlayWidget.Close)
+            skip.clicked.connect(
+                lambda: self._updatechecker.noteSkipped(item))
+            msg.show()
+        elif modal and has_newer:
+            # modal message box
+            mb = QMessageBox(
+                self, windowTitle="Update", icon=QMessageBox.Information)
+            mb.setAttribute(Qt.WA_DeleteOnClose)
+            text = ("<em>{name} version {0.latest_version} is available "
+                    "(current installed version is {0.installed_version})."
+                    "</em>".format(item, name=item.display_name or item.name))
+            if release_notes_url:
+                text += ("<br/><br/>See <a href=\"{}\">release notes.</a>"
+                         .format(release_notes_url))
+            mb.setText(text)
+            b = mb.addButton("Remind Me Later", QMessageBox.AcceptRole)
+            mb.setEscapeButton(b)
+            mb.setDefaultButton(b)
+
+            if download_url:
+                b = mb.addButton("Download", QMessageBox.YesRole)
+                b.clicked.connect(
+                    lambda: QDesktopServices.openUrl(QUrl(download_url)))
+
+            b = mb.addButton("Skip This Update", QMessageBox.RejectRole)
+            b.clicked.connect(
+                lambda: self._updatechecker.noteSkipped(item))
+            mb.show()
+        elif modal and not has_newer:
+            mb = QMessageBox(
+                parent=self, windowTitle="Updates", text="You are up to date",
+                icon=QMessageBox.Information,
+            )
+            mb.setAttribute(Qt.WA_DeleteOnClose)
+            mb.show()
 
     def reset_widget_settings(self):
         res = message_question(

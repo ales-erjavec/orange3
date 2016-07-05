@@ -22,6 +22,10 @@ from AnyQt.QtWidgets import (
 from AnyQt.QtCore import (
     Qt, QEventLoop, QAbstractItemModel, QModelIndex
 )
+from AnyQt.QtCore import (
+    pyqtProperty as Property, pyqtSignal as Signal, pyqtSlot as Slot
+)
+
 
 log = logging.getLogger(__name__)
 
@@ -173,6 +177,59 @@ def container_widget_helper(orientation=Qt.Vertical, spacing=None, margin=0):
     return widget
 
 
+class IdComboBox(QComboBox):
+    """
+    A combo box mapping the current `itemData(...)` in the
+    `currentId_` property.
+    """
+    #: Emitted when the (user) item data (for the current index) changes
+    currentIdChanged = Signal(int)
+
+    def selectById(self, value):
+        """
+        Select the current item (currentIndex) by matching value to
+        itemData(Qt.UserData)
+
+        Parameters
+        ----------
+        value : int
+        """
+        for i in range(self.count()):
+            if value == self.itemData(i, Qt.UserRole):
+                self.setCurrentIndex(i)
+                break
+        else:
+            self.setCurrentIndex(-1)
+
+    def currentId(self):
+        """
+        Return the current id (the itemData(currentIndex())
+        Returns
+        -------
+        id : int
+        """
+        # type: () -> int
+        if self.currentIndex() < 0:
+            return -1
+        else:
+            return self.itemData(self.currentIndex(), Qt.UserRole)
+
+    currentId_ = Property(
+        int, currentId, selectById, notify=currentIdChanged)
+
+    def __init__(self, *args, **kwargs):
+        currentIndexChanged = kwargs.pop("currentIndexChanged", None)
+        super(IdComboBox, self).__init__(*args, **kwargs)
+        # connect first to ensure consistent order of emitted signals
+        self.currentIndexChanged.connect(self.__emitCurrentChanged)
+        if currentIndexChanged is not None:
+            self.currentIndexChanged.connect(currentIndexChanged)
+
+    @Slot()
+    def __emitCurrentChanged(self):
+        self.currentIdChanged.emit(self.currentId())
+
+
 class UserSettingsDialog(QMainWindow):
     """
     A User Settings/Defaults dialog.
@@ -303,7 +360,7 @@ class UserSettingsDialog(QMainWindow):
                               objectName="show-splash-screen")
 
         cb_welcome = QCheckBox(self.tr("Show welcome screen"), self,
-                                objectName="show-welcome-screen")
+                               objectName="show-welcome-screen")
 
         self.bind(cb_splash, "checked", "startup/show-splash-screen")
         self.bind(cb_welcome, "checked", "startup/show-welcome-screen")
@@ -324,6 +381,20 @@ class UserSettingsDialog(QMainWindow):
         toolbox.layout().addWidget(exclusive)
 
         form.addRow(self.tr("Tool box"), toolbox)
+
+        if self.__settings["application.update/enabled"]:
+            updates = IdComboBox(objectName="update-period")
+            updates.addItem("Daily", userData=1)
+            updates.addItem("Every two days", userData=2)
+            updates.addItem("Every three days", userData=3)
+            updates.addItem("Every four days", userData=4)
+            updates.addItem("Weekly", userData=7)
+            updates.insertSeparator(updates.count())
+            updates.addItem("Never", userData=-2)
+            self.bind(updates, "currentId_",
+                      "application.update/check-period")
+            form.addRow(self.tr("Check for updates"), updates)
+
         tab.setLayout(form)
 
         # Output Tab
@@ -407,7 +478,6 @@ class UserSettingsDialog(QMainWindow):
         target = UserDefaultsPropertyBinding(self.__settings, key)
         source = PropertyBinding(source, source_property)
         source.set(target.get())
-
         self._manager.bind(target, source)
 
     def commit(self):
