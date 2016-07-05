@@ -680,16 +680,7 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
 
         btn = self.__msgwidget.button(MessageOverlayWidget.Ok)
         btn.setText("Ok, got it")
-
-        self.__msgwidget.setStyleSheet("""
-            MessageOverlayWidget {
-                background: qlineargradient(
-                    x1: 0, y1: 0, x2: 0, y2: 1,
-                    stop:0 #666, stop:0.3 #6D6D6D, stop:1 #666)
-            }
-            MessageOverlayWidget QLabel#text-label {
-                color: white;
-            }""")
+        self.__msgwidget.setOverlayStyle(MessageOverlayWidget.DarkStyle)
 
         if message.moreurl is not None:
             helpbutton = self.__msgwidget.button(MessageOverlayWidget.Help)

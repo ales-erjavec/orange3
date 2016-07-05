@@ -78,7 +78,6 @@ class OverlayWidget(QWidget):
         return self.__alignment
 
     def eventFilter(self, recv, event):
-        # reimplemented
         if recv is self.__widget:
             if event.type() == QEvent.Resize or event.type() == QEvent.Move:
                 self.__layout()
@@ -114,7 +113,6 @@ class OverlayWidget(QWidget):
         if widget.isWindow():
             bounds = widget.geometry()
         else:
-
             bounds = QRect(widget.mapToGlobal(QPoint(0, 0)),
                            widget.size())
         if self.isWindow():
@@ -250,6 +248,9 @@ class MessageWidget(QWidget):
     helpRequested = Signal()
     #: Emitted when a button is clicked
     clicked = Signal(QAbstractButton)
+    #: Emitted when a link in the message text is clicked (and
+    #: `openExternalLinks` is False)
+    linkActivated = Signal(str)
 
     class StandardButton(enum.IntEnum):
         NoButton, Ok, Close, Help = 0x0, 0x1, 0x2, 0x4
@@ -257,13 +258,13 @@ class MessageWidget(QWidget):
 
     class ButtonRole(enum.IntEnum):
         InvalidRole, AcceptRole, RejectRole, HelpRole = 0, 1, 2, 3
-
     InvalidRole, AcceptRole, RejectRole, HelpRole = list(ButtonRole)
 
     _Button = namedtuple("_Button", ["button", "role", "stdbutton"])
 
     def __init__(self, parent=None, icon=QIcon(), text="", wordWrap=False,
-                 textFormat=Qt.AutoText, standardButtons=NoButton, **kwargs):
+                 textFormat=Qt.AutoText, openExternalLinks=False,
+                 standardButtons=NoButton, **kwargs):
         super().__init__(parent, **kwargs)
         self.__text = text
         self.__icon = QIcon()
@@ -277,7 +278,9 @@ class MessageWidget(QWidget):
         self.__iconlabel = QLabel(objectName="icon-label")
         self.__iconlabel.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.__textlabel = QLabel(objectName="text-label", text=text,
-                                  wordWrap=wordWrap, textFormat=textFormat)
+                                  wordWrap=wordWrap, textFormat=textFormat,
+                                  openExternalLinks=openExternalLinks)
+        self.__textlabel.linkActivated.connect(self.linkActivated)
 
         if sys.platform == "darwin":
             self.__textlabel.setAttribute(Qt.WA_MacSmallSize)
@@ -371,6 +374,12 @@ class MessageWidget(QWidget):
         :rtype: Qt.TextFormat
         """
         return self.__textlabel.textFormat()
+
+    def setOpenExternalLinks(self, open):
+        self.__textlabel.setOpenExternalLinks(open)
+
+    def openExternalLinks(self):
+        return self.__textlabel.openExternalLinks()
 
     def changeEvent(self, event):
         # reimplemented
@@ -523,30 +532,41 @@ class MessageOverlayWidget(OverlayWidget):
     clicked = Signal(QAbstractButton)
     #: Emitted when a button with HelpRole is clicked
     helpRequested = Signal()
+    #: Emitted when a link in the message text is clicked (and
+    #: `openExternalLinks` is False)
+    linkActivated = Signal(str)
 
     NoButton, Ok, Close, Help = list(MessageWidget.StandardButton)
     InvalidRole, AcceptRole, RejectRole, HelpRole = \
         list(MessageWidget.ButtonRole)
 
+    class Style(enum.IntEnum):
+        NoStyle, LightStyle, DarkStyle = 0, 1, 2
+    NoStyle, LightStyle, DarkStyle = list(Style)
+
     def __init__(self, parent=None, text="", icon=QIcon(),
                  alignment=Qt.AlignTop, wordWrap=False,
+                 textFormat=Qt.RichText, openExternalLinks=False,
                  standardButtons=NoButton, **kwargs):
         super().__init__(parent, alignment=alignment, **kwargs)
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         self.__msgwidget = MessageWidget(
             parent=self, text=text, icon=icon, wordWrap=wordWrap,
-            standardButtons=standardButtons
+            standardButtons=standardButtons, textFormat=textFormat,
+            openExternalLinks=openExternalLinks, objectName="message-widget"
         )
         self.__msgwidget.accepted.connect(self.accepted)
         self.__msgwidget.rejected.connect(self.rejected)
         self.__msgwidget.clicked.connect(self.clicked)
         self.__msgwidget.helpRequested.connect(self.helpRequested)
+        self.__msgwidget.linkActivated.connect(self.linkActivated)
 
         self.__msgwidget.accepted.connect(self.hide)
         self.__msgwidget.rejected.connect(self.hide)
         layout.addWidget(self.__msgwidget)
         self.setLayout(layout)
+        self.setAutoFillBackground(True)
 
     @proxydoc(MessageWidget.setText)
     def setText(self, text):
@@ -572,6 +592,14 @@ class MessageOverlayWidget(OverlayWidget):
     def setTextFormat(self, textFormat):
         self.__msgwidget.setTextFormat(textFormat)
 
+    @proxydoc(MessageWidget.setOpenExternalLinks)
+    def setOpenExternalLinks(self, open):
+        self.__msgwidget.setOpenExternalLinks(open)
+
+    @proxydoc(MessageWidget.openExternalLinks)
+    def openExternalLinks(self):
+        return self.__msgwidget.openExternalLinks()
+
     @proxydoc(MessageWidget.setStandardButtons)
     def setStandardButtons(self, buttons):
         self.__msgwidget.setStandardButtons(buttons)
@@ -592,8 +620,54 @@ class MessageOverlayWidget(OverlayWidget):
     def button(self, standardButton):
         return self.__msgwidget.button(standardButton)
 
+    def setOverlayStyle(self, style):
+        if style == MessageOverlayWidget.DarkStyle:
+            self.setStyleSheet(DarkStyleSheet)
+        elif style == MessageOverlayWidget.LightStyle:
+            self.setStyleSheet(LightStyleSheet)
+        elif style == MessageOverlayWidget.NoStyle:
+            self.setStyleSheet("")
+        else:
+            raise ValueError(style)
+
+
+DarkStyleSheet = """
+MessageOverlayWidget {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #808080,
+        stop: 1.0 #666
+    );
+    border-style: solid;
+    border-color: #808080;
+    border-width: 1px 1px 1px 1px;
+}
+MessageOverlayWidget QLabel#text-label {
+    color: white;
+}
+"""
+
+LightStyleSheet = """
+MessageOverlayWidget {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #F2F2F2,
+        stop: 0.5 #F2F2F2,
+        stop: 0.8 #EBEBEB,
+        stop: 1.0 #DBDBDB
+    );
+    border-style: solid;
+    border-color: #808080;
+    border-width: 1px 1px 1px 1px;
+}
+MessageOverlayWidget QLabel#text-label {
+    color: black;
+}
+"""
+
 
 import unittest
+
 
 
 class TestOverlay(unittest.TestCase):
