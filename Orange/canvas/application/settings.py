@@ -172,6 +172,81 @@ def container_widget_helper(orientation=Qt.Vertical, spacing=None, margin=0):
 
     return widget
 
+from PyQt4.QtCore import pyqtProperty as Property, pyqtSignal as Signal, pyqtSlot as Slot
+
+
+class Q_Property(Property):
+    """
+    A property descriptor that more closely resembles the Q_PROPERTY macro.
+
+    Encourage a coding style which is consistent with Qt.
+
+    Example:
+    >>> class Foo(QObject):
+    ...     _bar = 0
+    ...     def bar(self):
+    ...         return self._bar
+    ...     def setBar(self, bar):
+    ...         self._bar = bar
+    ...     bar = Q_Property(int, fget=bar, fset=setBar)
+
+    >>> obj = Foo()
+    >>> obj.setBar(2)
+    >>> obj.bar()
+    2
+    >>> obj.setProperty("bar", 42)
+    True
+    >>> obj.property("bar")
+    42
+    >>> obj.bar()
+    42
+
+    """
+    def __get__(self, obj, cls=None):
+        # Simply return the contained (bound) fget method
+        return self.fget.__get__(obj, cls)
+
+    def __set__(self, obj, value):
+        raise TypeError
+
+    def setter(self, f):
+        raise RuntimeError
+
+    def getter(self, f):
+        raise RuntimeError
+
+
+class ComboBox(QComboBox):
+    #: Emitted when the (user) item data (for the current index) changes
+    currentIdChanged = Signal(int)
+
+    def setCurrentId(self, value):
+        for i in range(self.count()):
+            if value == self.itemData(i, Qt.UserRole):
+                self.setCurrentIndex(i)
+                break
+        else:
+            self.setCurrentIndex(-1)
+
+    def currentId(self):
+        return self.itemData(self.currentIndex(), Qt.UserRole)
+
+    currentId = Q_Property(
+        int, currentId, setCurrentId, notify=currentIdChanged)
+
+    def __init__(self, *args, **kwargs):
+        currentIndexChanged = kwargs.pop("currentIndexChanged", None)
+        super(ComboBox, self).__init__(*args, **kwargs)
+
+        self.currentIndexChanged.connect(self.__emitCurrentChanged)
+        # Ensure predictable order of emitted signals
+        if currentIndexChanged is not None:
+            self.currentIndexChanged.connect(currentIndexChanged)
+
+    @Slot()
+    def __emitCurrentChanged(self):
+        self.currentIdChanged.emit(self.currentId)
+
 
 class UserSettingsDialog(QMainWindow):
     """
@@ -303,7 +378,7 @@ class UserSettingsDialog(QMainWindow):
                               objectName="show-splash-screen")
 
         cb_welcome = QCheckBox(self.tr("Show welcome screen"), self,
-                                objectName="show-welcome-screen")
+                               objectName="show-welcome-screen")
 
         self.bind(cb_splash, "checked", "startup/show-splash-screen")
         self.bind(cb_welcome, "checked", "startup/show-welcome-screen")
@@ -324,6 +399,17 @@ class UserSettingsDialog(QMainWindow):
         toolbox.layout().addWidget(exclusive)
 
         form.addRow(self.tr("Tool box"), toolbox)
+
+        updates = ComboBox(objectName="update-period")
+        updates.addItem("Daily", userData=1)
+        updates.addItem("Every two days", userData=2)
+        updates.addItem("Weekly", userData=7)
+        updates.addItem("On every start", userData=0)
+        updates.addItem("Never", userData=-1)
+        self.bind(updates, "currentId",
+                  "application/update/check-period")
+        form.addRow(self.tr("Check for updates"), updates)
+
         tab.setLayout(form)
 
         # Output Tab
@@ -452,7 +538,6 @@ class UserSettingsDialog(QMainWindow):
         target = UserDefaultsPropertyBinding(self.__settings, key)
         source = PropertyBinding(source, source_property)
         source.set(target.get())
-
         self._manager.bind(target, source)
 
     def commit(self):

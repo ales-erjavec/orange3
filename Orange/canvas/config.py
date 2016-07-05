@@ -8,6 +8,10 @@ import sys
 import logging
 import pickle as pickle
 import itertools
+import sysconfig
+import configparser
+
+from urllib.request import urlopen
 
 import pkg_resources
 
@@ -133,7 +137,14 @@ spec = \
      ("help/dockable", bool, True, "Allow help window to be docked"),
 
      ("help/open-in-external-browser", bool, False,
-      "Open help in an external browser")
+      "Open help in an external browser"),
+
+     ("application/update/check-period", int, 1,
+      "Check for updates every #N days (0 means check at every start;"
+      "-1 means disabled"),
+
+     ("application/update/nag-period", int, 1,
+      "Nag the user every #N days when an update is available"),
      ]
 
 spec = [config_slot(*t) for t in spec]
@@ -314,3 +325,193 @@ def application_icon():
     )
     return QIcon(path)
 
+
+def application_name():
+    """
+    Return the application name
+    """
+    return "Orange Canvas"
+
+
+def application_version():
+    """
+    Return the application version string
+    """
+    dist = pkg_resources.get_distribution("Orange3")
+    return dist.version
+
+
+def fetch_latest_application_version():
+    with urlopen("http://orange.biolab.si/version", timeout=5) as r:
+        return r.read().decode("ascii")
+
+
+def download_url():
+    """
+    Return the download landing page url
+    """
+    return "http://orange.biolab.si/download"
+
+
+updateconfig = """
+[update-components]
+items =
+    Orange Canvas
+
+[Orange Canvas]
+name = Orange
+type = ApplicationInstaller
+category = "core/application"
+"""
+
+# An example application configuration
+updateconfig = """
+[application.update]
+
+# Enable disable update/checking (default is disabled)
+#enabled = false
+
+# Update type; can be 'Manual' (the user must download and run an
+# installer) or 'Auto' (the application can apply/install an update by
+# itself). Further type specific configurations are listed bellow
+type = Manual
+# type = Auto
+
+
+[application.update.manual]
+
+# An url returning the latest application version string. The version must
+# be be PEP-440 compliant
+versionurl = http://orange.biolab.si/version
+
+# Application download landing page
+downloadurl = http://orange.biolab.si/download
+
+
+[application.update.auto]
+
+# Base url of a simple repository api (specified by PEP 503). If not supplied
+# then the default https://pypi.python.org/simple/ will be used
+#repourl = https://pypi.io/simple/
+
+
+# The project name used to query the pypi index
+project = Orange3
+
+"""
+
+
+def updateconf():
+    fname = os.path.join(
+        sysconfig.get_path("data"), "etc", "Orange3", "update.conf")
+    cfg = configparser.ConfigParser()
+    cfg.read([fname])
+    items = cfg.get("update-components", "items", fallback="")
+    items = [s.strip() for s in items.splitlines()]
+    # ignore missing sections
+    items = [s for s in items if s in cfg]
+    config = {}
+
+    for item in items:
+        name = cfg.get(item, "name", fallback=item)
+        cat = cfg.get(item, "category", fallback=None)
+        type = cfg.get(item, "type", fallback=None)
+        if cat is not None and type is not None:
+            config[item] = {"name": name, "category": cat, "type": type}
+    return config
+
+
+def updateconf1():
+    fname = os.path.join(
+        sysconfig.get_path("data"), "etc", "orange3", "canvas.conf")
+
+    cfg = configparser.ConfigParser()
+    cfg.read([fname])
+    config = {}
+
+    enabled = cfg.getboolean("application.update", "enabled", fallback=False)
+    config["enabled"] = enabled
+    if not enabled:
+        return {"enabled": False}
+
+    updatetype = cfg.get("application.update", "type", fallback=None)
+    if updatetype is None:
+        return {"enabled": False}
+    elif updatetype not in {"Auto", "Manual"}:
+        return {"enabled": False}
+
+    config["updatetype"] = updatetype
+
+    if updatetype == "Manual":
+        section = "application.update.manual"
+        versionurl = cfg.get(section, "versionurl", fallback=None)
+        downloadurl = cfg.get(section, "downloadurl", fallback=None)
+        if not versionurl and downloadurl:
+            return {"enabled": False}
+        config["manual"] = {"versionurl": versionurl,
+                            "downloadurl": downloadurl}
+        return config
+    elif updatetype == "Auto":
+        section = "application.update.auto"
+        repourl = cfg.get(section, "repourl",
+                           fallback=pypiquery.PYPI_INDEX_URL)
+        projectname = cfg.get(section, "project", fallback=None)
+        if not repourl and projectname:
+            return {"enabled": False}
+        config["auto"] = {"repourl": repourl, "projectname": projectname}
+    return config
+
+
+def fetch_updates():
+    from .application.addons import Installable  ## is not installable and not from adddons!!!!!
+    cfg = updateconf()
+    item = cfg.get(application_name(), None)
+    if item is None:
+        return []
+    elif item["type"] == "ApplicationInstaller":
+        latest = fetch_latest_application_version()
+        item = Installable(
+            name=application_name(),
+            version=latest,
+            summary="",
+            description="",
+            package_url=download_url(),
+            release_urls=[]
+        )
+        return [item]
+    else:
+        return []
+
+
+def fetch_updates1():
+    from types import SimpleNamespace as namespace
+    cfg = updateconf1()
+    if not cfg["enabled"]:
+        return []
+    elif cfg["updatetype"] == "Manual":
+        cfg = cfg["manual"]
+        with urlopen(cfg["versionurl"]) as s:
+            version = s.read().decode("ascii")
+        return [namespace(name=application_name(),
+                          updatetype="manual",
+                          version=version,
+                          download_url=cfg["downloadurl"],
+                          package_url=cfg["downloadurl"])]
+
+    elif cfg["updatetype"] == "Auto":
+        cfg = cfg["auto"]
+        indexurl = cfg["repourl"]
+        projectname = cfg["projectname"]
+        releases = pypiquery.simple_index_query(projectname, indexurl)
+        if not releases:
+            return []
+        else:
+            latest = releases[-1]
+            return [namespace(name=application_name(),
+                              updatetype="pip",
+                              project_name=projectname,
+                              version=latest.version,
+                              index_url=indexurl,
+                              package_url=indexurl + projectname,
+                              download_url=indexurl + projectname,
+                              release_urls=latest.urls)]

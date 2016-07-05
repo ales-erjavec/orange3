@@ -148,6 +148,20 @@ echo "================="
 
 "$PIP" install .
 
+# config search paths: ${prefix}/etc/orange3/update.conf
+PREFIX=$("$PYTHON" -B -c 'import sysconfig as c; print(c.get_path("data"))')
+mkdir -p "${PREFIX:?}"/etc/Orange3
+cat <<EOF > "${PREFIX:?}"/etc/Orange3/update.conf
+[update-components]
+items =
+    Orange Canvas
+
+[Orange Canvas]
+name = Orange
+type = ApplicationInstaller
+category = "core/application"
+EOF
+
 echo "Running tests"
 echo "============="
 

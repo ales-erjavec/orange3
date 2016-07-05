@@ -238,6 +238,20 @@ Section "Main"
 				"Software\Microsoft\Windows\CurrentVersion\Uninstall\Orange3" \
 				"UninstallString" ${UNINSTALLER}
 
+	# Write a condiguration file for the update checker
+	CreateDirectory "$PythonDir\etc\Orange3"
+	FileOpen $9 "$PythonDir\etc\Orange3\update.conf" w
+	FileWrite $9 '[update-components]$\r$\n\
+items =$\r$\n\
+    Orange Canvas$\r$\n\
+$\r$\n\
+[Orange Canvas]$\r$\n\
+name = Orange$\r$\n\
+type = ApplicationInstaller$\r$\n\
+category = "core/application"$\r$\n\
+'
+	FileClose $9
+
 	DetailPrint "Cleanup"
 	RmDir /R ${TEMPDIR}
 

@@ -51,11 +51,14 @@ from ..scheme import widgetsscheme
 from ..scheme.readwrite import scheme_load, sniff_version
 
 from . import welcomedialog
+from . import updater
 from ..preview import previewdialog, previewmodel
 
 from .. import config
 
 from . import workflows
+
+from ..gui.overlay import MessageOverlayWidget
 
 log = logging.getLogger(__name__)
 
@@ -179,6 +182,9 @@ def update_window_flags(widget, flags):
             widget.show()
 
 
+UPDATE_TEMPLATE = "Orange version {new} available. Your version is {current}."
+
+
 class CanvasMainWindow(QMainWindow):
     SETTINGS_VERSION = 2
 
@@ -210,6 +216,11 @@ class CanvasMainWindow(QMainWindow):
         self.setup_menu()
 
         self.restore()
+
+        self._updatechecker = updater.UpdateManager(parent=self)
+        self._updatechecker.updateNotificationRequested.connect(
+            self.__autoupdate_check_completed)
+        self._updatechecker.autoStart()
 
     def setup_ui(self):
         """Setup main canvas ui
@@ -482,6 +493,21 @@ class CanvasMainWindow(QMainWindow):
                     menuRole=QAction.AboutRole,
                     )
 
+        self.check_updates_action = \
+            QAction(self.tr("Check for updates..."), self,
+                    objectName="check-update-action",
+                    toolTip=self.tr("Check if there is a newer version of "
+                                    "Orange and/or installed add-ons "
+                                    "available for installation"),
+                    triggered=self.check_updates,
+                    menuRole=QAction.ApplicationSpecificRole,
+                    )
+
+        # Are application updates actually configured.
+        if not config.updateconf().get(config.application_name()):
+            self.check_updates_action.setVisible(False)
+            self.check_updates_action.setEnabled(False)
+
         # Action group for for recent scheme actions
         self.recent_scheme_action_group = \
             QActionGroup(self, exclusive=False,
@@ -675,6 +701,7 @@ class CanvasMainWindow(QMainWindow):
         self.options_menu.addAction(self.canvas_settings_action)
         self.options_menu.addAction(self.reset_widget_settings_action)
         self.options_menu.addAction(self.canvas_addons_action)
+        self.options_menu.addAction(self.check_updates_action)
 
         # Widget menu
         menu_bar.addMenu(self.widget_menu)
@@ -1603,6 +1630,80 @@ class CanvasMainWindow(QMainWindow):
         dlg = AddonManagerDialog(self, windowTitle=self.tr("Add-ons"))
         dlg.setAttribute(Qt.WA_DeleteOnClose)
         return dlg.exec_()
+
+    def check_updates(self):
+        # Start (force) the update check if not already pending and mark that
+        # the update check was requested explicitly.
+        self._updatechecker.start()
+
+    def __autoupdate_check_completed(self, flags):
+        # Auto update check has completed, display an update message if
+        # necessary
+        showmodal = not flags & updater.NotificationFlag.Spontaneous
+        items = self._updatechecker.updateItems()
+
+        coreupdate = [item for item in items
+                      if item.name == config.application_name()]
+        if coreupdate:
+            item = coreupdate.pop()
+            self.__update_notify(item, modal=showmodal)
+
+    def __update_notify(self, item, modal=False):
+        parse_version = pkg_resources.parse_version
+        selfver = parse_version(config.application_version())
+        version = parse_version(item.version)
+        has_newer = version > selfver
+
+        if not modal and has_newer:
+            # display a non-modal overlay message
+            text = UPDATE_TEMPLATE.format(current=selfver, new=item.version)
+            msg = MessageOverlayWidget(
+                parent=self,
+                text=text,
+                textFormat=Qt.PlainText,
+            )
+            msg.setAttribute(Qt.WA_DeleteOnClose)
+            msg.setWidget(self)
+            msg.setOverlayStyle(MessageOverlayWidget.DarkStyle)
+            download = msg.addButton(
+                "Download\N{HORIZONTAL ELLIPSIS}",
+                MessageOverlayWidget.AcceptRole)
+            skip = msg.addButton(
+                "Skip this version", MessageOverlayWidget.RejectRole)
+            msg.addButton(MessageOverlayWidget.Close)
+            skip.clicked.connect(
+                lambda: self._updatechecker.noteSkipped(item.version))
+            download.clicked.connect(
+                lambda: QDesktopServices.openUrl(QUrl(item.package_url)))
+            msg.show()
+
+        elif modal and has_newer:
+            text = ("<p>" +
+                    UPDATE_TEMPLATE.format(current=selfver, new=item.version) +
+                    "</p><p>Update now?</p>")
+            mb = QMessageBox(
+                parent=self,
+                windowTitle="Updates",
+                text=text,
+                icon=QMessageBox.Question,
+                standardButtons=QMessageBox.Yes | QMessageBox.No
+            )
+            mb.setAttribute(Qt.WA_DeleteOnClose)
+
+            @mb.finished.connect
+            def onfinished(result):
+                if result == QMessageBox.Yes:
+                    QDesktopServices.openUrl(QUrl(item.package_url))
+            mb.show()
+        elif modal and not has_newer:
+            mb = QMessageBox(
+                parent=self,
+                windowTitle="Updates",
+                text="You are up to date",
+                icon=QMessageBox.Information,
+            )
+            mb.setAttribute(Qt.WA_DeleteOnClose)
+            mb.show()
 
     def reset_widget_settings(self):
         res = message_question(
