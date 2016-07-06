@@ -101,6 +101,11 @@ class OverlayWidget(QWidget):
         painter = QPainter(self)
         self.style().drawPrimitive(QStyle.PE_Widget, opt, painter, self)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Force immediate re-layout on show
+        self.__layout()
+
     def __layout(self):
         # position itself over `widget`
         widget = self.__widget
@@ -639,6 +644,14 @@ class MessageOverlayWidget(OverlayWidget):
             self.setStyleSheet("")
         else:
             raise ValueError(style)
+
+    def showEvent(self, event):
+        # Reimplemented.
+        # Explicitly show the message widget. If/when it is dismissed it is
+        # also explicitly hidden (to parent) and will not be visible again
+        # until shown again.
+        self.__msgwidget.show()
+        super().showEvent(event)
 
 
 DarkStyleSheet = """
