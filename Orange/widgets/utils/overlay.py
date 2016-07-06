@@ -2,7 +2,7 @@
 Overlay Message Widget
 ----------------------
 
-A Widget to display a temporary dismissable message over another widget.
+A Widget to display a temporary dismissible message over another widget.
 
 """
 
@@ -106,6 +106,10 @@ class OverlayWidget(QWidget):
         # Force immediate re-layout on show
         self.__layout()
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.__layout()
+
     def __layout(self):
         # position itself over `widget`
         widget = self.__widget
@@ -171,14 +175,14 @@ class OverlayWidget(QWidget):
         if alignment & Qt.AlignLeft:
             x = bounds.x()
         elif alignment & Qt.AlignRight:
-            x = bounds.right() - size.width()
+            x = bounds.x() + bounds.width() - size.width()
         else:
             x = bounds.x() + max(0, bounds.width() - size.width()) // 2
 
         if alignment & Qt.AlignTop:
             y = bounds.y()
         elif alignment & Qt.AlignBottom:
-            y = bounds.bottom() - size.height()
+            y = bounds.y() + bounds.height() - size.height()
         else:
             y = bounds.y() + max(0, bounds.height() - size.height()) // 2
 
@@ -690,7 +694,7 @@ MessageOverlayWidget QLabel#text-label {
 
 
 import unittest
-
+import unittest.mock
 
 
 class TestOverlay(unittest.TestCase):
@@ -701,25 +705,24 @@ class TestOverlay(unittest.TestCase):
             app = QApplication([])
         self.app = app
 
-    def _exec(self, timeout):
-        QTimer.singleShot(timeout, self.app.quit)
-        return self.app.exec_()
-
     def tearDown(self):
         del self.app
 
     def test_overlay(self):
+        from AnyQt.QtTest import QTest
         container = QWidget()
         overlay = MessageOverlayWidget(parent=container)
         overlay.setWidget(container)
         overlay.setIcon(QStyle.SP_MessageBoxInformation)
         container.show()
-        container.raise_()
-        self._exec(500)
+        QTest.qWaitForWindowExposed(container)
+
         self.assertTrue(overlay.isVisible())
 
         overlay.setText("Hello world! It's so nice here")
-        self._exec(500)
+        self.app.sendPostedEvents(overlay, QEvent.LayoutRequest)
+        self.assertTrue(overlay.geometry().isValid())
+
         button_ok = overlay.addButton(MessageOverlayWidget.Ok)
         button_close = overlay.addButton(MessageOverlayWidget.Close)
         button_help = overlay.addButton(MessageOverlayWidget.Help)
@@ -735,4 +738,54 @@ class TestOverlay(unittest.TestCase):
         self.assertTrue(overlay.buttonRole(button),
                         MessageOverlayWidget.AcceptRole)
 
-        self._exec(10000)
+        mock = unittest.mock.MagicMock()
+        overlay.accepted.connect(mock)
+        QTest.mouseClick(button, Qt.LeftButton)
+        self.assertFalse(overlay.isVisible())
+
+        mock.assert_called_once_with()
+
+        overlay.show()
+
+        self.assertTrue(overlay.isVisible())
+        self.assertTrue(overlay.geometry().isValid())
+
+    def test_layout(self):
+        from AnyQt.QtTest import QTest
+        container = QWidget()
+        container.setLayout(QHBoxLayout())
+        container1 = QWidget()
+        container.layout().addWidget(container1)
+        container.show()
+        QTest.qWaitForWindowExposed(container)
+        container.resize(600, 600)
+
+        overlay = OverlayWidget(parent=container)
+        overlay.setWidget(container)
+        overlay.resize(20, 20)
+        overlay.show()
+
+        center = overlay.geometry().center()
+        self.assertTrue(290 < center.x() < 310)
+        self.assertTrue(290 < center.y() < 310)
+
+        overlay.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+        geom = overlay.geometry()
+        self.assertEqual(geom.top(), 0)
+        self.assertTrue(290 < geom.center().x() < 310)
+
+        overlay.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        geom = overlay.geometry()
+        self.assertEqual(geom.left(), 0)
+        self.assertTrue(290 < geom.center().y() < 310)
+
+        overlay.setAlignment(Qt.AlignBottom | Qt.AlignRight)
+        geom = overlay.geometry()
+        self.assertEqual(geom.right(), 600 - 1)
+        self.assertEqual(geom.bottom(), 600 - 1)
+
+        overlay.setWidget(container1)
+        geom = overlay.geometry()
+
+        self.assertEqual(geom.right(), container1.geometry().right())
+        self.assertEqual(geom.bottom(), container1.geometry().bottom())
