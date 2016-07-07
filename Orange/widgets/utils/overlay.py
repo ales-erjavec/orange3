@@ -203,6 +203,7 @@ class SimpleButton(QAbstractButton):
     def __init__(self, parent=None, **kwargs):
         super().__init__(parent, **kwargs)
         self.__focusframe = None
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
     def focusInEvent(self, event):
         # reimplemented
@@ -245,8 +246,8 @@ class SimpleButton(QAbstractButton):
                         else QIcon.Active)
             else:
                 mode = QIcon.Disabled
-            pixmap = icon.pixmap(option.iconSize, mode, )
-
+            state = QIcon.On if option.state & QStyle.State_On else QIcon.Off
+            pixmap = icon.pixmap(option.iconSize, mode, state)
             painter.drawItemPixmap(option.rect, Qt.AlignCenter, pixmap)
 
 
@@ -305,7 +306,7 @@ class MessageWidget(QWidget):
             self.__textlabel.setAttribute(Qt.WA_MacSmallSize)
 
         layout.addWidget(self.__iconlabel)
-        layout.addWidget(self.__textlabel)
+        layout.addWidget(self.__textlabel, 10)
 
         self.setLayout(layout)
         self.setIcon(icon)
@@ -445,10 +446,6 @@ class MessageWidget(QWidget):
                 button = QPushButton("Ok", default=False, autoDefault=False)
             elif button == MessageWidget.Close:
                 role = MessageWidget.RejectRole
-#                 button = QPushButton(
-#                     default=False, autoDefault=False, flat=True,
-#                     icon=QIcon(self.style().standardIcon(
-#                                QStyle.SP_TitleBarCloseButton)))
                 button = SimpleButton(
                     icon=QIcon(self.style().standardIcon(
                                QStyle.SP_TitleBarCloseButton)))
