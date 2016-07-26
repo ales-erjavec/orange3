@@ -280,6 +280,12 @@ class MessageWidget(QWidget):
         InvalidRole, AcceptRole, RejectRole, HelpRole = 0, 1, 2, 3
     InvalidRole, AcceptRole, RejectRole, HelpRole = list(ButtonRole)
 
+    #: QStyle.SP_MessageBox* pixmap enums repeated for easier access
+    Question = QStyle.SP_MessageBoxQuestion
+    Information = QStyle.SP_MessageBoxInformation
+    Warning = QStyle.SP_MessageBoxWarning
+    Critical = QStyle.SP_MessageBoxCritical
+
     _Button = namedtuple("_Button", ["button", "role", "stdbutton"])
 
     def __init__(self, parent=None, icon=QIcon(), text="", wordWrap=False,
@@ -559,6 +565,11 @@ class MessageOverlayWidget(OverlayWidget):
     class Style(enum.IntEnum):
         NoStyle, LightStyle, DarkStyle = 0, 1, 2
     NoStyle, LightStyle, DarkStyle = list(Style)
+
+    Question = MessageWidget.Question
+    Information = MessageWidget.Information
+    Warning = MessageWidget.Warning
+    Critical = MessageWidget.Critical
 
     def __init__(self, parent=None, text="", icon=QIcon(),
                  alignment=Qt.AlignTop, wordWrap=False,
