@@ -589,8 +589,8 @@ class MessageOverlayWidget(OverlayWidget):
         self.__msgwidget.helpRequested.connect(self.helpRequested)
         self.__msgwidget.linkActivated.connect(self.linkActivated)
 
-        self.__msgwidget.accepted.connect(self.hide)
-        self.__msgwidget.rejected.connect(self.hide)
+        self.__msgwidget.accepted.connect(self.close)
+        self.__msgwidget.rejected.connect(self.close)
         layout.addWidget(self.__msgwidget)
         self.setLayout(layout)
         self.setAutoFillBackground(True)
