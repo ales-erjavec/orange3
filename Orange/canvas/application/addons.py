@@ -38,7 +38,9 @@ from PyQt4.QtCore import (
 )
 from PyQt4.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
 
-from ..config import ADDON_KEYWORD
+from ..utils import concurrent as qconcurrent
+
+from .. import config
 from ..gui.utils import message_warning, message_information, \
                         message_critical as message_error, \
                         OSX_NSURL_toLocalFile
@@ -185,7 +187,7 @@ class AddonManagerWidget(QWidget):
 
     def __init__(self, parent=None, **kwargs):
         super(AddonManagerWidget, self).__init__(parent, **kwargs)
-
+        self.__items = []
         self.setLayout(QVBoxLayout())
 
         self.__header = QLabel(
@@ -414,18 +416,6 @@ class AddonManagerWidget(QWidget):
         return QSize(480, 420)
 
 
-def method_queued(method, sig, conntype=Qt.QueuedConnection):
-    name = method.__name__
-    obj = method.__self__
-    assert isinstance(obj, QObject)
-
-    def call(*args):
-        args = [Q_ARG(atype, arg) for atype, arg in zip(sig, args)]
-        return QMetaObject.invokeMethod(obj, name, conntype, *args)
-
-    return call
-
-
 class AddonManagerDialog(QDialog):
     _packages = None
 
@@ -455,16 +445,14 @@ class AddonManagerDialog(QDialog):
         self.user_install = not os.access(sysconfig.get_path("purelib"),
                                           os.W_OK)
 
-        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         if AddonManagerDialog._packages is None:
-            self._f_pypi_addons = self._executor.submit(list_pypi_addons)
+            self._f_pypi_addons = qconcurrent.submit(config.query_addons)
         else:
             self._f_pypi_addons = concurrent.futures.Future()
             self._f_pypi_addons.set_result(AddonManagerDialog._packages)
 
-        self._f_pypi_addons.add_done_callback(
-            method_queued(self._set_packages, (object,))
-        )
+        w = qconcurrent.FutureWatcher(self, self._f_pypi_addons)
+        w.done.connect(self._set_packages)
 
         self.__progress = QProgressDialog(
             self, Qt.Sheet,
@@ -497,13 +485,25 @@ class AddonManagerDialog(QDialog):
             raise
         else:
             AddonManagerDialog._packages = packages
+        packages = [
+            Installable(
+                name=pkgmeta.name,
+                version=pkgmeta.version,
+                summary=pkgmeta.summary,
+                description=pkgmeta.description,
+                package_url=pkgmeta.package_url,
+                release_urls=releases
 
-        installed = list_installed_addons()
+            )
+            for pkgmeta, releases in filter(None, packages)
+        ]
+
+        installed = config.pkgconfg_iter_installed()
         dists = {dist.project_name: dist for dist in installed}
         packages = {pkg.name: pkg for pkg in packages}
 
         # For every pypi available distribution not listed by
-        # list_installed_addons, check if it is actually already
+        # config.pkgconfg_iter_installed, check if it is actually already
         # installed.
         ws = pkg_resources.WorkingSet()
         for pkg_name in set(packages.keys()).difference(set(dists.keys())):
@@ -545,7 +545,7 @@ class AddonManagerDialog(QDialog):
     def done(self, retcode):
         super().done(retcode)
         self._f_pypi_addons.cancel()
-        self._executor.shutdown(wait=False)
+
         if self.__thread is not None:
             self.__thread.quit()
             self.__thread.wait(1000)
@@ -553,7 +553,6 @@ class AddonManagerDialog(QDialog):
     def closeEvent(self, event):
         super().closeEvent(event)
         self._f_pypi_addons.cancel()
-        self._executor.shutdown(wait=False)
 
         if self.__thread is not None:
             self.__thread.quit()
@@ -695,13 +694,6 @@ def list_pypi_addons():
                             urls)
             )
     return packages
-
-
-def list_installed_addons():
-    from ..config import ADDON_ENTRY
-    workingset = pkg_resources.WorkingSet(sys.path)
-    return [ep.dist for ep in
-            workingset.iter_entry_points(ADDON_ENTRY)]
 
 
 def unique(iterable):

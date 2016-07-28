@@ -353,6 +353,54 @@ def download_url():
     return "http://orange.biolab.si/download"
 
 
+from .utils import pypiquery
+
+# A list of known Orange3 Add-ons hardcoded here due to pypi's flakiness
+# https://github.com/pypa/pypi-legacy/issues/397
+# https://bitbucket.org/pypa/pypi/issues/326
+OFFICIAL_ADDONS = [
+    "Orange-Bioinformatics",
+    "Orange3-DataFusion",
+    "Orange3-Prototypes",
+    "Orange3-Text",
+    "Orange3-Network",
+    "Orange3-Associate",
+]
+
+
+# TODO: Try the 'https://pypi.io/pypi' as a xmlrpc entry point
+
+def _query_orange_addons():
+    # Search Orange3 add ons on PyPi
+    # return a list of project names and their latest version
+    client = pypiquery.default_pypi_client(timeout=10)
+    addons = pypiquery.pypi_search(ADDON_PYPI_SEARCH_SPEC, client)
+
+    addons = [addon.name for addon in addons] + OFFICIAL_ADDONS
+    addons = list(set(addons))
+    return pypiquery.pypi_json_query_project_meta(addons)
+
+
+def query_addons():
+    return _query_orange_addons()
+
+
+def pkgconfg_iter_installed():
+    # TODO: get_dist_meta and other utils from manager into utils
+    from .help.manager import get_dist_meta
+    rval = []
+    ws = pkg_resources.WorkingSet(sys.path)
+    for key, dist in ws.by_key.items():
+        meta = get_dist_meta(dist)
+        keywords = meta.get("Keywords", "")
+        if "orange3 add-on" in keywords:
+            rval.append(dist)
+    for ep in ws.iter_entry_points(ADDON_ENTRY):
+        if ep.dist not in rval:
+            rval.append(ep.dist)
+    return rval
+
+
 updateconfig = """
 [update-components]
 items =
