@@ -189,6 +189,11 @@ PACKAGE_DATA = {
     "Orange.tests": ["xlsx_files/*.xlsx", "*.tab", "*.basket", "*.csv"]
 }
 
+DATA_FILES = [
+    ("etc/orange3",
+     ["etc/orange3/canvas.conf"])
+]
+
 
 class LintCommand(Command):
     """A setup.py lint subcommand developers can run locally."""
@@ -264,6 +269,7 @@ def setup_package():
         classifiers=CLASSIFIERS,
         packages=PACKAGES,
         package_data=PACKAGE_DATA,
+        data_files=DATA_FILES,
         install_requires=INSTALL_REQUIRES,
         entry_points=ENTRY_POINTS,
         zip_safe=False,

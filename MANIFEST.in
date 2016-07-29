@@ -12,6 +12,7 @@ recursive-include Orange/widgets/_highcharts *.js *.css *.html
 recursive-include Orange/widgets/utils/plot *.fs *.vs *.gs *.obj
 
 recursive-include distribute *.svg *.desktop
+include etc/orange3/*.conf
 
 include requirements*.txt
 
