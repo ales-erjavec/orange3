@@ -6,7 +6,6 @@ A Widget to display a temporary dismissable message over another widget.
 
 """
 
-import sys
 import enum
 import functools
 import operator
@@ -279,9 +278,6 @@ class MessageWidget(QWidget):
         self.__textlabel = QLabel(objectName="text-label", text=text,
                                   wordWrap=wordWrap, textFormat=textFormat)
 
-        if sys.platform == "darwin":
-            self.__textlabel.setAttribute(Qt.WA_MacSmallSize)
-
         layout.addWidget(self.__iconlabel)
         layout.addWidget(self.__textlabel)
 
@@ -381,7 +377,13 @@ class MessageWidget(QWidget):
     def changeEvent(self, event):
         # reimplemented
         if event.type() == 177:  # QEvent.MacSizeChange:
-            ...
+            for attr in [Qt.WA_MacSmallSize, Qt.WA_MacNormalSize,
+                         Qt.WA_MacMiniSize]:
+                # QLabel does not seem to inherit MacSize hints? Or at least
+                # it's font is not resolved properly
+                self.__textlabel.setAttribute(attr, self.testAttribute(attr))
+                self.__iconlabel.setAttribute(attr, self.testAttribute(attr))
+
         super().changeEvent(event)
 
     def setStandardButtons(self, buttons):
@@ -440,8 +442,6 @@ class MessageWidget(QWidget):
             role = rolearg[0]
             button = QPushButton(button, default=False, autoDefault=False)
 
-        if sys.platform == "darwin":
-            button.setAttribute(Qt.WA_MacSmallSize)
         self.__buttons.append(MessageWidget._Button(button, role, stdbutton))
         button.clicked.connect(self.__button_clicked)
         self.__relayout()
@@ -544,6 +544,7 @@ class MessageOverlayWidget(OverlayWidget):
             parent=self, text=text, icon=icon, wordWrap=wordWrap,
             standardButtons=standardButtons
         )
+        self.__msgwidget.setAttribute(Qt.WA_MacSmallSize, True)
         self.__msgwidget.accepted.connect(self.accepted)
         self.__msgwidget.rejected.connect(self.rejected)
         self.__msgwidget.clicked.connect(self.clicked)
