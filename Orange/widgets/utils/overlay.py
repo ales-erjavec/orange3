@@ -407,6 +407,12 @@ class MessageWidget(QWidget):
     def openExternalLinks(self):
         return self.__textlabel.openExternalLinks()
 
+    def paintEvent(self, event):
+        opt = QStyleOption()
+        opt.initFrom(self)
+        painter = QPainter(self)
+        self.style().drawPrimitive(QStyle.PE_Widget, opt, painter, self)
+
     def changeEvent(self, event):
         # reimplemented
         if event.type() == 177:  # QEvent.MacSizeChange:
