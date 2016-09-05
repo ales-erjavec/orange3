@@ -35,7 +35,7 @@ from inspect import getattr_static
 from AnyQt.QtWidgets import QApplication, QStyle, QSizePolicy
 
 from Orange.widgets import gui
-
+from Orange.widgets.utils import overlay
 
 class UnboundMsg(str):
     """
@@ -311,7 +311,7 @@ class WidgetMessagesMixin(MessagesMixin):
 
     def __init__(self):
         super().__init__()
-        self.message_bar = self.message_label = self.message_icon = None
+        self.message_bar = None
         self.messageActivated.connect(self.update_message_state)
         self.messageDeactivated.connect(self.update_message_state)
 
@@ -356,13 +356,32 @@ class WidgetMessagesMixin(MessagesMixin):
 
         This method must be called at the appropriate place in the widget
         layout setup by any widget that is using this mixin."""
-        self.message_bar = gui.hBox(self, spacing=0)
-        self.message_icon = gui.widgetLabel(self.message_bar, "")
-        self.message_label = gui.widgetLabel(self.message_bar, "")
-        self.message_label.setStyleSheet("padding-top: 5px")
+        self.message_bar = self._create_message_bar(parent=self)
         self.message_bar.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Maximum)
-        gui.rubber(self.message_bar)
+        self.layout().addWidget(self.message_bar)
         self.message_bar.setVisible(False)
+
+    def _create_message_bar(self, parent=None):
+        """Create and return a 'message bar' widget.
+
+        This widget is used to display widget's messages. It must have the
+        the following property setters:
+            * `setText(text: str)` - set the message text (as qt rich text)
+            * `setIcon(icon: QIcon)` - set the displayed message icon.
+
+        Parameters
+        ----------
+        parent : Optional[QWidget]
+            The created widget's parent
+
+        Returns
+        -------
+        widget : QWidget
+
+        """
+        w = overlay.MessageWidget(parent)
+        w.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Maximum)
+        return w
 
     def _hide_message_bar(self):
         if self.message_bar is None:
@@ -379,14 +398,16 @@ class WidgetMessagesMixin(MessagesMixin):
 
         current_height = self.height()
         style = QApplication.instance().style()
-        self.message_icon.setPixmap(
+        self.message_bar.setIcon(
             style.standardIcon(group.bar_icon).pixmap(14, 14))
+
         self.message_bar.setStyleSheet(
-            "QWidget {{ background-color: {}; color: black;"
+            "MessageWidget {{ background-color: {}; color: black;"
             "padding: 3px; padding-left: 6px; vertical-align: center }}\n"
             "QToolTip {{ background-color: white; }}".
             format(group.bar_background))
-        self.message_label.setText(text)
+
+        self.message_bar.setText(text)
         self.message_bar.setToolTip(tooltip)
         if self.message_bar.isHidden():
             self.message_bar.setVisible(True)
