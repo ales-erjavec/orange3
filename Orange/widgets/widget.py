@@ -1,6 +1,7 @@
 import sys
 import os
 import types
+import enum
 from functools import reduce
 
 from PyQt4.QtCore import QByteArray, Qt, pyqtSignal as Signal, QSettings, QUrl
@@ -70,6 +71,11 @@ class WidgetMetaClass(type(QDialog)):
         return cls
 
 
+class MessageBarPosition(enum.Enum):
+    Top = "Top"
+    Bottom = "Bottom"
+
+
 class OWWidget(QDialog, Report, ProgressBarMixin, WidgetMessagesMixin,
                metaclass=WidgetMetaClass):
     """Base widget class"""
@@ -121,9 +127,15 @@ class OWWidget(QDialog, Report, ProgressBarMixin, WidgetMessagesMixin,
     #: Should the widget construct a `controlArea`.
     want_control_area = True
     #: Orientation of the buttonsArea box; valid only if
-    #  `want_control_area` is `True`. Possible values are Qt.Horizontal,
-    #  Qt.Vertical and None for no buttons area
+    #: `want_control_area` is `True`. Possible values are Qt.Horizontal,
+    #: Qt.Vertical and None for no buttons area
     buttons_area_orientation = Qt.Horizontal
+    #: Specify where the default message bar should be placed.
+    #: Valid values are Top, Bottom, None; if None the default message
+    #: bar is not constructed and clients are responsible for displaying
+    #: messages within the widget
+    message_bar_position = MessageBarPosition.Top
+
     #: Widget painted by `Save graph" button
     graph_name = None
     graph_writers = FileFormat.img_writers
@@ -285,8 +297,9 @@ class OWWidget(QDialog, Report, ProgressBarMixin, WidgetMessagesMixin,
         """Provide the basic widget layout
 
         Which parts are created is regulated by class attributes
-        `want_main_area`, `want_control_area` and `buttons_area_orientation`,
-        the presence of method `send_report` and attribute `graph_name`.
+        `want_main_area`, `want_control_area`, `message_bar_position` and
+        `buttons_area_orientation`, the presence of method `send_report`
+        and attribute `graph_name`.
         """
         self.setLayout(QVBoxLayout())
         self.layout().setContentsMargins(2, 2, 2, 2)
@@ -295,12 +308,17 @@ class OWWidget(QDialog, Report, ProgressBarMixin, WidgetMessagesMixin,
 
         self.want_main_area = self.want_main_area or self.graph_name
         self._create_default_buttons()
-        self.insert_message_bar()
+
+        if self.message_bar_position == MessageBarPosition.Top:
+            self.insert_message_bar()
         self._insert_splitter()
         if self.want_control_area:
             self._insert_control_area()
         if self.want_main_area:
             self._insert_main_area()
+
+        if self.message_bar_position == MessageBarPosition.Bottom:
+            self.insert_message_bar()
 
     def save_graph(self):
         """Save the graph with the name given in class attribute `graph_name`.
