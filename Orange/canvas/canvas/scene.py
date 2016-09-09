@@ -336,6 +336,7 @@ class CanvasScene(QGraphicsScene):
         node.processing_state_changed.connect(item.setProcessingState)
         node.state_message_changed.connect(item.setStateMessage)
         node.status_message_changed.connect(item.setStatusMessage)
+        node.runtime_state_changed.connect(item.setRuntimeState)
 
         return self.add_node_item(item)
 

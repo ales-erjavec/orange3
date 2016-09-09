@@ -78,7 +78,6 @@ class SignalManager(QObject):
         # mapping a node to it's current outputs
         # {node: {channel: {id: signal_value}}}
         self._node_outputs = {}
-
         self.__state = SignalManager.Running
         self.__runtime_state = SignalManager.Waiting
 
@@ -86,6 +85,9 @@ class SignalManager(QObject):
         self.__reschedule = False
         self.__update_timer = QTimer(self, interval=100, singleShot=True)
         self.__update_timer.timeout.connect(self.__process_next)
+
+        # type: Dict[SchemeNode, SchemeNode.RuntimeState]
+        self.__node_state = {}
 
     def _can_process(self):
         """
@@ -184,9 +186,13 @@ class SignalManager(QObject):
         self.remove_pending_signals(node)
 
         del self._node_outputs[node]
+        del self.__node_state[node]
+        node.runtime_state_changed.disconnect(self.__on_node_state_change)
 
     def on_node_added(self, node):
         self._node_outputs[node] = defaultdict(dict)
+        self.__node_state[node] = node.runtime_state()
+        node.runtime_state_changed.connect(self.__on_node_state_change)
 
     def link_added(self, link):
         # push all current source values to the sink
@@ -347,9 +353,11 @@ class SignalManager(QObject):
                 .intersection({sig.link for sig in signals_in}) == set([]))
         self.processingStarted.emit()
         self.processingStarted[SchemeNode].emit(node)
+        node.set_state_flag(SchemeNode.RuntimeState.UpdatingInputs)
         try:
             self.send_to_node(node, signals_in)
         finally:
+            node.set_state_flag(SchemeNode.RuntimeState.UpdatingInputs, False)
             self.processingFinished.emit()
             self.processingFinished[SchemeNode].emit(node)
 
@@ -421,6 +429,27 @@ class SignalManager(QObject):
     def is_blocking(self, node):
         return False
 
+    def __on_node_state_change(self, state):
+        node = self.sender()
+        current = self.__node_state[node]
+        mask = (SchemeNode.RuntimeState.UpdatingInputs |
+                SchemeNode.RuntimeState.Processing)
+
+        if not current & mask and state & mask:
+            self.__on_node_enter_processing(node)
+        elif current & mask and not state & mask:
+            self.__on_node_exit_processing(node)
+
+        self.__node_state[node] = state
+
+    def __on_node_enter_processing(self, node):
+        print("SignalManager: start output monitor", node.title)
+        pass
+
+    def __on_node_exit_processing(self, node):
+        print("SignalManager: stop output monitor", node.title)
+        pass
+
     def node_update_front(self):
         """
         Return a list of nodes on the update front, i.e. nodes scheduled for
@@ -434,6 +463,8 @@ class SignalManager(QObject):
         scheme = self.scheme()
 
         blocking_nodes = set(self.blocking_nodes())
+        print("\n".join("{}: state {}".format(node.title, node.runtime_state())
+                        for node in blocking_nodes))
 
         dependents = partial(dependent_nodes, scheme)
 

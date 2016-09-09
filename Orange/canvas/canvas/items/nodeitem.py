@@ -24,7 +24,7 @@ from AnyQt.QtCore import pyqtSignal as Signal, pyqtProperty as Property
 from .graphicspathobject import GraphicsPathObject
 from .utils import saturated, radial_gradient
 
-from ...scheme.node import UserMessage
+from ...scheme.node import UserMessage, SchemeNode
 from ...registry import NAMED_COLORS
 from ...resources import icon_loader
 from .utils import uniform_linear_layout
@@ -86,6 +86,7 @@ class NodeBodyItem(GraphicsPathObject):
         self.__hasFocus = False
         self.__hover = False
         self.__shapeRect = QRectF(-10, -10, 20, 20)
+        self.__palette = QPalette()
 
         self.setAcceptHoverEvents(True)
 
@@ -140,8 +141,9 @@ class NodeBodyItem(GraphicsPathObject):
         """
         Set the body color palette (:class:`QPalette`).
         """
-        self.palette = palette
-        self.__updateBrush()
+        if self.__palette != palette:
+            self.__palette = palette
+            self.__updateBrush()
 
     def setAnimationEnabled(self, enabled):
         """
@@ -158,6 +160,7 @@ class NodeBodyItem(GraphicsPathObject):
             self.__processingState = state
             if not state and self.__animationEnabled:
                 self.ping()
+            self.update()
 
     def setProgress(self, progress):
         """
@@ -165,8 +168,11 @@ class NodeBodyItem(GraphicsPathObject):
         be a number between 0 and 100.
 
         """
-        self.__progress = progress
-        self.update()
+        progress = max(min(progress, 100,), -1)
+        if self.__progress != progress:
+            self.__progress = progress
+            print(progress)
+            self.update()
 
     def ping(self):
         """
@@ -193,17 +199,34 @@ class NodeBodyItem(GraphicsPathObject):
             # Prevent the default bounding rect selection indicator.
             option.state = option.state ^ QStyle.State_Selected
         GraphicsPathObject.paint(self, painter, option, widget)
+
         if self.__progress >= 0:
             # Draw the progress meter over the shape.
             # Set the clip to shape so the meter does not overflow the shape.
             painter.save()
             painter.setClipPath(self.shape(), Qt.ReplaceClip)
-            color = self.palette.color(QPalette.ButtonText)
+            color = self.__palette.color(QPalette.ButtonText)
             pen = QPen(color, 5)
             painter.setPen(pen)
             painter.setRenderHints(QPainter.Antialiasing)
             span = max(1, int(self.__progress * 57.60))
             painter.drawArc(self.__shapeRect, 90 * 16, -span)
+            painter.restore()
+        elif self.__processingState:
+            # Indeterminate processing indicator
+            # Set the clip to shape so the meter does not overflow the shape.
+            painter.setClipPath(self.shape(), Qt.ReplaceClip)
+            color = self.__palette.color(QPalette.Disabled,
+                                         QPalette.WindowText).lighter(150)
+            pw = 3
+            pen = QPen(color, pw, Qt.DotLine)
+            painter.save()
+            painter.setPen(pen)
+            painter.setRenderHints(QPainter.Antialiasing)
+            # span = max(1, int(self.__progress * 57.60))
+            # painter.drawArc(self.__shapeRect, 90 * 16, -span)
+            rect = self.__shapeRect.adjusted(pw/2, pw/2, -pw/2, -pw/2)
+            painter.drawEllipse(rect)
             painter.restore()
 
     def __updateShadowState(self):
@@ -238,7 +261,7 @@ class NodeBodyItem(GraphicsPathObject):
             self.shadow.setBlurRadius(radius)
 
     def __updateBrush(self):
-        palette = self.palette
+        palette = self.__palette
         if self.__isSelected:
             cg = QPalette.Active
         else:
@@ -750,6 +773,57 @@ class NameTextItem(QGraphicsTextItem):
             super().setHtml(contents)
 
 
+class StateIndicator(QGraphicsObject):
+    def __init__(self, parent=None, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.__text = QGraphicsTextItem(self)
+
+    def setState(self, state):
+        if state == 1:
+            self.__text.setPlainText("\N{BULLET}" * 3)
+        else:
+            self.__text.setPlainText("")
+
+        self.__text.adjustSize()
+        self.__text.setPos(-self.__text.textWidth() / 2, 0)
+
+    def setText(self, text):
+        self.__text.setPlainText(text)
+        self.__text.adjustSize()
+        self.__text.setPos(-self.__text.textWidth() / 2, 0)
+
+    def boundingRect(self):
+        return QRectF()
+
+    def paint(self, painter, option, widget=None):
+        pass
+
+    def font(self):
+        return self.__text.font()
+
+    def setFont(self, font):
+        self.__text.setFont(font)
+
+
+class RuntimeStateIndicator(QGraphicsObject):
+    Red, Yellow, Green, Gray = 1, 2, 3, 4
+    def __init__(self, parentItem=None, **kwargs):
+        super().__init__(parentItem, **kwargs)
+        self.__state = self.Gray
+
+    def setState(self, state):
+        if self.__state != state:
+            self.__state = state
+            self.update()
+
+    def paint(self, painter, option, widget=None):
+        pass
+        # if self.__state ==
+
+    def boundingRect(self):
+        return QRectF()
+
+
 class NodeItem(QGraphicsObject):
     """
     An widget node item in the canvas.
@@ -797,12 +871,12 @@ class NodeItem(QGraphicsObject):
         self.errorItem = None
         self.warningItem = None
         self.infoItem = None
-
+        self.__stateItem = None
         self.__title = ""
         self.__processingState = 0
         self.__progress = -1
         self.__statusMessage = ""
-
+        self.__runtimeState = SchemeNode.RuntimeState
         self.__error = None
         self.__warning = None
         self.__info = None
@@ -881,6 +955,11 @@ class NodeItem(QGraphicsObject):
         self.warningItem = iconItem(QStyle.SP_MessageBoxWarning)
         self.infoItem = iconItem(QStyle.SP_MessageBoxInformation)
 
+        self.__stateItem = StateIndicator(self)
+        self.__stateItem.setPos(0, 24 + 1)
+        font = self.__stateItem.font()
+        font.setPixelSize(32 - 24 - 1)
+        self.__stateItem.setFont(font)
         self.prepareGeometryChange()
         self.__boundingRect = None
 
@@ -1005,6 +1084,10 @@ class NodeItem(QGraphicsObject):
                 self.setProgress(-1)
                 if self.__animationEnabled:
                     self.shapeItem.ping()
+                self.__stateItem.hide()
+            elif state:
+                self.__stateItem.show()
+                self.__stateItem.setState(state)
 
     def processingState(self):
         """
@@ -1019,7 +1102,7 @@ class NodeItem(QGraphicsObject):
         """
         Set the node work progress state (number between 0 and 100).
         """
-        if progress is None or progress < 0 or not self.__processingState:
+        if progress is None or progress < 0: # or not self.__processingState:
             progress = -1
 
         progress = max(min(progress, 100), -1)
@@ -1050,6 +1133,26 @@ class NodeItem(QGraphicsObject):
 
     def statusMessage(self):
         return self.__statusMessage
+
+    def setRuntimeState(self, state):
+        if self.__runtimeState != state:
+            self.__runtimeState = state
+            self.setProcessingState(
+                bool(state & SchemeNode.RuntimeState.Processing))
+            # if state & SchemeNode.RuntimeState.Processing:
+            #     self.__stateItem.setText("\N{BULLET}" * 3)
+            #     self.__stateItem.show()
+            text = ""
+            if state & SchemeNode.RuntimeState.HasUncommitedChanges:
+                text += "Has Uncommitted Changes"
+                self.outputAnchorItem.setBrush(QBrush(Qt.yellow))
+            else:
+                self.outputAnchorItem.setBrush(QBrush(Qt.gray))
+            if state & SchemeNode.RuntimeState.WaitingForUserInput:
+                text += "..."
+
+            self.__stateItem.setText(text)
+            self.__stateItem.setVisible(bool(text))
 
     def setStateMessage(self, message):
         """
