@@ -67,6 +67,21 @@ class WidgetMetaClass(type(QDialog)):
         return cls
 
 
+import enum
+from Orange.canvas.scheme import SchemeNode
+
+
+class RuntimeState(enum.IntEnum):
+    NoState = SchemeNode.RuntimeState.NoState
+    # PendingInitialization = 1024 #?
+    Initialized = SchemeNode.RuntimeState.Initialized
+    #: processing or active
+    Processing = SchemeNode.RuntimeState.Processing
+    WaitingForUserInput = SchemeNode.RuntimeState.WaitingForUserInput
+    HasUncommitedChanges = SchemeNode.RuntimeState.HasUncommitedChanges
+    Modified = SchemeNode.RuntimeState.Modified
+
+
 class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
                WidgetMessagesMixin, WidgetSignalsMixin,
                metaclass=WidgetMetaClass):
@@ -216,6 +231,7 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
         )
         self.addAction(self.__help_action)
 
+        self.__state = RuntimeState.NoState
         self.left_side = None
         self.controlArea = self.mainArea = self.buttonsArea = None
         self.splitter = None
@@ -685,6 +701,20 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
         """
         return self.__statusMessage
 
+    def setRuntimeFlag(self, flag, state=True):
+        state = bool(state)
+        if bool(self.__state & flag) != state:
+            if state:
+                self.__state |= flag
+            else:
+                self.__state &= ~flag
+            self.runtimeStateChanged.emit(self.__state)
+
+    def runtimeState(self):
+        return self.__state
+
+    runtimeStateChanged = Signal(int)
+
     def keyPressEvent(self, e):
         """Handle default key actions or pass the event to the inherited method
         """
@@ -692,7 +722,6 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
             OWWidget.defaultKeyActions[int(e.modifiers()), e.key()](self)
         else:
             QDialog.keyPressEvent(self, e)
-
 
     defaultKeyActions = {}
 
@@ -721,13 +750,50 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
         .. note::
             Failure to clear this flag will block dependent nodes forever.
         """
-        if self.__blocking != state:
-            self.__blocking = state
-            self.blockingStateChanged.emit(state)
+        if bool(self.__state & RuntimeState.Processing) != state:
+            if state:
+                self.__state |= RuntimeState.Processing
+            else:
+                self.__state &= ~RuntimeState.Processing
+            self.runtimeStateChanged.emit(self.__state)
+            self.blockingStateChanged.emit(self.isBlocking())
 
     def isBlocking(self):
         """Is this widget blocking signal processing."""
-        return self.__blocking
+        return bool(self.__state & RuntimeState.Processing)
+
+    def setHasUncommittedChanges(self, state):
+        """
+        Set or clear the a flag indicating that this widget has uncommited
+        changes
+
+        Widgets with this flag get an indicator in the canvas interface
+        indicating their state
+
+        Parameters
+        ----------
+        state : bool
+            The new state flag
+        """
+        self.setRuntimeFlag(RuntimeState.HasUncommitedChanges, state)
+
+    def hasUncommitedChanges(self):
+        return bool(self.__state & RuntimeState.HasUncommitedChanges)
+
+    def setWaitingForUserInput(self, state):
+        """
+        Set/clear the flag indicating that this widget requires user input
+        before it can proceed.
+
+        Parameters
+        ----------
+        state : bool
+            The new state flag
+        """
+        self.setRuntimeFlag(RuntimeState.WaitingForUserInput, state)
+
+    def isWaitingForUserInput(self):
+        return bool(self.__state & RuntimeState.WaitingForUserInput)
 
     def resetSettings(self):
         """Reset the widget settings to default"""

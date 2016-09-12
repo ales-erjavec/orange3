@@ -154,6 +154,8 @@ class OWBaseLearner(OWWidget, metaclass=OWBaseLearnerMeta):
         self.Outputs.learner.send(self.learner)
         self.outdated_settings = False
         self.Warning.outdated_learner.clear()
+        self.setHasUncommittedChanges(False)
+        self.setWaitingForUserInput(False)
 
     def show_fitting_failed(self, exc):
         """Show error when fitting fails.
@@ -194,6 +196,8 @@ class OWBaseLearner(OWWidget, metaclass=OWBaseLearnerMeta):
 
     def settings_changed(self, *args, **kwargs):
         self.outdated_settings = True
+        self.setHasUncommittedChanges(not self.auto_apply)
+        self.setWaitingForUserInput(not self.auto_apply)
         self.Warning.outdated_learner(shown=not self.auto_apply)
         self.apply()
 

@@ -15,7 +15,7 @@ from collections import namedtuple, defaultdict, deque
 from operator import attrgetter
 from functools import partial
 
-from AnyQt.QtCore import QObject, QCoreApplication, QEvent, QTimer
+from AnyQt.QtCore import QObject, QCoreApplication, QEvent, QTimer, QSignalMapper
 from AnyQt.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
 
 
@@ -85,7 +85,8 @@ class SignalManager(QObject):
         self.__reschedule = False
         self.__update_timer = QTimer(self, interval=100, singleShot=True)
         self.__update_timer.timeout.connect(self.__process_next)
-
+        self.__mapper = QSignalMapper(self)
+        self.__mapper.mapped[QObject].connect(self.__on_node_state_change)
         # type: Dict[SchemeNode, SchemeNode.RuntimeState]
         self.__node_state = {}
 
@@ -187,12 +188,16 @@ class SignalManager(QObject):
 
         del self._node_outputs[node]
         del self.__node_state[node]
-        node.runtime_state_changed.disconnect(self.__on_node_state_change)
+        self.__mapper.removeMappings(node)
+        node.runtime_state_changed.disconnect(self.__mapper.map)
+        # node.runtime_state_changed.disconnect(self.__on_node_state_change)
 
     def on_node_added(self, node):
         self._node_outputs[node] = defaultdict(dict)
         self.__node_state[node] = node.runtime_state()
-        node.runtime_state_changed.connect(self.__on_node_state_change)
+        self.__mapper.setMapping(node, node)
+        node.runtime_state_changed.connect(self.__mapper.map)
+        # node.runtime_state_changed.connect(self.__on_node_state_change)
 
     def link_added(self, link):
         # push all current source values to the sink
@@ -429,8 +434,11 @@ class SignalManager(QObject):
     def is_blocking(self, node):
         return False
 
-    def __on_node_state_change(self, state):
-        node = self.sender()
+    @Slot(QObject)
+    def __on_node_state_change(self, node):
+        # type: (SchemeNode) -> None
+        # node = self.sender()
+        state = node.runtime_state()
         current = self.__node_state[node]
         mask = (SchemeNode.RuntimeState.UpdatingInputs |
                 SchemeNode.RuntimeState.Processing)

@@ -494,6 +494,7 @@ class WidgetManager(QObject):
         widget.statusMessageChanged.connect(node.set_status_message)
 
         # Widget's progress bar value state.
+        node.set_progress(widget.progressBarValue)
         widget.progressBarValueChanged.connect(node.set_progress)
 
         # Widget processing state (progressBarInit/Finished)
@@ -501,11 +502,39 @@ class WidgetManager(QObject):
         widget.processingStateChanged.connect(
             self.__on_processing_state_changed
         )
-        widget.blockingStateChanged.connect(self.__on_blocking_state_changed)
 
-        if widget.isBlocking():
-            # A widget can already enter blocking state in __init__
-            self.__widget_processing_state[widget] |= self.BlockingUpdate
+        # widget.blockingStateChanged.connect(self.__on_blocking_state_changed)
+
+        node.set_state_flag(SchemeNode.RuntimeState.Created)
+
+        node.set_state_flag(
+            SchemeNode.RuntimeState.Processing,
+            widget.runtimeState() & SchemeNode.RuntimeState.Processing
+        )
+
+        # if widget.runtimeState() & SchemeNode.RuntimeState.Processing:
+        #     # i.e. blockingState
+        #     node.set_state_flag(SchemeNode.RuntimeState.Processing)
+
+        node.set_state_flag(
+            SchemeNode.RuntimeState.WaitingForUserInput,
+            (widget.runtimeState() &
+             SchemeNode.RuntimeState.WaitingForUserInput)
+        )
+        node.set_state_flag(
+            SchemeNode.RuntimeState.HasUncommitedChanges,
+            (widget.runtimeState() &
+             SchemeNode.RuntimeState.HasUncommitedChanges)
+        )
+        # if widget.runtimeState() & SchemeNode.RuntimeState.WaitingForUserInput:
+        #     node.set_state_flag(SchemeNode.RuntimeState.WaitingForUserInput)
+
+        widget.runtimeStateChanged.connect(
+            self.__on_widget_runtime_state_change)
+
+        # if widget.isBlocking():
+        #     # A widget can already enter blocking state in __init__
+        #     self.__widget_processing_state[widget] |= self.BlockingUpdate
 
         if widget.processingState != 0:
             # It can also start processing (initialization of resources, ...)
@@ -676,6 +705,42 @@ class WidgetManager(QObject):
 
         self.__updating_widget = None
 
+    def __on_widget_runtime_state_change(self, state):
+        widget = self.sender()
+        node = self.node_for_widget(widget)
+        old = node.runtime_state()
+        node.set_state_flag(
+            SchemeNode.RuntimeState.Processing,
+            state & SchemeNode.RuntimeState.Processing)
+
+        node.set_state_flag(
+            SchemeNode.RuntimeState.WaitingForUserInput,
+            state & SchemeNode.RuntimeState.WaitingForUserInput)
+
+        node.set_state_flag(
+            SchemeNode.RuntimeState.HasUncommitedChanges,
+            state & SchemeNode.RuntimeState.HasUncommitedChanges)
+
+        if state & SchemeNode.RuntimeState.Processing:
+            self.__widget_processing_state[widget] |= self.BlockingUpdate
+        else:
+            self.__widget_processing_state[widget] &= ~self.BlockingUpdate
+
+        log.debug("OWWidget state changed: '%s': '%s",
+                  node.title, state)
+
+        if old & SchemeNode.RuntimeState.Processing and \
+                not state & SchemeNode.RuntimeState.Processing:
+            self.signal_manager()._update()
+            log.debug("new update")
+
+        if widget in self.__node_for_widget:
+            node = self.node_for_widget(widget)
+            self.__update_node_processing_state(node)
+
+        elif widget in self.__delay_delete:
+            self.__try_delete(widget)
+
     def __on_blocking_state_changed(self, state):
         """
         OWWidget blocking state has changed.
@@ -768,10 +833,15 @@ class WidgetsSignalManager(SignalManager):
 
     def is_blocking(self, node):
         """Reimplemented from `SignalManager`"""
+
         mask = (WidgetManager.InputUpdate |
                 WidgetManager.BlockingUpdate |
                 WidgetManager.Initializing)
-        return self.scheme().widget_manager.node_processing_state(node) & mask
+        blocking = self.scheme().widget_manager.node_processing_state(node) & mask
+        blocking = blocking or node.test_runtime_state(
+            SchemeNode.RuntimeState.Processing |
+            SchemeNode.RuntimeState.UpdatingInputs)
+        return blocking
 
     def send_to_node(self, node, signals):
         """
