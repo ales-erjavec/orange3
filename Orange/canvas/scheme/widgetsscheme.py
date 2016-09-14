@@ -768,6 +768,10 @@ class WidgetManager(QObject):
         """
         state = self.node_processing_state(node)
         node.set_processing_state(1 if state else 0)
+        if not state:
+            node.set_progress(-1)
+#        elif node.progress() < 0:
+#            node.set_progress(0)
 
     def __try_delete(self, widget):
         if self.__widget_processing_state[widget] == 0:
