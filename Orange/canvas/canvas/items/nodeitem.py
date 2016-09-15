@@ -788,7 +788,7 @@ class StateIndicator(QGraphicsObject):
         self.__text.setPos(-self.__text.textWidth() / 2, 0)
 
     def setText(self, text):
-        self.__text.setPlainText(text)
+        self.__text.setHtml(text)
         self.__text.adjustSize()
         self.__text.setPos(-self.__text.textWidth() / 2, 0)
 
@@ -1144,12 +1144,12 @@ class NodeItem(QGraphicsObject):
             #     self.__stateItem.show()
             text = ""
             if state & SchemeNode.RuntimeState.HasUncommitedChanges:
-                text += "Has Uncommitted Changes"
+                # text += "Has Uncommitted Changes"
                 self.outputAnchorItem.setBrush(QBrush(Qt.yellow))
             else:
                 self.outputAnchorItem.setBrush(QBrush(Qt.gray))
             if state & SchemeNode.RuntimeState.WaitingForUserInput:
-                text += "..."
+                text += "<b>" + ("\N{BULLET}" * 3) + "</b>"
 
             self.__stateItem.setText(text)
             self.__stateItem.setVisible(bool(text))
