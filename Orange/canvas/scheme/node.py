@@ -114,6 +114,35 @@ class SchemeNode(QObject):
         InputPending = 1
         #: ...
 
+    # glossary:
+    #  * Execution state: state corresponding and managed by the execution
+    #    engine
+    #    - NoState: The node's execution resources are not initialized.
+    #    - Waiting|Idle: The node is waiting
+    #    - Pending: The node is scheduled to receive updated inputs
+    #    - Active: The node is currently processing, it's outputs are
+    #      considered invalidated and all its descendants are also put
+    #      in Invalidated state (note that a node can enter an active state
+    #      in a spontaneous manner; see RunState.Active).
+    #    - Invalidated: One or more of the node's ancestors are in Active
+    #      or Pending state
+    #    - Ready: The node is on the active update front (i.e. it is Pending
+    #      and not Invalidated or Working)
+    #
+    # * Runtime state: The state as reported by the node widgets, some of
+    #   this also effect the execution state, notably the pending output
+    #   update:
+    #   - Initialized : The node has been initialized
+    #   - ? PendingConfiguration : The node requires configuration
+    #     (implies ~Initialized)
+    #   - RequiresUserInput: The node requires/requests user input
+    #   - HasUncommittedChanges: The node's parameters were changed but
+    #     have not yet been applied on the output
+    #   - Invalidated: The node's current outputs are invalidated (blocking)
+    #   - Modified: The node parameters/settings were changed and have not
+    #     yet been serialized to disk. The GUI sets this property when
+    #     the user changes parameters and the canvas framework clears it
+    #     when it saves the modified workflow
 
     # TODO: Convenience signals
     #: Emitted when node transitions from Processing to ~Processing
