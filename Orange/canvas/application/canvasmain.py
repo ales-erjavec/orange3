@@ -994,6 +994,10 @@ class CanvasMainWindow(QMainWindow):
         """
         new_scheme = widgetsscheme.WidgetsScheme(
             parent=self, env={"basedir": os.path.dirname(filename)})
+
+        if self.freeze_action.isChecked():
+            new_scheme.signal_manager.pause()
+
         errors = []
         try:
             scheme_load(new_scheme, open(filename, "rb"),
