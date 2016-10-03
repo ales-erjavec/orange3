@@ -143,10 +143,6 @@ def main(argv=None):
     rootlogger = logging.getLogger(canvas.__name__)
     rootlogger.setLevel(root_level)
 
-    # Initialize SQL query and execution time logger (in SqlTable)
-    sql_level = min(levels[options.log_level], logging.INFO)
-    make_sql_logger(sql_level)
-
     # Standard output stream handler at the requested level
     stream_hander = logging.StreamHandler()
     stream_hander.setLevel(level=levels[options.log_level])
@@ -187,6 +183,10 @@ def main(argv=None):
 
     file_handler.setLevel(root_level)
     rootlogger.addHandler(file_handler)
+
+    # Initialize SQL query and execution time logger (in SqlTable)
+    sql_level = min(levels[options.log_level], logging.INFO)
+    make_sql_logger(sql_level)
 
     # intercept any QFileOpenEvent requests until the main window is
     # fully initialized.

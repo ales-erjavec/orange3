@@ -32,6 +32,11 @@ def init():
               Otherwise it can break Qt's plugin search paths.
 
     """
+    if not QCoreApplication.instance():
+        raise RuntimeError(
+            "config.init must not be called before QApplication has "
+            "been initialized")
+
     dist = pkg_resources.get_distribution("Orange3")
     version = dist.version
     # Use only major.minor
