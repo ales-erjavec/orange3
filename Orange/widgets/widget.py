@@ -3,10 +3,11 @@ import os
 import types
 from functools import reduce
 
-from PyQt4.QtCore import QByteArray, Qt, pyqtSignal as Signal, QSettings, QUrl
+from PyQt4.QtCore import QByteArray, Qt, pyqtSignal as Signal, QSettings, \
+    QUrl, QEvent, QT_VERSION
 from PyQt4.QtGui import QDialog, QVBoxLayout, QSizePolicy, qApp, QStyle, \
     QIcon, QShortcut, QKeySequence, QDesktopServices, QSplitter, \
-    QSplitterHandle, QWidget, QPushButton
+    QSplitterHandle, QWidget, QPushButton, QWidgetItem
 
 from Orange.data import FileFormat
 from Orange.widgets import settings, gui
@@ -236,6 +237,59 @@ class OWWidget(QDialog, Report, ProgressBarMixin, WidgetMessagesMixin,
             def mouseMoveEvent(self, event):
                 """Prevent moving; just show/hide"""
                 return
+
+        def heightForWidth(self, w):
+            """
+            Reimplemented from QWidget.heightForWidth
+            """
+            # This is necessary for the splitter to propagate
+            # heightForWidth hints to parent layouts.
+            if self.count() == 1:
+                h = self.widget(0).heightForWidth(w)
+            else:
+                h = -1
+            if h > 0:
+                return h
+            elif self.sizePolicy().hasHeightForWidth():
+                # The size policy in __updateSizePolicyHfw is only updated
+                # some time after the contained widget/layout changes its
+                # own policy. So a parent layout can believe that we have
+                # hfw when we really do not. Play it safe and return
+                # something sensible
+                return self.sizeHint().height()
+            else:
+                return -1
+
+        if QT_VERSION >= 0x50000:
+            def hasHeightForWidth(self):
+                """Reimplemented from QWidget.hasHeightForWidth"""
+                if self.count() == 1:
+                    return self.widget(0).hasHeightForWidth()
+                else:
+                    return False
+        else:
+            # In Qt4 the hasHeightForWidth is only defined by the QLayoutItem.
+            # QWidgets can only define it with their layout or sizePolicy
+            def __updateSizePolicyHfw(self):
+                # Update the splitter's sizePolicy hasHeightForWidth flag
+                # based on the contained (single) widget. If the splitter
+                # has multiple widgets, the heightForWidth is disabled.
+                sp = self.sizePolicy()
+                if self.count() == 1:
+                    wi = QWidgetItem(self.widget(0))
+                    hfw = wi.hasHeightForWidth()
+                else:
+                    hfw = False
+                if sp.hasHeightForWidth() != hfw:
+                    sp.setHeightForWidth(hfw)
+                    self.setSizePolicy(sp)
+
+            def event(self, event):
+                """Reimplemented from QSplitter.event"""
+                if event.type() == QEvent.LayoutRequest:
+                    # Update the size policy before processing layout requests.
+                    self.__updateSizePolicyHfw()
+                return super().event(event)
 
     def _insert_splitter(self):
         self.splitter = self._Splitter(Qt.Horizontal, self)
