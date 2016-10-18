@@ -25,6 +25,7 @@ from .annotations import SchemeTextAnnotation, SchemeArrowAnnotation
 from .errors import IncompatibleChannelTypeError
 
 from ..registry import global_registry
+from ..registry import WidgetDescription, InputSignal, OutputSignal
 
 log = logging.getLogger(__name__)
 
@@ -414,6 +415,10 @@ _data = namedtuple(
     "_data",
     ["format", "data"])
 
+_channel = namedtuple(
+    "_channel",
+    ["id", "name"])
+
 _link = namedtuple(
     "_link",
     ["id", "source_node_id", "sink_node_id", "source_channel", "sink_channel",
@@ -467,8 +472,14 @@ def parse_ows_etree_v_2_0(tree):
             id=link.get("id"),
             source_node_id=link.get("source_node_id"),
             sink_node_id=link.get("sink_node_id"),
-            source_channel=link.get("source_channel"),
-            sink_channel=link.get("sink_channel"),
+            source_channel=_channel(
+                link.get("source_channel_id"),
+                link.get("source_channel")
+            ),
+            sink_channel=_channel(
+                link.get("sink_channel_id"),
+                link.get("sink_channel")
+            ),
             enabled=link.get("enabled") == "true",
         )
         links.append(params)
@@ -560,8 +571,8 @@ def parse_ows_etree_v_1_0(tree):
                 _link(id=next(id_gen),
                       source_node_id=source.id,
                       sink_node_id=sink.id,
-                      source_channel=source_channel,
-                      sink_channel=sink_channel,
+                      source_channel=_channel(None, source_channel),
+                      sink_channel=_channel(None, sink_channel),
                       enabled=enabled)
             )
     return _scheme(title="", description="", version="1.0",
@@ -582,7 +593,7 @@ def parse_ows_stream(stream):
 
     if version == "1.0":
         return parse_ows_etree_v_1_0(doc)
-    elif version == "2.0":
+    elif version >= "2.0":
         return parse_ows_etree_v_2_0(doc)
     else:
         raise ValueError()
@@ -604,15 +615,29 @@ def resolve_1_0(scheme_desc, registry):
 
     return scheme_desc._replace(nodes=nodes)
 
+from typing import Dict
 
 def resolve_replaced(scheme_desc, registry):
     widgets = registry.widgets()
+    nodes_by = {}  # type: Dict[str, _node]
     replacements = {}
-    for desc in widgets:
+    replacements_channels = {}
+    # collect all the replacement mappings
+    for desc in widgets:  # type: WidgetDescription
         if desc.replaces:
             for repl_qname in desc.replaces:
                 replacements[repl_qname] = desc.qualified_name
 
+        for idesc in desc.inputs or []:  # type: InputSignal
+            for repl_qname in idesc.replaces or []:  # type: str
+                replacements_channels["i", desc.qualified_name, repl_qname] = \
+                    _channel(id=idesc.id, name=idesc.name)
+
+        for odesc in desc.outputs:  # type: OutputSignal
+            for repl_qname in odesc.replaces or []:  # type: str
+                replacements_channels["o", desc.qualified_name, repl_qname] = \
+                    _channel(id=odesc.id, name=odesc.name)
+    # replace the nodes
     nodes = scheme_desc.nodes
     for i, node in list(enumerate(nodes)):
         if not registry.has_widget(node.qualified_name) and \
@@ -621,8 +646,26 @@ def resolve_replaced(scheme_desc, registry):
             desc = registry.widget(qname)
             nodes[i] = node._replace(qualified_name=desc.qualified_name,
                                      project_name=desc.project_name)
+        nodes_by[node.id] = nodes[i]
 
-    return scheme_desc._replace(nodes=nodes)
+    # replace links
+    links = scheme_desc.links
+    for i, link in list(enumerate(links)):  # type: _link
+        nsink = nodes_by[link.sink_node_id]
+        nsource = nodes_by[link.source_node_id]
+        source_key = "o", nsource.qualified_name, link.source_channel.name
+        sink_key = "i", nsink.qualified_name, link.sink_channel.name
+
+        if source_key in replacements_channels:
+            link = link._replace(source_channel=replacements_channels[source_key])
+        if sink_key in replacements_channels:
+            link = link._replace(sink_channel=replacements_channels[sink_key])
+        links[i] = link
+        # csource = resolve_link(nsource, link.source_channel)
+        # csink = resolve_link(nsink, link.sink_channel)
+        # links[i] = _link._replace(source_channel=csource, sink_channel=csink)
+
+    return scheme_desc._replace(nodes=nodes, links=links)
 
 
 def scheme_load(scheme, stream, registry=None, error_handler=None):
@@ -681,8 +724,8 @@ def scheme_load(scheme, stream, registry=None, error_handler=None):
         source = nodes_by_id[source_id]
         sink = nodes_by_id[sink_id]
         try:
-            link = SchemeLink(source, link_d.source_channel,
-                              sink, link_d.sink_channel,
+            link = SchemeLink(source, link_d.source_channel.name,
+                              sink, link_d.sink_channel.name,
                               enabled=link_d.enabled)
         except (ValueError, IncompatibleChannelTypeError) as ex:
             error_handler(ex)
@@ -727,7 +770,7 @@ def scheme_to_etree(scheme, data_format="literal", pickle_fallback=False):
     Return an `xml.etree.ElementTree` representation of the `scheme.
     """
     builder = TreeBuilder(element_factory=Element)
-    builder.start("scheme", {"version": "2.0",
+    builder.start("scheme", {"version": "2.1",
                              "title": scheme.title or "",
                              "description": scheme.description or ""})
 
@@ -766,7 +809,9 @@ def scheme_to_etree(scheme, data_format="literal", pickle_fallback=False):
                  "source_node_id": str(source_id),
                  "sink_node_id": str(sink_id),
                  "source_channel": link.source_channel.name,
+                 "source_channel_id": link.source_channel.id,
                  "sink_channel": link.sink_channel.name,
+                 "sink_channel_id": link.sink_channel.id,
                  "enabled": "true" if link.enabled else "false",
                  }
         builder.start("link", attrs)

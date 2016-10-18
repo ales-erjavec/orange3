@@ -7,6 +7,7 @@ Widget meta description classes
 import sys
 import copy
 import warnings
+import re
 
 # Exceptions
 
@@ -50,6 +51,9 @@ Dynamic = 64
 
 # Input/output signal (channel) description
 
+def normalize_name(string):
+    return re.sub(r"\W", "_", string)
+
 
 class InputSignal(object):
     """
@@ -58,24 +62,29 @@ class InputSignal(object):
     Parameters
     ----------
     name : str
-        Name of the channel.
+        A human readable name of the channel.
     type : str or `type`
         Type of the accepted signals.
     handler : str
         Name of the handler method for the signal.
     flags : int, optional
         Channel flags.
-    id : str
-        A unique id of the input signal.
+    id : str, optional
+        A unique id of the input signal. If not supplied an id
+        is derived from `name` by converting it to lowercase and
+        replacing all non alphanumeric characters with and
+        underscore'_'.
     doc : str, optional
         A docstring documenting the channel.
-
+    replaces : List[str]
     """
     def __init__(self, name, type, handler, flags=Single + NonDefault,
-                 id=None, doc=None):
+                 id=None, doc=None, replaces=[]):
         self.name = name
         self.type = type
         self.handler = handler
+        if id is None:
+            id = normalize_name(name)
         self.id = id
         self.doc = doc
 
@@ -96,6 +105,7 @@ class InputSignal(object):
         self.default = flags & Default
         self.explicit = flags & Explicit
         self.flags = flags
+        self.replaces = replaces
 
     def __str__(self):
         fmt = ("{0.__name__}(name={name!r}, type={type!s}, "
@@ -130,14 +140,17 @@ class OutputSignal(object):
         A unique id of the output signal.
     doc : str, optional
         A docstring documenting the channel.
-
+    replaces : List[str]
     """
     def __init__(self, name, type, flags=Single + NonDefault,
-                 id=None, doc=None):
+                 id=None, doc=None, replaces=[]):
         self.name = name
         self.type = type
+        if id is None:
+            id = normalize_name(name)
         self.id = id
         self.doc = doc
+        self.replaces = replaces
 
         if isinstance(flags, str):
             # flags are stored as strings
