@@ -8,6 +8,7 @@ import sys
 import logging
 import pickle as pickle
 import itertools
+import sysconfig
 
 import pkg_resources
 
@@ -40,6 +41,9 @@ def init():
     QCoreApplication.setApplicationName("Orange Canvas")
     QCoreApplication.setApplicationVersion(version)
     QSettings.setDefaultFormat(QSettings.IniFormat)
+    # Set $PREFIX/etc/xdg/ as the system config dir.
+    path = os.path.join(sysconfig.get_path("data",), "etc", "xdg")
+    QSettings.setPath(QSettings.IniFormat, QSettings.SystemScope, path)
 
     # Make it a null op.
     global init
