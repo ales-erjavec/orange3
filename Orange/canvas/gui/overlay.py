@@ -24,11 +24,13 @@ class OverlayWidget(QWidget):
     """
     A widget positioned on top of another widget.
     """
-    def __init__(self, parent=None, alignment=Qt.AlignCenter, **kwargs):
+    def __init__(self, parent=None, alignment=Qt.AlignCenter,
+                 useContentsRect=True, **kwargs):
         super().__init__(parent, **kwargs)
         self.setContentsMargins(0, 0, 0, 0)
         self.__alignment = alignment
         self.__widget = None
+        self.__useContentsRect = useContentsRect
 
     def setWidget(self, widget):
         """
@@ -76,6 +78,30 @@ class OverlayWidget(QWidget):
         """
         return self.__alignment
 
+    def setUseContentsRect(self, useContentsRect):
+        """
+        Should the OverlayWidget use `widget().contentsRect()` for layout.
+
+        If False then the widget full `rect()` will be used.
+
+        Parameters
+        ----------
+        useContentsRect : bool
+        """
+        if self.__useContentsRect != useContentsRect:
+            self.__useContentsRect = useContentsRect
+            self.__layout()
+
+    def useContentsRect(self):
+        """
+        Does this overlay uses `widget().contentsRect()` for layout.
+
+        Returns
+        -------
+        bool : bool
+        """
+        return self.__useContentsRect
+
     def eventFilter(self, recv, event):
         if recv is self.__widget:
             if event.type() == QEvent.Resize or event.type() == QEvent.Move:
@@ -84,6 +110,9 @@ class OverlayWidget(QWidget):
                 self.show()
             elif event.type() == QEvent.Hide:
                 self.hide()
+            elif self.__useContentsRect and \
+                    event.type() == QEvent.Type(178):  # QEvent.ContentsRectChange
+                self.__layout()
         return super().eventFilter(recv, event)
 
     def event(self, event):
@@ -138,7 +167,10 @@ class OverlayWidget(QWidget):
             else:
                 bounds = QRect(self.parent().mapFromGlobal(bounds.topLeft()),
                                bounds.size())
-
+        if self.__useContentsRect:
+            margins = widget.contentsMargins()
+            bounds = bounds.adjusted(margins.left(), margins.top(),
+                                     -margins.right(), -margins.bottom())
         sh = self.sizeHint()
         minsh = self.minimumSizeHint()
         minsize = self.minimumSize()
