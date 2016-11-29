@@ -225,7 +225,8 @@ class CanvasMainWindow(QMainWindow):
         # margins.
         w = QWidget()
         w.setLayout(QVBoxLayout())
-        w.layout().setContentsMargins(20, 0, 10, 0)
+        w.layout().setContentsMargins(0, 0, 0, 0)
+        w.setContentsMargins(20, 0, 10, 0)
 
         self.scheme_widget = SchemeEditWidget()
         self.scheme_widget.setScheme(widgetsscheme.WidgetsScheme(parent=self))
@@ -867,8 +868,7 @@ class CanvasMainWindow(QMainWindow):
             margins = (margin / 2, 0, margin, 0)
         else:
             margins = (margin, 0, margin / 2, 0)
-
-        central.layout().setContentsMargins(*margins)
+        central.setContentsMargins(*margins)
 
     #################
     # Action handlers
