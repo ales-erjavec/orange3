@@ -677,6 +677,7 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
         self.__msgwidget = MessageOverlayWidget(
             parent=self, text=message.text, icon=icon, wordWrap=True,
             standardButtons=buttons)
+        self.__msgwidget.setAttribute(Qt.WA_DeleteOnClose)
 
         btn = self.__msgwidget.button(MessageOverlayWidget.Ok)
         btn.setText("Ok, got it")
@@ -691,6 +692,11 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
         self.__msgwidget.setWidget(self)
         self.__msgwidget.show()
 
+        def finished():
+            self.__msgwidget = None
+        self.__msgwidget.accepted.connect(finished)
+        self.__msgwidget.rejected.connect(finished)
+
     def __quicktip(self):
         messages = list(self.UserAdviceMessages)
         if messages:
@@ -699,6 +705,8 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
             self.__showMessage(message)
 
     def __quicktipOnce(self):
+        if self.__msgchoice:
+            return  # Already showed one message on this instance
         filename = os.path.join(settings.widget_settings_dir(),
                                 "user-session-state.ini")
         namespace = ("user-message-history/{0.__module__}.{0.__qualname__}"
