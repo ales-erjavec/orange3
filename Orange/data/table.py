@@ -266,8 +266,8 @@ class Table(MutableSequence, Storage):
 
         global _conversion_cache
 
-        def get_columns(row_indices, src_cols, n_rows, dtype=np.float64,
-                        is_sparse=False):
+        def get_columns(row_indices, src_cols, variables, n_rows,
+                        dtype=np.float64, is_sparse=False):
 
             if not len(src_cols):
                 if is_sparse:
@@ -306,9 +306,9 @@ class Table(MutableSequence, Storage):
                     return np.ravel(x.toarray())
 
             shared_cache = _conversion_cache
-            for i, col in enumerate(src_cols):
+            for i, (col, var) in enumerate(zip(src_cols, variables)):
                 if col is None:
-                    a[:, i] = Unknown
+                    a[:, i] = var.Unknown
                 elif not isinstance(col, Integral):
                     if isinstance(col, SharedComputeValue):
                         if (id(col.compute_shared), id(source)) not in shared_cache:
@@ -364,18 +364,20 @@ class Table(MutableSequence, Storage):
                 self = cls()
                 self.domain = domain
                 conversion = domain.get_conversion(source.domain)
-                self.X = get_columns(row_indices, conversion.attributes, n_rows,
+                self.X = get_columns(row_indices, conversion.attributes,
+                                     domain.attributes, n_rows,
                                      is_sparse=sp.issparse(source.X))
                 if self.X.ndim == 1:
                     self.X = self.X.reshape(-1, len(self.domain.attributes))
-                self.Y = get_columns(row_indices, conversion.class_vars, n_rows,
+                self.Y = get_columns(row_indices, conversion.class_vars,
+                                     domain.class_vars, n_rows,
                                      is_sparse=sp.issparse(source.Y))
 
                 dtype = np.float64
                 if any(isinstance(var, StringVariable) for var in domain.metas):
                     dtype = np.object
                 self.metas = get_columns(row_indices, conversion.metas,
-                                         n_rows, dtype,
+                                         domain.metas, n_rows, dtype,
                                          is_sparse=sp.issparse(source.metas))
                 if self.metas.ndim == 1:
                     self.metas = self.metas.reshape(-1, len(self.domain.metas))
@@ -1101,6 +1103,100 @@ class Table(MutableSequence, Storage):
                 return rx(self._Y[:, index - self.X.shape[1]])
         else:
             return rx(self.metas[:, -1 - index])
+
+    def get_column_array(self, index, dtype=None, copy=True):
+        """
+
+        Parameters
+        ----------
+        index : Union[int, str, Orange.data.Variable]
+        dtype : Optional[numpy.dtype]
+            The desired data-type of the returned array
+        copy : bool
+            If True (default) then the returned arrays is always a copy of
+            the column. Otherwise a copy is made only when a dtype does not
+            match the column's dtype, or it the data is sparse
+
+        Returns
+        -------
+        out : numpy.ndarray
+        """
+        if not isinstance(index, Integral):
+            index = self.domain.index(index)
+        var = self.domain[index]
+        _, M = self.X.shape
+        _, K = self.Y.shape
+        _, J = self.metas.shape
+        coerce = False
+        if 0 <= index < M:
+            col = self.X[:, index]
+        elif M <= index < M + K:
+            col = self._Y[:, index - M]
+        elif -J <= index < 0:
+            col = self.metas[:, -1 - index]
+            coerce = True
+        else:
+            raise IndexError()
+
+        if sp.issparse(col):
+            col = np.asarray(col.todense())
+
+        if var.is_primitive and dtype is None and coerce:
+            if not isinstance(col.dtype.type, np.number):
+                col = np.asarray(col, dtype=float)
+                copy = False
+
+        return np.array(col, dtype=dtype, copy=copy)
+
+    def get_column_maarray(self, index, dtype=None, copy=True):
+        """
+
+        Parameters
+        ----------
+        index : Union[int, str, Orange.data.Variable]
+        dtype : Optional[numpy.dtype]
+            The desired data-type of the returned array.
+        copy : Optional[bool]
+            If True (default) then the returned arrays is always a copy of
+            the column. Otherwise a copy is made only when a dtype does not
+            match the existing
+
+        Returns
+        -------
+        out : numpy.ma.masked_array
+        """
+        if not isinstance(index, Integral):
+            index = self.domain.index(index)
+        var = self.domain[index]
+        _, M = self.X.shape
+        _, K = self.Y.shape
+        _, J = self.metas.shape
+        coerce = False
+        if 0 <= index < M:
+            col = self.X[:, index]
+        elif M <= index < M + K:
+            col = self._Y[:, index - M]
+        elif -J <= index < 0:
+            col = self.metas[:, -1 - index]
+            coerce = True
+        else:
+            raise IndexError()
+
+        if sp.issparse(col):
+            col = np.asarray(col.todense())
+
+        if var.is_primitive and dtype is None and coerce:
+            if not isinstance(col.dtype.type, np.number):
+                col = np.asarray(col, dtype=float)
+                copy = False
+
+        if var.is_primitive:
+            mask = np.isnan(col)
+        else:
+            mask = (col == var.Unknown)
+
+        col = np.array(col, dtype=dtype, copy=copy)
+        return np.ma.array(col, mask=mask)
 
     def _filter_is_defined(self, columns=None, negate=False):
         if columns is None:
