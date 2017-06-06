@@ -58,6 +58,7 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         self.data = None
         self.component_x = 0
         self.component_y = 1
+        self.ca = None  # type: CA
 
         box = gui.vBox(self.controlArea, "Variables")
         self.varlist = itemmodels.VariableListModel()
@@ -331,10 +332,17 @@ def burt_table(data, variables):
     Return and ordered list of (variable, value) pairs and a
     numpy.ndarray contingency
 
-    :param Orange.data.Table data: Data table.
-    :param variables: List of variables (discrete).
-    :type variables: list of Orange.data.DiscreteVariable
+    Parameters
+    ----------
+    data : Orange.data.Table
+    variables : List[Orange.data.DiscreteVariable]
 
+    Returns
+    -------
+    values : List[Tuple[Orange.data.DiscreteVariable, str]]
+        A list
+    table : (K, K) np.array
+        Cross tabulation for all variable,value pairs
     """
     values = [(var, value) for var in variables for value in var.values]
 
@@ -361,7 +369,13 @@ def burt_table(data, variables):
 
 def correspondence(A):
     """
-    :param numpy.ndarray A:
+    Parameters
+    ----------
+    A : np.ndarray
+
+    Returns
+    -------
+    ca : CA
     """
     A = np.asarray(A)
 
