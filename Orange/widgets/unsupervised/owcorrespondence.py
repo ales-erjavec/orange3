@@ -101,6 +101,8 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
 
         self.plot = pg.PlotWidget(background="w")
         self.plot.setMenuEnabled(False)
+        self.plot.getPlotItem().hideButtons()
+        self.plot.setAspectLocked(True)
         self.mainArea.layout().addWidget(self.plot)
 
     @Inputs.data
