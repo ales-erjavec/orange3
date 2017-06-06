@@ -30,9 +30,14 @@ def select_rows(view, row_indices, command=QItemSelectionModel.ClearAndSelect):
     """
     Select rows in view.
 
-    :param QAbstractItemView view:
-    :param row_indices: Integer indices of rows to select.
-    :param command: QItemSelectionModel.SelectionFlags
+    Parameters
+    ----------
+    view : QAbstractItemView
+        The view.
+    row_indices : List[int]
+        A list of indices to select.
+    command : QItemSelectionModel.SelectionFlags
+        The selection command (default: QItemSelectionModel.ClearAndSelect)
     """
     selmodel = view.selectionModel()
     model = view.model()
@@ -70,6 +75,7 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         self.data = None
         self.component_x = 0
         self.component_y = 1
+        self.ca = None  # type: CA
 
         box = gui.vBox(self.controlArea, "Variables")
         self.varlist = itemmodels.VariableListModel()
@@ -148,7 +154,6 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         restore(self.varview, self.selected_var_indices)
 
     def _p_axes(self):
-#         return (0, 1)
         return (self.component_x, self.component_y)
 
     def _var_changed(self):
@@ -323,10 +328,17 @@ def burt_table(data, variables):
     Return and ordered list of (variable, value) pairs and a
     numpy.ndarray contingency
 
-    :param Orange.data.Table data: Data table.
-    :param variables: List of variables (discrete).
-    :type variables: list of Orange.data.DiscreteVariable
+    Parameters
+    ----------
+    data : Orange.data.Table
+    variables : List[Orange.data.DiscreteVariable]
 
+    Returns
+    -------
+    values : List[Tuple[Orange.data.DiscreteVariable, str]]
+        A list
+    table : (K, K) np.array
+        Cross tabulation for all variable,value pairs
     """
     values = [(var, value) for var in variables for value in var.values]
 
@@ -353,7 +365,13 @@ def burt_table(data, variables):
 
 def correspondence(A):
     """
-    :param numpy.ndarray A:
+    Parameters
+    ----------
+    A : np.ndarray
+
+    Returns
+    -------
+    ca : CA
     """
     A = np.asarray(A)
 
