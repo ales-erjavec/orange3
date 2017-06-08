@@ -5,7 +5,10 @@ Rank
 Rank (score) features for prediction.
 
 """
-
+import sys
+import copy
+import logging
+import concurrent.futures
 from collections import namedtuple
 
 import numpy as np
@@ -17,8 +20,8 @@ from AnyQt.QtWidgets import (
 )
 from AnyQt.QtGui import QStandardItemModel, QStandardItem
 from AnyQt.QtCore import (
-    Qt, QItemSelection, QItemSelectionRange, QItemSelectionModel,
-    QSortFilterProxyModel
+    Qt, QSize, QItemSelection, QItemSelectionRange, QItemSelectionModel,
+    QSortFilterProxyModel, QThread
 )
 
 from Orange.base import Learner
@@ -31,6 +34,8 @@ from Orange.widgets.settings import (DomainContextHandler, Setting,
                                      ContextSetting)
 from Orange.widgets.utils.sql import check_sql_input
 from Orange.widgets.widget import OWWidget, Msg, Input, Output
+from Orange.widgets.data.owimpute import FutureSetWatcher, Task as TaskSet
+from Orange.widgets.utils import concurrent as qconcurrent
 
 
 def table(shape, fill=None):
@@ -187,6 +192,7 @@ class OWRank(OWWidget):
         self.discRanksModel.setHorizontalHeaderLabels(self.discRanksLabels)
 
         self.discRanksProxyModel = MySortProxyModel(self)
+        self.discRanksProxyModel.setDynamicSortFilter(False)
         self.discRanksProxyModel.setSourceModel(self.discRanksModel)
         self.discRanksView.setModel(self.discRanksProxyModel)
 
@@ -217,6 +223,7 @@ class OWRank(OWWidget):
         self.contRanksModel.setHorizontalHeaderLabels(self.contRanksLabels)
 
         self.contRanksProxyModel = MySortProxyModel(self)
+        self.contRanksProxyModel.setDynamicSortFilter(False)
         self.contRanksProxyModel.setSourceModel(self.contRanksModel)
         self.contRanksView.setModel(self.contRanksProxyModel)
 
@@ -247,6 +254,7 @@ class OWRank(OWWidget):
         self.noClassRanksModel.setHorizontalHeaderLabels(self.noClassRanksLabels)
 
         self.noClassRanksProxyModel = MySortProxyModel(self)
+        self.noClassRanksProxyModel.setDynamicSortFilter(False)
         self.noClassRanksProxyModel.setSourceModel(self.noClassRanksModel)
         self.noClassRanksView.setModel(self.noClassRanksProxyModel)
 
@@ -275,6 +283,11 @@ class OWRank(OWWidget):
         self.resize(690, 500)
 
         self.measure_scores = table((len(self.measures), 0), None)
+        self.executor = qconcurrent.ThreadExecutor()
+        self.__task = None  # type: TaskSet
+
+    def sizeHint(self):
+        return QSize(690, 500)
 
     def switchRanksMode(self, index):
         """
@@ -409,6 +422,7 @@ class OWRank(OWWidget):
         indicating what measures should be recomputed.
 
         """
+        self.cancel()
         if not self.data:
             return
         if self.data.has_missing():
@@ -424,63 +438,150 @@ class OWRank(OWWidget):
 
         data = self.data
         learner_col = len(self.measures)
+
         if len(measuresMask) <= len(self.measures) or \
                 measuresMask[len(self.measures)]:
             self.labels = []
             self.Error.inadequate_learner.clear()
 
-        self.setStatusMessage("Running")
-        with self.progressBar():
-            n_measure_update = len([x for x in measuresMask if x is not False])
-            count = 0
-            for index, (meas, mask) in enumerate(zip(measures, measuresMask)):
-                if not mask:
-                    continue
-                self.progressBarSet(90 * count / n_measure_update)
-                count += 1
-                if index < len(self.measures):
-                    estimator = meas.score()
+        def score_one(method, data):
+            # type: (score.Scorer, Table) -> List[float]
+            try:
+                return method(data)
+            except ValueError:
+                scores = []
+                for attr in data.domain.attributes:
                     try:
-                        self.measure_scores[index] = estimator(data)
+                        scores.append(method(data, attr))
                     except ValueError:
-                        self.measure_scores[index] = []
-                        for attr in data.domain.attributes:
-                            try:
-                                self.measure_scores[index].append(
-                                    estimator(data, attr))
-                            except ValueError:
-                                self.measure_scores[index].append(None)
+                        scores.append(None)
+                return scores
+        futures = []
+        indices = []
+        for index, (meas, mask) in enumerate(zip(measures, measuresMask)):
+            if not mask:
+                continue
+
+            if index < len(self.measures):
+                estimator = meas.score()
+                scores_f = self.executor.submit(score_one, estimator, data)
+            else:
+                learner = meas.score
+                if isinstance(learner, Learner) and \
+                        not learner.check_learner_adequacy(self.data.domain):
+                    self.Error.inadequate_learner(
+                        learner.learner_adequacy_err_msg)
+                    scores = table((1, len(data.domain.attributes)))
+                    scores_f = qconcurrent.Future()
+                    scores_f.set_result(scores)
                 else:
-                    learner = meas.score
-                    if isinstance(learner, Learner) and \
-                            not learner.check_learner_adequacy(self.data.domain):
-                        self.Error.inadequate_learner(
-                            learner.learner_adequacy_err_msg)
-                        scores = table((1, len(data.domain.attributes)))
-                    else:
-                        scores = meas.score.score_data(data)
-                    for i, row in enumerate(scores):
-                        self.labels.append(meas.shortname + str(i + 1))
-                        if len(self.measure_scores) > learner_col:
-                            self.measure_scores[learner_col] = row
-                        else:
-                            self.measure_scores.append(row)
-                        learner_col += 1
-            self.progressBarSet(90)
-        self.contRanksModel.setHorizontalHeaderLabels(
-            self.contRanksLabels + self.labels
-        )
-        self.discRanksModel.setHorizontalHeaderLabels(
-            self.discRanksLabels + self.labels
-        )
-        self.noClassRanksModel.setHorizontalHeaderLabels(
-            self.noClassRanksLabels + self.labels
-        )
-        self.updateRankModel(measuresMask)
-        self.ranksProxyModel.invalidate()
-        self.selectMethodChanged()
-        self.Outputs.scores.send(self.create_scores_table(self.labels))
-        self.setStatusMessage("")
+                    estimator = copy.deepcopy(meas.score)
+                    scores_f = self.executor.submit(
+                        lambda data: estimator.score_data(data).flatten().tolist(),
+                        data
+                    )
+            indices.append(index)
+            futures.append(scores_f)
+        w = FutureSetWatcher(futures)
+        w.doneAt.connect(self._score_done)
+        w.doneAll.connect(self._finish)
+        w.progressChanged.connect(self._progress)
+        self.__task = task = TaskSet(futures, w)
+        task.indices = indices
+
+        # self.setStatusMessage("Running")
+        # with self.progressBar():
+        #     n_measure_update = len([x for x in measuresMask if x is not False])
+        #     count = 0
+        #     for index, (meas, mask) in enumerate(zip(measures, measuresMask)):
+        #         if not mask:
+        #             continue
+        #         self.progressBarSet(90 * count / n_measure_update)
+        #         count += 1
+        #         if index < len(self.measures):
+        #             estimator = meas.score()
+        #             try:
+        #                 self.measure_scores[index] = estimator(data)
+        #             except ValueError:
+        #                 self.measure_scores[index] = []
+        #                 for attr in data.domain.attributes:
+        #                     try:
+        #                         self.measure_scores[index].append(
+        #                             estimator(data, attr))
+        #                     except ValueError:
+        #                         self.measure_scores[index].append(None)
+        #         else:
+        #             learner = meas.score
+        #             if isinstance(learner, Learner) and \
+        #                     not learner.check_learner_adequacy(self.data.domain):
+        #                 self.Error.inadequate_learner(
+        #                     learner.learner_adequacy_err_msg)
+        #                 scores = table((1, len(data.domain.attributes)))
+        #             else:
+        #                 scores = meas.score.score_data(data)
+        #             for i, row in enumerate(scores):
+        #                 self.labels.append(meas.shortname + str(i + 1))
+        #                 if len(self.measure_scores) > learner_col:
+        #                     self.measure_scores[learner_col] = row
+        #                 else:
+        #                     self.measure_scores.append(row)
+        #                 learner_col += 1
+        #     self.progressBarSet(90)
+
+
+        # self.contRanksModel.setHorizontalHeaderLabels(
+        #     self.contRanksLabels + self.labels
+        # )
+        # self.discRanksModel.setHorizontalHeaderLabels(
+        #     self.discRanksLabels + self.labels
+        # )
+        # self.noClassRanksModel.setHorizontalHeaderLabels(
+        #     self.noClassRanksLabels + self.labels
+        # )
+        # self.updateRankModel(measuresMask)
+        # self.ranksProxyModel.invalidate()
+        # self.selectMethodChanged()
+        # self.Outputs.scores.send(self.create_scores_table(self.labels))
+        # self.setStatusMessage("")
+
+    def _score_done(self, index, f):
+        # type: (int, qconcurrent.Future) -> None
+        assert QThread.currentThread() is self.thread()
+        assert f.done()
+        assert self.__task is not None
+        assert f in self.__task.futures
+
+        try:
+            scores = f.result()
+        except qconcurrent.CancelledError:
+            return
+        except Exception:
+            log = logging.getLogger(__name__)
+            log.exception("")
+            scores = []
+
+        index = self.__task.indices[index]
+        self.measure_scores[index][:] = list(scores)
+        mask = [False] * len(self.measure_scores)
+        mask[index] = True
+        self.updateRankModel(mask)
+
+    def _progress(self, n, d):
+        self.progressBarSet(100. * n / d)
+
+    def _finish(self):
+        self.setBlocking(False)
+        self.progressBarFinished()
+
+    def cancel(self):
+        if self.__task is not None:
+            self.__task.cancel()
+            concurrent.futures.wait(self.__task.futures)
+            self.__task.watcher.flush()
+            self.__task.watcher.doneAt.disconnect(self._score_done)
+            self.__task.watcher.doneAll.disconnect(self._finish)
+            task, self.__task = self.__task, None
+            assert not self.isBlocking()
 
     def updateRankModel(self, measuresMask):
         """
@@ -750,14 +851,29 @@ class MySortProxyModel(QSortFilterProxyModel):
             return str(left_data) < str(right_data)
 
 
-if __name__ == "__main__":
+def main(argv=None):
     from AnyQt.QtWidgets import QApplication
     from Orange.classification import RandomForestLearner
-    a = QApplication([])
+    a = QApplication(list(argv) if argv else [])
+    argv = a.arguments()
+    if len(argv) > 1:
+        filename = argv[1]
+    else:
+        filename = "heart_disease.tab"
+
     ow = OWRank()
-    ow.setData(Table("heart_disease.tab"))
+    ow.setData(Table(filename))
     ow.set_learner(RandomForestLearner(), (3, 'Learner', None))
-    ow.commit()
+    ow.handleNewSignals()
     ow.show()
+    ow.raise_()
     a.exec_()
+    ow.setData(None)
+    ow.set_learner(None, (3, 'Learner', None))
+    ow.handleNewSignals()
     ow.saveSettings()
+    ow.onDeleteWidget()
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
