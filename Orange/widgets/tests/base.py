@@ -69,9 +69,7 @@ class WidgetTest(GuiTest):
     All widgets should be created by the create_widget method, as this
     will ensure they are created correctly.
     """
-
-    #: list[OwWidget]
-    widgets = []
+    widgets = []  # type: List[OWWidget]
 
     @classmethod
     def setUpClass(cls):
@@ -89,6 +87,13 @@ class WidgetTest(GuiTest):
         report = OWReport()
         cls.widgets.append(report)
         OWReport.get_instance = lambda: report
+
+    @classmethod
+    def tearDownClass(cls):
+        for w in cls.widgets:
+            w.onDeleteWidget()
+        del cls.widgets[:]
+        super().tearDownClass()
 
     def tearDown(self):
         """Process any pending events before the next test is executed."""
