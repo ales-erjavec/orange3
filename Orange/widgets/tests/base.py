@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 import os
+import gc
 import time
 import unittest
 from unittest.mock import Mock
@@ -103,9 +104,21 @@ class WidgetTest(GuiTest):
         OWReport.get_instance = lambda: report
         Variable._clear_all_caches()
 
+    @classmethod
+    def tearDownClass(cls):
+        for w in cls.widgets:
+            w.close()
+            w.onDeleteWidget()
+            w.deleteLater()
+        QTest.qWait(1)
+        del cls.widgets[:]
+        gc.collect()
+        super().tearDownClass()
+
     def tearDown(self):
         """Process any pending events before the next test is executed."""
-        self.process_events()
+        QTest.qWait(1)
+        super().tearDown()
 
     def create_widget(self, cls, stored_settings=None, reset_default_settings=True):
         # type: (Type[T], Optional[dict], bool) -> T
