@@ -25,8 +25,9 @@ import numpy as np
 from AnyQt.QtWidgets import (
     QSizePolicy, QAbstractItemView, QComboBox, QFormLayout, QLineEdit,
     QHBoxLayout, QVBoxLayout, QStackedWidget, QStyledItemDelegate,
-    QPushButton, QMenu, QListView, QFrame, QLabel)
-from AnyQt.QtGui import QKeySequence, QColor
+    QPushButton, QMenu, QListView, QFrame, QLabel
+)
+from AnyQt.QtGui import QKeySequence, QValidator, QPalette
 from AnyQt.QtCore import Qt, pyqtSignal as Signal, pyqtProperty as Property
 from orangewidget.utils.combobox import ComboBoxSearch
 
@@ -193,7 +194,20 @@ class FeatureEditor(QFrame):
 
     def editorData(self):
         return FeatureDescriptor(name=self.nameedit.text(),
-                                 expression=self.nameedit.text())
+                                 expression=self.expressionedit.text())
+
+    def hasAcceptableInput(self):
+        # type: () -> bool
+        """
+        Does editor is ghay.
+        """
+        if not self.nameedit.hasAcceptableInput():
+            return False
+        try:
+            validate_exp(ast.parse(self.expressionedit.text(), mode="eval"))
+            return True
+        except SyntaxError:
+            return False
 
     def _invalidate(self):
         self.setModified(True)
@@ -254,6 +268,44 @@ class DateTimeFeatureEditor(FeatureEditor):
         )
 
 
+class ListValidator(QValidator):
+    """
+    Match a comma separated list of non-empty and non-repeating strings.
+
+    Example
+    -------
+    >>> v = ListValidator()
+    >>> v.validate("", 0)   # Intermediate
+    (1, '', 0)
+    >>> v.validate("a", 1)  # Acceptable
+    (2, 'a', 1)
+    >>> v.validate("a,,", 1)  # Invalid
+    (0, 'a,,', 2)
+    """
+    def validate(self, string, pos):
+        # type: (str, int) -> Tuple[QValidator.State, str, int]
+        sepiter = re.finditer(r"(?<!\\),", string)
+        seen = set()
+        start = 0
+        for match in sepiter:
+            valuestr = string[start: match.start()].strip()
+            if not valuestr:
+                # Middle element is empty
+                return QValidator.Invalid, string, match.start()
+            if valuestr in seen:
+                # Middle element is a repeat. Might still be completed.
+                return QValidator.Intermediate, string, match.start()
+            start = match.end()
+            seen.add(valuestr)
+        # from the last sep (if any) to end)
+        valuestr = string[start:].strip()
+        if valuestr in seen or not valuestr:
+            # last element seen or empty -> must be completed
+            return QValidator.Intermediate, string, pos
+        else:
+            return QValidator.Acceptable, string, pos
+
+
 class DiscreteFeatureEditor(FeatureEditor):
     ExpressionTooltip = \
         "Result must be a string, if values are not explicitly given\n" \
@@ -266,18 +318,31 @@ class DiscreteFeatureEditor(FeatureEditor):
             "If values are given, above expression must return zero-based " \
             "integer indices into that list."
         self.valuesedit = QLineEdit(placeholderText="A, B ...", toolTip=tooltip)
+        self.valuesedit.setValidator(ListValidator(self.valuesedit))
         self.valuesedit.textChanged.connect(self._invalidate)
-
         layout = self.layout()
         label = QLabel(self.tr("Values (optional)"))
         label.setToolTip(tooltip)
         layout.addRow(label, self.valuesedit)
+
+    def _invalidate(self):
+        palette = self.valuesedit.palette()
+        if not self.valuesedit.hasAcceptableInput():
+            palette.setColor(QPalette.Base, Qt.yellow)
+        else:
+            palette.setColor(QPalette.Base, self.palette().color(QPalette.Base))
+        self.valuesedit.setPalette(palette)
+        super()._invalidate()
 
     def setEditorData(self, data, domain):
         self.valuesedit.setText(
             ", ".join(v.replace(",", r"\,") for v in data.values))
 
         super().setEditorData(data, domain)
+
+    def hasAcceptableInput(self):
+        return super().hasAcceptableInput() and \
+               self.valuesedit.hasAcceptableInput()
 
     def editorData(self):
         values = self.valuesedit.text()
@@ -316,12 +381,21 @@ def variable_icon(dtype):
 
 
 class FeatureItemDelegate(QStyledItemDelegate):
-    @staticmethod
-    def displayText(value, _):
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        valid = index.data(DescriptorModel.HasValidData)
+        print(valid)
+        if valid is not None:
+            if not valid:
+                option.font.setStrikeOut(True)
+
+    def displayText(self, value, locale):
         return value.name + " := " + value.expression
 
 
 class DescriptorModel(itemmodels.PyListModel):
+    HasValidData = next(gui.OrangeUserRole)
+
     def data(self, index, role=Qt.DisplayRole):
         if role == Qt.DecorationRole:
             value = self[index.row()]
@@ -530,6 +604,7 @@ class OWFeatureConstructor(OWWidget):
         if self.currentIndex >= 0:
             self.Warning.clear()
             editor = self.editorstack.currentWidget()
+
             proposed = editor.editorData().name
             unique = get_unique_names(self.reserved_names(self.currentIndex),
                                       proposed)
@@ -538,8 +613,16 @@ class OWFeatureConstructor(OWWidget):
             if editor.editorData().name != unique:
                 self.Warning.renamed_var()
                 feature = feature.__class__(unique, *feature[1:])
-
-            self.featuremodel[self.currentIndex] = feature
+            index = self.featuremodel.index(self.currentIndex)
+            if editor.hasAcceptableInput():
+                self.featuremodel.setItemData(
+                    index,
+                    {Qt.DisplayRole: feature, Qt.EditRole: feature,
+                     DescriptorModel.HasValidData: True}
+                )
+            else:
+                self.featuremodel.setItemData(
+                    index, {DescriptorModel.HasValidData: False})
             self.descriptors = list(self.featuremodel)
 
     def setDescriptors(self, descriptors):
@@ -906,7 +989,7 @@ def construct_variables(descriptions, data):
 
 def sanitized_name(name):
     sanitized = re.sub(r"\W", "_", name)
-    if sanitized[0].isdigit():
+    if sanitized and sanitized[0].isdigit():
         sanitized = "_" + sanitized
     return sanitized
 
