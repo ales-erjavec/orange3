@@ -24,7 +24,7 @@ from Orange.widgets.data.owfeatureconstructor import (
     DateTimeDescriptor)
 
 from Orange.widgets.data.owfeatureconstructor import (
-    freevars, validate_exp, FeatureFunc
+    freevars, validate_exp, FeatureFunc, ListValidator
 )
 
 
@@ -428,6 +428,33 @@ class FeatureConstructorHandlerTests(unittest.TestCase):
                 {}
             )
         )
+
+
+class TestListValidator(unittest.TestCase):
+    def test_validate(self):
+        v = ListValidator()
+        state, _, _ = v.validate("", 0)
+        self.assertEqual(state, ListValidator.Intermediate)
+        state, _, _ = v.validate(" ", 0)
+        self.assertEqual(state, ListValidator.Intermediate)
+        state, _, _ = v.validate("a", 0)
+        self.assertEqual(state, ListValidator.Acceptable)
+        state, _, _ = v.validate(" a ", 0)
+        self.assertEqual(state, ListValidator.Acceptable)
+        state, _, _ = v.validate(" a , ", 0)
+        self.assertEqual(state, ListValidator.Intermediate)
+        state, _, _ = v.validate(" a ,b", 0)
+        self.assertEqual(state, ListValidator.Acceptable)
+        state, _, _ = v.validate("a ,b, a", 0)
+        self.assertEqual(state, ListValidator.Intermediate)
+        state, _, _ = v.validate("a ,b, b ,", 0)
+        self.assertEqual(state, ListValidator.Intermediate)
+        state, _, _ = v.validate("a ,b,,", 0)
+        self.assertEqual(state, ListValidator.Invalid)
+        state, _, _ = v.validate("a, b, ,", 0)
+        self.assertEqual(state, ListValidator.Invalid)
+        state, _, _ = v.validate(r"a, b, \,", 0)
+        self.assertEqual(state, ListValidator.Acceptable)
 
 
 if __name__ == "__main__":
