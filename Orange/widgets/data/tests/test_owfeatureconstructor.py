@@ -448,7 +448,7 @@ class TestListValidator(unittest.TestCase):
         state, _, _ = v.validate("a ,b, a", 0)
         self.assertEqual(state, ListValidator.Intermediate)
         state, _, _ = v.validate("a ,b, b ,", 0)
-        self.assertEqual(state, ListValidator.Intermediate)
+        self.assertEqual(state, ListValidator.Invalid)
         state, _, _ = v.validate("a ,b,,", 0)
         self.assertEqual(state, ListValidator.Invalid)
         state, _, _ = v.validate("a, b, ,", 0)
