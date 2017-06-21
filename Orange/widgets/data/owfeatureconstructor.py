@@ -14,11 +14,12 @@ import random
 import logging
 import ast
 import types
+import enum
 
 from traceback import format_exception_only
 from collections import namedtuple, OrderedDict
 from itertools import chain, count
-from typing import List, Dict, Any
+from typing import Optional, Union, Tuple, List, Dict, Any
 
 import numpy as np
 
@@ -42,20 +43,71 @@ from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.utils.state_summary import format_summary_details
 from Orange.widgets.widget import OWWidget, Msg, Input, Output
 
-FeatureDescriptor = \
-    namedtuple("FeatureDescriptor", ["name", "expression"])
 
-ContinuousDescriptor = \
-    namedtuple("ContinuousDescriptor",
-               ["name", "expression", "number_of_decimals"])
-DateTimeDescriptor = \
-    namedtuple("DateTimeDescriptor",
-               ["name", "expression"])
-DiscreteDescriptor = \
-    namedtuple("DiscreteDescriptor",
-               ["name", "expression", "values", "ordered"])
+def is_valid_expression(source):
+    try:
+        validate_exp(ast.parse(source, mode="eval"))
+    except (SyntaxError, ValueError):
+        return False
+    else:
+        return True
 
-StringDescriptor = namedtuple("StringDescriptor", ["name", "expression"])
+
+class FeatureDescriptor(
+    namedtuple(
+        "FeatureDescriptor",
+        ["name", "expression"])
+    ):
+    def is_valid(self):
+        return is_valid_expression(self.expression)
+
+
+class ContinuousDescriptor(
+    namedtuple(
+        "ContinuousDescriptor",
+        ["name", "expression", "number_of_decimals"])
+    ):
+    def is_valid(self):
+        return is_valid_expression(self.expression)
+
+
+class DiscreteDescriptor(
+    namedtuple(
+        "DiscreteDescriptor",
+        ["name", "expression", "values", "ordered"])
+    ):
+    def is_valid(self):
+        return (is_valid_expression(self.expression) and
+                self.values and
+                all(self.values) and
+                len(unique(self.values)) == len(self.values))
+
+
+class StringDescriptor(
+    namedtuple(
+        "StringDescriptor",
+        ["name", "expression"])
+    ):
+    def is_valid(self):
+        return is_valid_expression(self.expression)
+
+
+class DateTimeDescriptor(
+    namedtuple(
+        "StringDescriptor",
+        ["name", "expression"])
+    ):
+    def is_valid(self):
+        return is_valid_expression(self.expression)
+
+
+
+Descriptor = Union[
+    FeatureDescriptor,
+    ContinuousDescriptor,
+    DiscreteDescriptor,
+    StringDescriptor
+]
 
 #warningIcon = gui.createAttributePixmap('!', QColor((202, 0, 32)))
 
@@ -83,10 +135,13 @@ def make_variable(descriptor, compute_value):
 
 
 def selected_row(view):
+    # type: (QAbstractItemView) -> Optional[int]
     """
     Return the index of selected row in a `view` (:class:`QListView`)
 
-    The view's selection mode must be a QAbstractItemView.SingleSelction
+    The view's selection mode must be a QAbstractItemView.SingleSelection
+
+    Return None in case of no selection.
     """
     if view.selectionMode() in [QAbstractItemView.MultiSelection,
                                 QAbstractItemView.ExtendedSelection]:
@@ -109,7 +164,6 @@ class FeatureEditor(QFrame):
                                        "abs", "max", "min"}]))
     featureChanged = Signal()
     featureEdited = Signal()
-
     modifiedChanged = Signal(bool)
 
     def __init__(self, *args, **kwargs):
@@ -160,30 +214,31 @@ class FeatureEditor(QFrame):
         layout.addRow(self.tr(""), hbox)
         self.setLayout(layout)
 
-        self.nameedit.editingFinished.connect(self._invalidate)
-        self.expressionedit.textChanged.connect(self._invalidate)
-        self.attributescb.currentIndexChanged.connect(self.on_attrs_changed)
-        self.functionscb.currentIndexChanged.connect(self.on_funcs_changed)
+        self.nameedit.textEdited.connect(self._invalidate)
+        self.expressionedit.textEdited.connect(self._invalidate)
+        self.attributescb.activated.connect(self.on_attrs_changed)
+        self.functionscb.activated.connect(self.on_funcs_changed)
 
         self._modified = False
 
     def setModified(self, modified):
-        if not isinstance(modified, bool):
-            raise TypeError
-
+        # type: (bool) -> None
         if self._modified != modified:
             self._modified = modified
             self.modifiedChanged.emit(modified)
 
     def modified(self):
+        # type: () -> bool
         return self._modified
 
     modified = Property(bool, modified, setModified,
                         notify=modifiedChanged)
 
     def setEditorData(self, data, domain):
-        self.nameedit.setText(data.name)
-        self.expressionedit.setText(data.expression)
+        with itemmodels.signal_blocking(self):
+            self.nameedit.setText(data.name)
+            self.expressionedit.setText(data.expression)
+
         self.setModified(False)
         self.featureChanged.emit()
         self.attrs_model[:] = ["Select Feature"]
@@ -199,7 +254,9 @@ class FeatureEditor(QFrame):
     def hasAcceptableInput(self):
         # type: () -> bool
         """
-        Does editor is ghay.
+        Does the editor contain `valid` input.
+
+        Can only check that the input is syntactically correct.
         """
         if not self.nameedit.hasAcceptableInput():
             return False
@@ -242,6 +299,7 @@ class FeatureEditor(QFrame):
         text = ct[:cp] + what + ct[cp:]
         self.expressionedit.setText(text)
         self.expressionedit.setFocus()
+        self._invalidate()
 
 
 class ContinuousFeatureEditor(FeatureEditor):
@@ -282,21 +340,42 @@ class ListValidator(QValidator):
     >>> v.validate("a,,", 1)  # Invalid
     (0, 'a,,', 2)
     """
+
+    class Mode(enum.IntEnum):
+        #: Treat middle empty and repeating strings as hard Invalid errors.
+        #: This makes it harder to input invalid values, but also makes it
+        #: harder to edit values in the middle.
+        Strict = 1
+        #: Treat empty and repeating strings as Intermediate errors.
+        Forgiving = 2
+
+    Strict, Forgiving = Mode.Strict, Mode.Forgiving
+
+    def __init__(self, parent=None, mode=Strict, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.__mode = mode  # type: ListValidator.Mode
+
     def validate(self, string, pos):
         # type: (str, int) -> Tuple[QValidator.State, str, int]
         sepiter = re.finditer(r"(?<!\\),", string)
         seen = set()
         start = 0
+        if self.__mode == ListValidator.Strict:
+            invalid = QValidator.Invalid
+        else:
+            invalid = QValidator.Intermediate
+
         for match in sepiter:
             valuestr = string[start: match.start()].strip()
             if not valuestr:
                 # Middle element is empty
-                return QValidator.Invalid, string, match.start()
+                return invalid, string, match.start()
             if valuestr in seen:
-                # Middle element is a repeat. Might still be completed.
-                return QValidator.Intermediate, string, match.start()
+                # Middle element is a repeat.
+                return invalid, string, match.start()
             start = match.end()
             seen.add(valuestr)
+
         # from the last sep (if any) to end)
         valuestr = string[start:].strip()
         if valuestr in seen or not valuestr:
@@ -304,6 +383,15 @@ class ListValidator(QValidator):
             return QValidator.Intermediate, string, pos
         else:
             return QValidator.Acceptable, string, pos
+
+    def fixup(self, string):
+        # type: (str) -> str
+        """
+        Fixup the input. Remove empty parts from the string.
+        """
+        parts = re.split(r"(?<!\\),", string)
+        parts = [part for part in parts if part.strip()]
+        return ",".join(parts)
 
 
 class DiscreteFeatureEditor(FeatureEditor):
@@ -318,8 +406,11 @@ class DiscreteFeatureEditor(FeatureEditor):
             "If values are given, above expression must return zero-based " \
             "integer indices into that list."
         self.valuesedit = QLineEdit(placeholderText="A, B ...", toolTip=tooltip)
-        self.valuesedit.setValidator(ListValidator(self.valuesedit))
+        self.valuesedit.setValidator(
+            ListValidator(self.valuesedit, ListValidator.Forgiving)
+        )
         self.valuesedit.textChanged.connect(self._invalidate)
+        self.valuesedit.textChanged.connect(self.featureChanged)
         layout = self.layout()
         label = QLabel(self.tr("Values (optional)"))
         label.setToolTip(tooltip)
@@ -335,8 +426,9 @@ class DiscreteFeatureEditor(FeatureEditor):
         super()._invalidate()
 
     def setEditorData(self, data, domain):
-        self.valuesedit.setText(
-            ", ".join(v.replace(",", r"\,") for v in data.values))
+        with itemmodels.signal_blocking(self):
+            self.valuesedit.setText(
+                ", ".join(v.replace(",", r"\,") for v in data.values))
 
         super().setEditorData(data, domain)
 
@@ -383,18 +475,23 @@ def variable_icon(dtype):
 class FeatureItemDelegate(QStyledItemDelegate):
     def initStyleOption(self, option, index):
         super().initStyleOption(option, index)
-        valid = index.data(DescriptorModel.HasValidData)
-        print(valid)
-        if valid is not None:
-            if not valid:
-                option.font.setStrikeOut(True)
+        valid = index.data(DescriptorModel.HasValidDataRole)
+        modified = index.data(DescriptorModel.ModifiedRole)
+        if valid is not None and not valid:
+            option.font.setStrikeOut(True)
+            option.palette.setColor(QPalette.Text, Qt.red)
+            option.palette.setColor(QPalette.HighlightedText, Qt.red)
+
+        if modified is not None and modified:
+            option.font.setItalic(True)
 
     def displayText(self, value, locale):
         return value.name + " := " + value.expression
 
 
 class DescriptorModel(itemmodels.PyListModel):
-    HasValidData = next(gui.OrangeUserRole)
+    HasValidDataRole = next(gui.OrangeUserRole)
+    ModifiedRole = next(gui.OrangeUserRole)
 
     def data(self, index, role=Qt.DisplayRole):
         if role == Qt.DecorationRole:
@@ -487,7 +584,8 @@ class OWFeatureConstructor(OWWidget):
 
         for descclass, editorclass in self.EDITORS:
             editor = editorclass()
-            editor.featureChanged.connect(self._on_modified)
+            editor.featureChanged.connect(self._on_feature_changed)
+            editor.modifiedChanged.connect(self._on_modified_changed)
             self.editors[descclass] = editor
             self.editorstack.addWidget(editor)
 
@@ -582,13 +680,17 @@ class OWFeatureConstructor(OWWidget):
 
     def setCurrentIndex(self, index):
         index = min(index, len(self.featuremodel) - 1)
-        self.currentIndex = index
-        if index >= 0:
-            itemmodels.select_row(self.featureview, index)
-            desc = self.featuremodel[min(index, len(self.featuremodel) - 1)]
-            editor = self.editors[type(desc)]
-            self.editorstack.setCurrentWidget(editor)
-            editor.setEditorData(desc, self.data.domain if self.data else None)
+        if self.currentIndex != index:
+            self.currentIndex = index
+
+            if index >= 0:
+                itemmodels.select_row(self.featureview, index)
+                desc = self.featuremodel[index]
+                editor = self.editors[type(desc)]
+                self.editorstack.setCurrentWidget(editor)
+                editor.setEditorData(
+                    desc, self.data.domain if self.data is not None else None)
+
         self.editorstack.setEnabled(index >= 0)
         self.duplicateaction.setEnabled(index >= 0)
         self.removebutton.setEnabled(index >= 0)
@@ -600,7 +702,7 @@ class OWFeatureConstructor(OWWidget):
         else:
             self.setCurrentIndex(-1)
 
-    def _on_modified(self):
+    def _on_feature_changed(self):
         if self.currentIndex >= 0:
             self.Warning.clear()
             editor = self.editorstack.currentWidget()
@@ -614,16 +716,24 @@ class OWFeatureConstructor(OWWidget):
                 self.Warning.renamed_var()
                 feature = feature.__class__(unique, *feature[1:])
             index = self.featuremodel.index(self.currentIndex)
-            if editor.hasAcceptableInput():
-                self.featuremodel.setItemData(
-                    index,
-                    {Qt.DisplayRole: feature, Qt.EditRole: feature,
-                     DescriptorModel.HasValidData: True}
-                )
-            else:
-                self.featuremodel.setItemData(
-                    index, {DescriptorModel.HasValidData: False})
+            valid = editor.hasAcceptableInput()
+            data = self.featuremodel.itemData(index)
+            data[Qt.EditRole] = feature
+            data[DescriptorModel.HasValidDataRole] = valid
+            self.featuremodel.setItemData(index, data)
             self.descriptors = list(self.featuremodel)
+            editor.setModified(False)
+
+    def _on_modified_changed(self, state):
+        return
+        if self.currentIndex >= 0:
+            editor = self.editorstack.currentWidget()
+            assert editor is self.sender()
+            self.featuremodel.setData(
+                self.featuremodel.index(self.currentIndex),
+                state,
+                DescriptorModel.ModifiedRole
+            )
 
     def setDescriptors(self, descriptors):
         """
@@ -660,7 +770,7 @@ class OWFeatureConstructor(OWWidget):
 
             if descriptors != self.descriptors or \
                     self.currentIndex != currindex:
-                # disconnect from the selection model while reseting the model
+                # disconnect from the selection model while resetting the model
                 selmodel = self.featureview.selectionModel()
                 selmodel.selectionChanged.disconnect(
                     self._on_selectedVariableChanged)
