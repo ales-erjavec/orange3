@@ -1,9 +1,10 @@
 import inspect
 import sys
+import enum
 from collections import deque
 
 import typing
-from typing import TypeVar, Deque, Callable, Any, Iterable
+from typing import TypeVar, Deque, Callable, Any, Iterable, Optional, Type
 
 from AnyQt.QtCore import QObject
 from AnyQt.QtGui import QColor, QFont
@@ -13,6 +14,7 @@ from Orange.util import deepgetattr
 
 if typing.TYPE_CHECKING:
     H = typing.TypeVar("H", bound=typing.Hashable)
+    E = typing.TypeVar("E", bound=enum.Enum)
 
 
 def vartype(var):
@@ -151,3 +153,24 @@ def unique(iterable):
             seen.add(e)
         return isfirst
     return (e for e in iterable if first_seen(e))
+
+
+if typing.TYPE_CHECKING:
+    @typing.overload
+    def enum_lookup(enumtype: Type[E], name: str) -> Optional[E]: ...
+
+    @typing.overload
+    def enum_lookup(enumtype: Type[E], name: str, default: E) -> E: ...
+
+
+def enum_lookup(enumtype, name, default=None):
+    """
+    Return an value from `enumtype` by its symbolic `name`.
+
+    `default` is returned if the value is not found.
+    """
+    try:
+        return enumtype[name]
+    except LookupError:
+        return default
+
