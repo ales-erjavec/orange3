@@ -154,7 +154,7 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         restore(self.varview, self.selected_var_indices)
 
     def _p_axes(self):
-        return (self.component_x, self.component_y)
+        return self.component_x, self.component_y
 
     def _var_changed(self):
         self.selected_var_indices = sorted(
@@ -374,6 +374,8 @@ def correspondence(A):
     ca : CA
     """
     A = np.asarray(A)
+    assert np.all(np.isfinite(A))
+    assert np.all(A >= 0)
 
     total = np.sum(A)
     if total > 0:
