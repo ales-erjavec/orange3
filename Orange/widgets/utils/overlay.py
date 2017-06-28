@@ -10,20 +10,25 @@ import enum
 import functools
 import operator
 from collections import namedtuple
+from typing import Optional
 
 from AnyQt.QtWidgets import (
     QHBoxLayout, QPushButton, QLabel, QSizePolicy, QStyle, QAbstractButton,
-    QStyleOptionButton, QStylePainter, QFocusFrame, QWidget, QStyleOption
+    QWidget, QStyleOption
 )
 from AnyQt.QtGui import QIcon, QPixmap, QPainter
 from AnyQt.QtCore import Qt, QSize, QRect, QPoint, QEvent, QTimer
 from AnyQt.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
+
+from .buttons import SimpleButton
 
 
 class OverlayWidget(QWidget):
     """
     A widget positioned on top of another widget.
     """
+    __widget = None  # type: Optional[QWidget]
+
     def __init__(self, parent=None, alignment=Qt.AlignCenter, **kwargs):
         super().__init__(parent, **kwargs)
         self.setContentsMargins(0, 0, 0, 0)
@@ -164,7 +169,7 @@ class OverlayWidget(QWidget):
         if alignment & Qt.AlignTop:
             y = bounds.y()
         elif alignment & Qt.AlignBottom:
-            y = bounds.bottom() - size.height()
+            y = bounds.y() + bounds.height() - size.height() + 1
         else:
             y = bounds.y() + max(0, bounds.height() - size.height()) // 2
 
@@ -176,60 +181,6 @@ class OverlayWidget(QWidget):
         self.__widget = None
         if self.isVisible():
             self.hide()
-
-
-class SimpleButton(QAbstractButton):
-    """
-    A simple icon button widget.
-    """
-    def __init__(self, parent=None, **kwargs):
-        super().__init__(parent, **kwargs)
-        self.__focusframe = None
-
-    def focusInEvent(self, event):
-        # reimplemented
-        event.accept()
-        self.__focusframe = QFocusFrame(self)
-        self.__focusframe.setWidget(self)
-
-    def focusOutEvent(self, event):
-        # reimplemented
-        event.accept()
-        self.__focusframe.deleteLater()
-        self.__focusframe = None
-
-    def sizeHint(self):
-        # reimplemented
-        self.ensurePolished()
-        iconsize = self.iconSize()
-        icon = self.icon()
-        if not icon.isNull():
-            iconsize = icon.actualSize(iconsize)
-        return iconsize
-
-    def minimumSizeHint(self):
-        # reimplemented
-        return self.sizeHint()
-
-    def paintEvent(self, event):
-        # reimplemented
-        painter = QStylePainter(self)
-        option = QStyleOptionButton()
-        option.initFrom(self)
-        option.icon = self.icon()
-        option.iconSize = self.iconSize()
-
-        icon = self.icon()
-
-        if not icon.isNull():
-            if option.state & QStyle.State_Active:
-                mode = (QIcon.Normal if option.state & QStyle.State_MouseOver
-                        else QIcon.Active)
-            else:
-                mode = QIcon.Disabled
-            pixmap = icon.pixmap(option.iconSize, mode, )
-
-            painter.drawItemPixmap(option.rect, Qt.AlignCenter, pixmap)
 
 
 class MessageWidget(QWidget):

@@ -7,10 +7,11 @@ import types
 
 from AnyQt.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QSizePolicy, QApplication, QStyle,
-    QShortcut, QSplitter, QSplitterHandle, QPushButton
+    QShortcut, QSplitter, QSplitterHandle, QPushButton, QStatusBar, QFrame
 )
 from AnyQt.QtCore import (
-    Qt, QByteArray, QSettings, QUrl, pyqtSignal as Signal)
+    Qt, QByteArray, QSettings, QUrl, QSize, pyqtSignal as Signal
+)
 from AnyQt.QtGui import QIcon, QKeySequence, QDesktopServices
 
 from Orange.data import FileFormat
@@ -26,10 +27,11 @@ from Orange.widgets.settings import SettingsHandler
 from Orange.widgets.utils import saveplot, getdeepattr
 from Orange.widgets.utils.progressbar import ProgressBarMixin
 from Orange.widgets.utils.messages import \
-    WidgetMessagesMixin, UnboundMsg
+    WidgetMessagesMixin, UnboundMsg, MessagesWidget
 from Orange.widgets.utils.signals import \
     WidgetSignalsMixin, Input, Output, AttributeList
-from .utils.overlay import MessageOverlayWidget
+from Orange.widgets.utils.overlay import MessageOverlayWidget
+from Orange.widgets.utils.buttons import SimpleButton
 
 # Msg is imported and renamed, so widgets can import it from this module rather
 # than the one with the mixin (Orange.widgets.utils.messages). Assignment is
@@ -42,6 +44,11 @@ def _asmappingproxy(mapping):
         return mapping
     else:
         return types.MappingProxyType(mapping)
+
+
+def _resource_path(path):
+    base = os.path.dirname(__file__)
+    return os.path.join(base, path)
 
 
 class WidgetMetaClass(type(QDialog)):
@@ -115,6 +122,8 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
     #: Orientation of the buttonsArea box; valid only if
     #: `want_control_area` is `True`. Possible values are Qt.Horizontal,
     #: Qt.Vertical and None for no buttons area
+    #: .. deprecated:: 3.5.0
+    #:     Deprecated and ignored.
     buttons_area_orientation = Qt.Horizontal
     #: Specify whether the default message bar widget should be created
     #: and placed into the default layout. If False then clients are
@@ -281,6 +290,10 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
             m = 0
         else:
             m = 4
+        # self.setStyleSheet(
+        #     "QWidget#gui-widgetBox { border: 1px solid green; }\n"
+        #     "QWidget#gui-separator { border: 1px solid red; }"
+        # )
         self.controlArea.layout().setContentsMargins(m, m, m, m)
 
     def _insert_buttons_area(self):
@@ -322,21 +335,53 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
         and attribute `graph_name`.
         """
         self.setLayout(QVBoxLayout())
-        self.layout().setContentsMargins(2, 2, 2, 2)
+        self.layout().setContentsMargins(0, 0, 0, 0)
+        self.layout().setSpacing(0)
+
         if not self.resizing_enabled:
             self.layout().setSizeConstraint(QVBoxLayout.SetFixedSize)
 
         self.want_main_area = self.want_main_area or self.graph_name
         self._create_default_buttons()
 
-        if self.want_message_bar:
-            self.insert_message_bar()
-
         self._insert_splitter()
         if self.want_control_area:
             self._insert_control_area()
         if self.want_main_area:
             self._insert_main_area()
+
+        if self.want_message_bar:
+            sb = QStatusBar()
+            sb.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Maximum)
+            sb.setSizeGripEnabled(self.resizing_enabled)
+            self.layout().addWidget(sb)
+
+            b = SimpleButton(
+                icon=QIcon(_resource_path("icons/help.svg")),
+                toolTip="Show widget help",
+            )
+            sb.addWidget(b)
+            if self.graph_name is not None:
+                b = SimpleButton(
+                    icon=QIcon(_resource_path("icons/chart.svg")),
+                    toolTip="Save Image",
+                )
+                b.clicked.connect(self.save_graph)
+                sb.addWidget(b)
+            if hasattr(self, "send_report"):
+                b = SimpleButton(
+                    icon=QIcon(_resource_path("icons/report.svg")),
+                    toolTip="Report"
+                )
+                b.clicked.connect(self.show_report)
+                sb.addWidget(b)
+            sb.addWidget(
+                QFrame(frameShape=QFrame.VLine, frameShadow=QFrame.Plain)
+            )
+            self.message_bar = MessagesWidget(self)
+            self.message_bar.setSizePolicy(QSizePolicy.Preferred,
+                                           QSizePolicy.Ignored)
+            sb.addPermanentWidget(self.message_bar)
 
     def save_graph(self):
         """Save the graph with the name given in class attribute `graph_name`.
@@ -765,12 +810,15 @@ class Message(object):
     """
     A user message.
 
-    :param str text: Message text
-    :param str persistent_id:
+    Parameters
+    ----------
+    text: str
+        Message text.
+    persistent_id: str
         A persistent message id.
-    :param icon: Message icon
-    :type icon: QIcon or QStyle.StandardPixmap
-    :param str moreurl:
+    icon: Optional[Union[QIcon, QStyle.StandardPixmap]]
+        An icon to display next to the message
+    moreurl: Optional[str]
         An url to open when a user clicks a 'Learn more' button.
 
     .. seealso:: :const:`OWWidget.UserAdviceMessages`

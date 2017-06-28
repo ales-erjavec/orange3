@@ -322,7 +322,7 @@ def separator(widget, width=4, height=4):
     :return: separator
     :rtype: QWidget
     """
-    sep = QtWidgets.QWidget(widget)
+    sep = QtWidgets.QWidget(widget, objectName="gui-separator")
     if widget.layout() is not None:
         widget.layout().addWidget(sep)
     sep.setFixedSize(width, height)
@@ -362,13 +362,13 @@ def widgetBox(widget, box=None, orientation=Qt.Vertical, margin=None, spacing=4,
     :rtype: QGroupBox or QWidget
     """
     if box:
-        b = QtWidgets.QGroupBox(widget)
+        b = QtWidgets.QGroupBox(widget, objectName="gui-widgetBox")
         if isinstance(box, str):
             b.setTitle(" " + box.strip() + " ")
         if margin is None:
             margin = 7
     else:
-        b = QtWidgets.QWidget(widget)
+        b = QtWidgets.QWidget(widget, objectName="gui-widgetBox")
         b.setContentsMargins(0, 0, 0, 0)
         if margin is None:
             margin = 0
