@@ -16,16 +16,6 @@ from .. import test
 
 
 class TestDropShadow(test.QAppTestCase):
-    def test_drop_shadow_old(self):
-        w = dropshadow._DropShadowWidget()
-        w.setContentsMargins(20, 20, 20, 20)
-        w.setLayout(QHBoxLayout())
-        w.layout().setContentsMargins(0, 0, 0, 0)
-        w.layout().addWidget(QListView())
-        w.show()
-        QTimer.singleShot(1500, lambda: w.setRadius(w.radius + 5))
-        self.app.exec_()
-
     def test(self):
         lv = QListView()
         mw = QMainWindow()
