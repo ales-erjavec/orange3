@@ -68,7 +68,7 @@ class DropShadowFrame(QWidget):
 
         self.__color = color
         self.__radius = radius
-        self.__offset = QPoint()
+        self.__offset = QPoint(0, 0)
 
         self.__widget = None
         self.__widgetParent = None
@@ -118,6 +118,12 @@ class DropShadowFrame(QWidget):
             self.__updateGeometry()
             self.__updatePixmap()
 
+    def offset(self):
+        return QPoint(self.__offset)
+
+    offset_ = Property(QPoint, fget=offset, fset=setOffset, designable=True,
+                       doc="Drop shadow offset.")
+
     def setWidget(self, widget):
         """
         Set the widget around which to show the shadow.
@@ -164,13 +170,14 @@ class DropShadowFrame(QWidget):
         assert pixr == self.devicePixelRatio()
         shadow_rect = QRectF(opt.rect)
         widget_rect = QRectF(self.widget().geometry())
-        widget_rect.moveTo(self.radius_ - offset.x(), self.radius_)
+        widget_rect.moveTo(radius - offset.x(), radius - offset.y())
 
-        left = top = right = bottom = self.radius_ * pixr
+        left = top = right = bottom = radius * pixr
         pixmap_rect = QRectF(QPointF(0, 0), QSizeF(pixmap.size()))
 
         # Shadow casting rectangle in the source pixmap.
         pixmap_shadow_rect = pixmap_rect.adjusted(left, top, -right, -bottom)
+        pixmap_shadow_rect.translate(-offset.x() * pixr, -offset.y() * pixr)
         source_rects = self.__shadowPixmapFragments(pixmap_rect,
                                                     pixmap_shadow_rect)
         target_rects = self.__shadowPixmapFragments(shadow_rect, widget_rect)
@@ -216,7 +223,7 @@ class DropShadowFrame(QWidget):
         mask = QRegion(rect)
 
         rect = rect.adjusted(radius, radius, -radius, -radius)
-        rect = rect.translated(offset)
+        rect = rect.translated(-offset)
         transparent = QRegion(rect)
         mask = mask.subtracted(transparent)
         self.setMask(mask)
@@ -229,7 +236,6 @@ class DropShadowFrame(QWidget):
         pixr = self.devicePixelRatio()
         rect_size = QSize(50 * pixr, 50 * pixr)
         left = top = right = bottom = self.radius_ * pixr
-        # left, right = left - offset.x(), right - offset.x()
         # Size of the pixmap.
         pixmap_size = QSize(rect_size.width() + left + right,
                             rect_size.height() + top + bottom)
@@ -242,7 +248,7 @@ class DropShadowFrame(QWidget):
             pixmap,
             QRectF(shadow_rect),
             shadow_color=self.color_,
-            offset=QPointF(0, 0),
+            offset=offset * pixr,
             radius=self.radius_ * pixr,
             rect_fill_color=rect_fill_color
         )
