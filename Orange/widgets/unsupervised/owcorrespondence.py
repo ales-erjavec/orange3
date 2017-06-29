@@ -362,6 +362,95 @@ def burt_table(data, variables):
 
     return values, table
 
+import scipy.linalg
+
+
+def wsvd(A, Wu=None, Wv=None):
+    """
+    Compute a weighted SVD (also called generalized SVD)
+    (https://en.wikipedia.org/wiki/Generalized_singular_value_decomposition)
+
+    Factors the matrix `A` as  `A = U @ np.diag(s) @ Vh` where
+    `U.T @ Wu @ U = I` and `Vh @ Wv @ Vh.T = I`
+
+    The wu or wv can be passed as 1d arrays in which case they are taken
+    to be elements of a diagonal weighting matrix. If omitted they are
+    assumed to be `I`
+
+    Parameters
+    ----------
+    A : (M, N) array_like
+
+    Wu : (M) or (M, M) array_like
+        The `u` weighting matrix. Must be a positive semi-definite matrix
+    Wv : (N) or (N, N) array_like
+        The `v` weighing matrix.
+
+    Returns
+    -------
+    U : array
+    s : array
+    Vh : array
+
+    """
+    A = np.asarray(A)
+
+    if A.ndim != 2:
+        raise ValueError("A.ndim != 2 ({})".format(A.ndim))
+    assert A.size
+    m, n = A.shape
+
+    if Wu is not None:
+        Wu = np.asarray(Wu)
+        assert 0 < Wu.ndim <= 2
+        assert Wu.shape[0] == m
+    else:
+        Wu = 1
+
+    if Wv is not None:
+        Wv = np.asarray(Wv)
+        assert 0 < Wv.ndim <= 2
+        assert Wv.shape[0] == n
+    else:
+        Wv = 1
+
+    def sqrtm(A):
+        if A.ndim == 2:
+            return scipy.linalg.sqrtm(A)
+        elif 0 < A.ndim < 2:
+            return np.sqrt(A)
+        else:
+            raise ValueError
+
+    def inv(A):
+        if A.ndim == 2:
+            return np.linalg.inv(A)
+        elif 0 < A.ndim < 2:
+            return np.reciprocal(A)
+        else:
+            raise ValueError
+
+    def dot(A, B):
+        if A.ndim == B.ndim == 2:
+            return np.dot(A, B)
+        elif A.ndim == 1 and B.ndim == 2:
+            return np.c_[A] * B
+        elif A.ndim == 2 and B.ndim == 1:
+            return A * np.r_[B]
+        elif A.ndim == 1 and B.ndim == 1:
+            return A * B
+        else:
+            raise ValueError
+
+    Wu_sqrt = sqrtm(Wu)
+    Wv_sqrt = sqrtm(Wv)
+    # A_hat = Wu ** (1/2) @ A @
+    A_hat = dot(dot(Wu_sqrt, A), Wv_sqrt)
+    U_hat, s, Vh_hat = np.linalg.svd(A_hat, full_matrices=False)
+    U = dot(inv(Wu_sqrt), U_hat)
+    Vh = dot(inv(Wv_sqrt), Vh_hat.T).T
+    return U, s, Vh
+
 
 def correspondence(A):
     """
@@ -402,7 +491,7 @@ def correspondence(A):
         V = (np.c_[Wv_sqrt ** -1] * Vb.T).T
         return U, D, V
 
-    U, D, V = gsvd(corr_mat - E, D_r, D_c)
+    U, D, V = wsvd(corr_mat - E, D_r, D_c)
 
     F = np.c_[D_r] * U * D
     G = np.c_[D_c] * V.T * D
@@ -428,26 +517,24 @@ class CA(CA):
 
 
 def main(argv=None):
-    import sip
     if argv is None:
         argv = sys.argv[1:]
-
-    if argv:
-        filename = argv[0]
+    app = QApplication(list(argv) if argv else [])
+    argv = app.arguments()
+    if len(argv) > 1:
+        filename = argv[1]
     else:
         filename = "smokers_ct"
-
     data = Orange.data.Table(filename)
-    app = QApplication([argv])
     w = OWCorrespondenceAnalysis()
     w.set_data(data)
     w.show()
     w.raise_()
     rval = app.exec_()
+    w.set_data(None)
     w.onDeleteWidget()
-    sip.delete(w)
     del w
     return rval
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv))
