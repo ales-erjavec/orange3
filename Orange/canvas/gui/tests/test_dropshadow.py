@@ -2,6 +2,7 @@
 Tests for DropShadowFrame wiget.
 
 """
+import math
 
 from AnyQt.QtWidgets import (
     QMainWindow, QWidget, QListView, QTextEdit, QHBoxLayout, QToolBar,
@@ -9,7 +10,7 @@ from AnyQt.QtWidgets import (
 )
 from AnyQt.QtGui import QColor
 
-from AnyQt.QtCore import Qt, QTimer
+from AnyQt.QtCore import Qt, QPoint, QPropertyAnimation, QVariantAnimation
 from .. import dropshadow
 
 from .. import test
@@ -69,6 +70,25 @@ class TestDropShadow(test.QAppTestCase):
         self.singleShot(4000, lambda: f.setRadius(30))
         self.singleShot(5000, lambda: f.setRadius(40))
 
+        self.app.exec_()
+
+    def test_offset(self):
+        w = QWidget()
+        w.setLayout(QHBoxLayout())
+        w.setContentsMargins(30, 30, 30, 30)
+        ww = QTextEdit()
+        w.layout().addWidget(ww)
+        f = dropshadow.DropShadowFrame(radius=20)
+        f.setWidget(ww)
+        oanim = QVariantAnimation(
+            f, startValue=0.0, endValue=2 * math.pi, loopCount=-1,
+            duration=2000,
+        )
+        @oanim.valueChanged.connect
+        def _(value):
+            f.setOffset(QPoint(4 * math.cos(value), 4 * math.sin(value)))
+        oanim.start()
+        w.show()
         self.app.exec_()
 
 
