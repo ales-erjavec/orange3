@@ -223,6 +223,7 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
         )
         self.addAction(self.__help_action)
         self.__statusbar = None  # type: Optional[QStatusBar]
+        self.__statusbar_action = None  # type: Optional[QAction]
 
         self.left_side = None
         self.controlArea = self.mainArea = self.buttonsArea = None
@@ -473,7 +474,7 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
             c.setWidget(self)
             c.setLayout(QVBoxLayout())
             c.layout().setContentsMargins(0, 0, 0, 0)
-            statusbar = OWWidget._StatusBar(
+            self.__statusbar = statusbar = OWWidget._StatusBar(
                 c, objectName="owwidget-status-bar"
             )
             statusbar.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Maximum)
@@ -494,9 +495,27 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
                 margins = self.contentsMargins()
                 margins.setBottom(height)
                 self.setContentsMargins(margins)
+
             update_margin()
             statusbar.change.connect(update_margin)
-            self.__statusbar = statusbar
+            # Toggle status bar visibility. This action is not visible and
+            # enabled by default. Client classes can inspect self.actions
+            # and enable it if necessary.
+            self.__statusbar_action = statusbar_action = QAction(
+                "Show status bar", self, objectName="show-status-bar-action",
+                toolTip="Show status bar", checkable=True,
+                enabled=False, visible=False,
+                shortcut=QKeySequence(
+                    Qt.ShiftModifier | Qt.ControlModifier | Qt.Key_Backslash)
+            )
+            statusbar_action.toggled[bool].connect(statusbar.setVisible)
+
+            def update_checked():
+                statusbar_action.setChecked(statusbar.isVisibleTo(self))
+            statusbar.change.connect(update_checked)
+
+            self.addAction(statusbar_action)
+
         return statusbar
 
     def __toggleControlArea(self):
