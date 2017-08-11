@@ -918,3 +918,17 @@ Explicit = widget_description.Explicit
 #: to any input signal which can accept a subtype of the declared output
 #: type.
 Dynamic = widget_description.Dynamic
+
+
+class OWAction(QAction):
+    """
+    An action to be inserted into canvas right click context menu.
+
+    Actions defined and added this way are pulled from the widget and
+    inserted into canvas GUI's right context menu. The actions must
+    be defined in the OWWidget's `__init__` method and added to the
+    widget with `QWidget.addAction`.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setProperty("-canvas-extra-context-item", True)

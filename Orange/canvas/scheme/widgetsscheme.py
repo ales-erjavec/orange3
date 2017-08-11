@@ -367,6 +367,10 @@ class WidgetManager(QObject):
             state.widget.progressBarValueChanged.disconnect(node.set_progress)
 
             self.widget_for_node_removed.emit(node, state.widget)
+
+            node.setProperty("-canvas-extra-context-item", None)
+            node.set_actions([])
+
             self._delete_widget(state.widget)
         elif isinstance(state, WidgetManager.PartiallyInitialized):
             widget = state.partially_initialized_widget
@@ -530,6 +534,11 @@ class WidgetManager(QObject):
             icon_loader.from_description(desc).get(desc.icon)
         )
         widget.setCaption(node.title)
+
+        owactions = [action for action in widget.actions()
+                     if action.property("-canvas-extra-context-item")]
+        node.set_actions(owactions)
+        node.setProperty("-canvas-extra-context-item", owactions)
 
         # Schedule an update with the signal manager, due to the cleared
         # implicit Initializing flag

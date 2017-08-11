@@ -7,6 +7,7 @@ Scheme Node
 
 from AnyQt.QtCore import QObject
 from AnyQt.QtCore import pyqtSignal as Signal, pyqtProperty as Property
+from AnyQt.QtWidgets import QAction
 
 
 class UserMessage(object):
@@ -68,6 +69,7 @@ class SchemeNode(QObject):
         self.__processing_state = 0
         self.__status_message = ""
         self.__state_messages = {}
+        self.__actions = []
         self.properties = properties or {}
 
     def input_channels(self):
@@ -223,6 +225,21 @@ class SchemeNode(QObject):
         Return a list of all state messages.
         """
         return self.__state_messages.values()
+
+    def actions(self):
+        """
+        Return a list of `QAction` instances defining custom
+        """
+        return list(self.__actions)
+
+    def set_actions(self, actions):
+        """
+        Set a runtime defined list of actions.
+        Parameters
+        ----------
+        actions : List[QAction]
+        """
+        self.__actions = list(actions)
 
     def __str__(self):
         return "SchemeNode(description_id=%s, title=%r, ...)" % \

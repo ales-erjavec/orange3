@@ -224,7 +224,9 @@ class OWFile(widget.OWWidget, RecentPathsWComboMixin):
                     os.path.getsize(last_path) > self.SIZE_LIMIT:
                 self.Warning.file_too_big()
                 return
-
+        self.addAction(
+            widget.OWAction("Reload", self, triggered=self.load_data,
+                            icon=reload_button.icon()))
         QTimer.singleShot(0, self.load_data)
 
     def sizeHint(self):
