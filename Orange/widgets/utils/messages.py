@@ -368,6 +368,7 @@ class WidgetMessagesMixin(MessagesMixin):
         self.message_bar.clear()
         if messages:
             self.message_bar.setMessages((m, msg(m)) for m in messages)
+        self.message_bar.setVisible(bool(messages))
 
     def insert_message_bar(self):
         """Insert message bar into the widget.
