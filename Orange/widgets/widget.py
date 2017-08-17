@@ -7,13 +7,15 @@ import types
 import textwrap
 from operator import attrgetter
 
+from typing import Optional
+
 from AnyQt.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QSizePolicy, QApplication, QStyle,
     QShortcut, QSplitter, QSplitterHandle, QPushButton, QStatusBar,
     QProgressBar, QAction, QWIDGETSIZE_MAX
 )
 from AnyQt.QtCore import (
-    Qt, QRect, QMargins, QByteArray, QDataStream, QBuffer, QSettings,
+    Qt, QEvent, QRect, QMargins, QByteArray, QDataStream, QBuffer, QSettings,
     QUrl, pyqtSignal as Signal
 )
 from AnyQt.QtGui import QIcon, QKeySequence, QDesktopServices
@@ -128,6 +130,7 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
     #: responsible for displaying messages within the widget in an
     #: appropriate manner.
     want_message_bar = True
+
     #: Widget painted by `Save graph` button
     graph_name = None
     graph_writers = FileFormat.img_writers
@@ -219,6 +222,7 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
             enabled=False, visible=False, shortcut=QKeySequence(Qt.Key_F1)
         )
         self.addAction(self.__help_action)
+        self.__statusbar = None  # type: Optional[QStatusBar]
 
         self.left_side = None
         self.controlArea = self.mainArea = self.buttonsArea = None
@@ -372,17 +376,7 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
             self._insert_main_area()
 
         if self.want_message_bar:
-            # Use a OverlayWidget for status bar positioning.
-            c = OverlayWidget(self, alignment=Qt.AlignBottom)
-            c.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-            c.setWidget(self)
-            c.setLayout(QVBoxLayout())
-            c.layout().setContentsMargins(0, 0, 0, 0)
-            sb = QStatusBar()
-            sb.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Maximum)
-            sb.setSizeGripEnabled(self.resizing_enabled)
-            c.layout().addWidget(sb)
-
+            sb = self.statusBar()
             help = self.__help_action
             icon = QIcon(gui.resource_filename("icons/help.svg"))
             icon.addFile(gui.resource_filename("icons/help-hover.svg"), mode=QIcon.Active)
@@ -448,10 +442,62 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
             def _(val):
                 pb.setValue(int(val))
 
+    class _StatusBar(QStatusBar):
+        change = Signal()
+
+        def event(self, event):
+            # type: (QEvent) ->bool
+            if event.type() in {QEvent.Resize, QEvent.ShowToParent,
+                                QEvent.HideToParent}:
+                self.change.emit()
+            return super().event(event)
+
+    def statusBar(self):
+        # type: () -> QStatusBar
+        """
+        Return the widget's status bar.
+
+        The status bar can be hidden/shown (`self.statusBar().setVisible()`).
+
+        Note
+        ----
+        The status bar takes control of the widget's bottom margin
+        (`contentsMargins`) to layout itself in the OWWidget.
+        """
+        statusbar = self.__statusbar
+
+        if statusbar is None:
+            # Use a OverlayWidget for status bar positioning.
+            c = OverlayWidget(self, alignment=Qt.AlignBottom)
+            c.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            c.setWidget(self)
+            c.setLayout(QVBoxLayout())
+            c.layout().setContentsMargins(0, 0, 0, 0)
+            statusbar = OWWidget._StatusBar(
+                c, objectName="owwidget-status-bar"
+            )
+            statusbar.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Maximum)
+            statusbar.setSizeGripEnabled(self.resizing_enabled)
+            statusbar.ensurePolished()
+            c.layout().addWidget(statusbar)
+
             # Reserve the bottom margins for the status bar
-            margins = self.layout().contentsMargins()
-            margins.setBottom(sb.sizeHint().height())
+            margins = self.contentsMargins()
+            margins.setBottom(statusbar.sizeHint().height())
             self.setContentsMargins(margins)
+
+            def update_margin():
+                if statusbar.isVisibleTo(self):
+                    height = statusbar.height()
+                else:
+                    height = 0
+                margins = self.contentsMargins()
+                margins.setBottom(height)
+                self.setContentsMargins(margins)
+            update_margin()
+            statusbar.change.connect(update_margin)
+            self.__statusbar = statusbar
+        return statusbar
 
     def __toggleControlArea(self):
         if self.__splitter is None or self.__splitter.count() < 2:
