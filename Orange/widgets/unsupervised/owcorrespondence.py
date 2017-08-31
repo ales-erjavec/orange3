@@ -255,6 +255,7 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         margin = abs(minmax[2] - minmax[3])
         margin = margin * 0.05 if margin > 1e-10 else 1
         self.plot.setYRange(minmax[2] - margin, minmax[3] + margin)
+        legend = pg.LegendItem()
 
         for i, (v, points) in enumerate(zip(variables, points)):
             color_outline = colors[i]
@@ -267,13 +268,17 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
                 size=np.full((points.shape[0],), 10.1),
             )
             self.plot.addItem(item)
-
+            legend.addItem(item, v.name)
             for name, point in zip(v.values, points):
                 item = pg.TextItem(name, anchor=(0.5, 0))
                 self.plot.addItem(item)
                 item.setPos(point[0], point[1])
 
+        legend.setParentItem(self.plot.getPlotItem().getViewBox())
+        legend.anchor((1, 0), (1, 0))
+
         inertia = self.ca.inertia_of_axis()
+
         if np.sum(inertia) == 0:
             inertia = 100 * inertia
         else:
