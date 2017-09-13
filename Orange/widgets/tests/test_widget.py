@@ -105,6 +105,8 @@ class WidgetTestCase(WidgetTest):
         # Test that statusBar().setVisible collapses/expands the bottom margins
         w = MyWidget()
         self._status_bar_visible_test(w)
+        # run through drawing code (for coverage)
+        w.statusBar().grab()
 
     def test_status_bar_no_basic_layout(self):
         # Test that statusBar() works when widget defines
