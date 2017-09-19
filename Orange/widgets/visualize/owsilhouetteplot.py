@@ -25,7 +25,7 @@ import Orange.data
 import Orange.distance
 
 from Orange.widgets import widget, gui, settings
-from Orange.widgets.utils import itemmodels
+from Orange.widgets.utils import itemmodels, summary
 from Orange.widgets.utils.annotated_data import (create_annotated_table,
                                                  ANNOTATED_DATA_SIGNAL_NAME)
 from Orange.widgets.utils.sql import check_sql_input
@@ -163,6 +163,9 @@ class OWSilhouettePlot(widget.OWWidget):
         self.view.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.mainArea.layout().addWidget(self.view)
 
+        self.info.set_input_summary(self.info.NoInput)
+        self.info.set_output_summary(self.info.NoOutput)
+
     def sizeHint(self):
         sh = self.controlArea.sizeHint()
         return sh.expandedTo(QSize(600, 720))
@@ -205,6 +208,13 @@ class OWSilhouettePlot(widget.OWWidget):
 
     def handleNewSignals(self):
         if self.data is not None:
+            self.info.set_input_summary(
+                summary.summary_table_shape_inline(self.data),
+                summary.render_field_list(
+                    [(t.capitalize(), d)
+                     for t, d in summary.summarize_table(self.data)]),
+                format=Qt.RichText
+            )
             self._update()
             self._replot()
 
@@ -420,6 +430,10 @@ class OWSilhouettePlot(widget.OWWidget):
 
         self.Outputs.selected_data.send(selected)
         self.Outputs.annotated_data.send(create_annotated_table(data, indices))
+        if selected is not None:
+            self.info.set_output_summary(str(len(selected)))
+        else:
+            self.info.set_output_summary(self.info.NoOutput)
 
     def send_report(self):
         if not len(self.cluster_var_model):

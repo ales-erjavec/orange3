@@ -218,6 +218,9 @@ class OWScatterPlot(OWWidget):
             for ext in w.EXTENSIONS:
                 self.graph_writers[ext] = w
 
+        self.info.set_input_summary(self.info.NoInput)
+        self.info.set_output_summary(self.info.NoOutput)
+
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
         self.graph.update_tooltip(event.modifiers())
@@ -346,9 +349,13 @@ class OWScatterPlot(OWWidget):
         self.update_graph()
         self.cb_class_density.setEnabled(self.graph.can_draw_density())
         self.cb_reg_line.setEnabled(self.graph.can_draw_regresssion_line())
+
         if self.data is not None and self.__pending_selection_restore is not None:
             self.apply_selection(self.__pending_selection_restore)
             self.__pending_selection_restore = None
+
+        self.info.set_input_summary(
+            summary_data_with_subset(self.data, self.subset_data))
         self.unconditional_commit()
 
     def apply_selection(self, selection):
@@ -437,6 +444,13 @@ class OWScatterPlot(OWWidget):
         self.Outputs.annotated_data.send(_get_annotated())
         self.Outputs.selected_data.send(_get_selected())
 
+        if len(selection):
+            self.info.set_output_summary(
+                _summary.plural("{number} row{s}", len(selection)))
+        else:
+            self.info.set_output_summary(self.info.Empty())
+
+
     def send_features(self):
         features = [attr for attr in [self.attr_x, self.attr_y] if attr]
         self.Outputs.features.send(features or None)
@@ -476,6 +490,56 @@ class OWScatterPlot(OWWidget):
     def migrate_settings(cls, settings, version):
         if version < 2 and "selection" in settings and settings["selection"]:
             settings["selection_group"] = [(a, 1) for a in settings["selection"]]
+
+
+from Orange.widgets.utils import summary as _summary
+from Orange.widgets.widget import StateInfo
+
+
+def summary_data(table):
+    if table is None:
+        return StateInfo.Empty()
+    else:
+        return StateInfo.Summary(
+            brief="Data: " + _summary.summary_table_shape_inline(table),
+            details=_summary.render_field_list(
+                _summary.summarize_table(table),
+            ),
+            format=Qt.RichText
+        )
+
+
+def summary_subset(data, subset_data):
+    text = _summary.plural("{number} row{s}", len(subset_data), )
+    text += " ({})".format(
+        summary_intersection(data, subset_data, "Data", "Subset"))
+    return text
+
+
+def summary_intersection(table1, table2, left="X", right="Y"):
+    # type: (Orange.data.Table, Orange.data.Table) -> str
+    N = np.intersect1d(table1.ids, table2.ids).size
+    return ("|{left} \N{INTERSECTION} {right}| = {N}"
+            .format(N=N, left=left, right=right))
+
+
+def summary_data_with_subset(data, subset):
+    # type: (Optional[Table], Optional[Table]) -> StateInfo.Summary
+    if data is None and subset is not None:
+        return StateInfo.Partial()
+    elif data is None and subset is None:
+        return StateInfo.Empty()
+    elif data is not None:
+        short = _summary.summary_table_shape_inline(data)
+        items = _summary.summarize_table(data)
+        if subset is not None:
+            items += [("subset", summary_subset(data, subset))]
+        return StateInfo.Summary(
+            brief=short,
+            details=_summary.render_field_list(
+                [(t.capitalize(), d) for t, d in items]),
+            format=Qt.RichText
+        )
 
 
 def main(argv=None):

@@ -19,8 +19,8 @@ import Orange
 from Orange.widgets import widget, gui, settings
 from Orange.widgets.evaluate.utils import check_results_adequacy
 from Orange.widgets.utils import colorpalette, colorbrewer
-from Orange.widgets.io import FileFormat
 from Orange.widgets.widget import Input
+from Orange.widgets.evaluate.utils import summarize_results
 from Orange.widgets import report
 
 
@@ -403,7 +403,7 @@ class OWROCAnalysis(widget.OWWidget):
         pen = QPen(self.palette().color(QPalette.Text))
 
         tickfont = QFont(self.font())
-        tickfont.setPixelSize(max(int(tickfont.pixelSize() * 2 // 3), 11))
+        tickfont.setPixelSize(max(int(tickfont.pixelSize() * 2 // 3), 11)   )
 
         axis = self.plot.getAxis("bottom")
         axis.setTickFont(tickfont)
@@ -421,6 +421,8 @@ class OWROCAnalysis(widget.OWWidget):
         self.plotview.setCentralItem(self.plot)
         self.mainArea.layout().addWidget(self.plotview)
 
+        self.info.set_input_summary(self.info.NoInput)
+
     @Inputs.evaluation_results
     def set_results(self, results):
         """Set the input evaluation results."""
@@ -429,7 +431,9 @@ class OWROCAnalysis(widget.OWWidget):
         if self.results is not None:
             self._initialize(self.results)
             self._setup_plot()
+            self.info.set_input_summary(summarize_results(self.results))
         else:
+            self.info.set_input_summary(self.info.NoInput)
             self.warning()
 
     def clear(self):
@@ -445,6 +449,7 @@ class OWROCAnalysis(widget.OWWidget):
         self._plot_curves = {}
         self._rocch = None
         self._perf_line = None
+        self.info.set_input_summary(self.info.NoInput)
 
     def _initialize(self, results):
         names = getattr(results, "learner_names", None)

@@ -147,6 +147,15 @@ class OWConcatenate(widget.OWWidget):
 
     def handleNewSignals(self):
         self.mergebox.setDisabled(self.primary_data is not None)
+        if self.primary_data is not None and not self.more_data:
+            short = "Primary ({} row(s)".format(len(self.primary_data))
+        elif self.primary_data is not None and self.more_data:
+            short = "Primary + {} extra table(s)".format(len(self.more_data))
+        elif self.primary_data is None and self.more_data:
+            short = "{} table(s)".format(len(self.more_data))
+        else:
+            short = None
+        self.info.set_input_summary(short)
         self.apply()
 
     def apply(self):
@@ -190,6 +199,16 @@ class OWConcatenate(widget.OWWidget):
             data = None
 
         self.Outputs.data.send(data)
+        from Orange.widgets.utils import summary
+        if data is None:
+            self.info.set_output_summary(self.info.NoOutput)
+        else:
+            self.info.set_output_summary(
+                "{} row(s)".format(len(data)),
+                summary.render_field_list(
+                    [(t, d) for t, d in summary.summarize_table(data)]),
+                format=Qt.RichText
+            )
 
     def _merge_type_changed(self, ):
         if self.primary_data is None and self.more_data:

@@ -78,6 +78,8 @@ class OWLoadModel(widget.OWWidget):
             self.filename = None
             self.reloadbutton.setEnabled(False)
 
+        self.info.set_output_summary(self.info.NoOutput)
+
         if self.filename:
             QTimer.singleShot(0, lambda: self.load(self.filename))
 
@@ -100,15 +102,22 @@ class OWLoadModel(widget.OWWidget):
 
     def load(self, filename):
         """Load the object from filename and send it to output."""
+        model = None
         try:
             with open(filename, "rb") as f:
                 model = pickle.load(f)
         except (pickle.UnpicklingError, OSError, EOFError):
-            self.Error.load_error(os.path.split(filename)[-1])
+            self.Error.load_error(os.path.split(filename)[-1], exc_info=True)
         else:
             self.Error.load_error.clear()
             self._remember(filename)
-            self.Outputs.model.send(model)
+
+        self.Outputs.model.send(model)
+        if model is None:
+            self.info.set_output_summary(self.info.NoOutput)
+        else:
+            self.info.set_output_summary(
+                getattr(model, "name", type(model).__name__))
 
     def _remember(self, filename):
         """

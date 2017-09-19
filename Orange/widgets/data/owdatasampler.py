@@ -185,9 +185,16 @@ class OWDataSampler(OWWidget):
             if not sql:
                 self._update_sample_max_size()
                 self.updateindices()
+                nrows_s = "{}".format(len(dataset))
+            else:
+                nrows_s = "~{}".format(dataset.approx_len())
+            self.info.set_input_summary(nrows_s + " rows")
+            self.dataInfoLabel.setText(
+                nrows_s + ' instances in input data set.')
         else:
             self.dataInfoLabel.setText('No data on input.')
             self.outputInfoLabel.setText('')
+            self.info.set_input_summary(self.info.NoInput)
             self.indices = None
             self.clear_messages()
         self.commit()
@@ -239,6 +246,10 @@ class OWDataSampler(OWWidget):
             self.remaining_instances = len(other)
         self.Outputs.data_sample.send(sample)
         self.Outputs.remaining_data.send(other)
+        if sample is not None:
+            self.info.set_output_summary("{} rows".format(len(sample)))
+        else:
+            self.info.set_output_summary(self.info.NoOutput)
 
     def updateindices(self):
         self.Error.clear()

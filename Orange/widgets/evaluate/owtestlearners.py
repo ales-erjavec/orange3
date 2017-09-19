@@ -311,6 +311,9 @@ class OWTestLearners(OWWidget):
         box = gui.vBox(self.mainArea, "Evaluation Results")
         box.layout().addWidget(self.view)
 
+        self.info.set_input_summary(self.info.NoInput)
+        self.info.set_output_summary(self.info.NoOutput)
+
     def sizeHint(self):
         return QSize(780, 1)
 
@@ -490,6 +493,45 @@ class OWTestLearners(OWWidget):
         self._update_stats_model()
         if self.__needupdate:
             self.__update()
+        nlearners = len(self.learners)
+        ntrain = len(self.data) if self.data is not None else None
+        ntest = len(self.test_data) if self.test_data is not None else None
+        short = []
+        detail = []
+
+        if nlearners:
+            short += ["{} learners".format(nlearners)]
+            detail += [repr(lin.learner) for lin in self.learners.values()]
+
+        def summary_target(var):
+            # type: (Orange.data.Variable) -> str
+            if var.is_continuous:
+                return "continuous target"
+            elif var.is_discrete:
+                return "discrete target ({} values)".format(len(var.values))
+            else:
+                assert False
+
+        if ntrain and ntest:
+            short += ["test and train data"]
+        elif ntrain:
+            short += ["train data"]
+        elif ntest:
+            short += ["test data"]
+
+        if ntrain:
+            detail += ["Train data: {} rows, {} features, {}"
+                       .format(ntrain, len(self.data.domain.attributes),
+                               summary_target(self.data.domain.class_var))]
+        if ntest:
+            detail += ["Test data: {} rows".format(ntest)]
+
+        if not short:
+            self.info.set_input_summary(self.info.NoInput)
+        else:
+            self.info.set_input_summary(
+                ", ".join(short).capitalize(), details="\n".join(detail),
+            )
 
     def kfold_changed(self):
         self.resampling = OWTestLearners.KFold
@@ -692,6 +734,15 @@ class OWTestLearners(OWWidget):
 
         self.Outputs.evaluations_results.send(combined)
         self.Outputs.predictions.send(predictions)
+        if combined is not None:
+            self.info.set_output_summary(
+                "{}".format(len(combined.actual)),
+                details="Evaluation results: {} test cases, {} learners"
+                        .format(len(combined.actual),
+                                len(combined.learner_names))
+            )
+        else:
+            self.info.set_output_summary(self.info.NoOutput)
 
     def send_report(self):
         """Report on the testing schema and results"""

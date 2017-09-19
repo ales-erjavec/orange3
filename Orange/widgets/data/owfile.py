@@ -191,7 +191,7 @@ class OWFile(widget.OWWidget, RecentPathsWComboMixin):
         url_combo.activated.connect(self._url_set)
 
         box = gui.vBox(self.controlArea, "Info")
-        self.info = gui.widgetLabel(box, 'No data loaded.')
+        self.info_label = gui.widgetLabel(box, 'No data loaded.')
         self.warnings = gui.widgetLabel(box, '')
 
         box = gui.widgetBox(self.controlArea, "Columns (Double click to edit)")
@@ -225,6 +225,7 @@ class OWFile(widget.OWWidget, RecentPathsWComboMixin):
                 self.Warning.file_too_big()
                 return
 
+        self.info.set_output_summary(self.info.NoOutput)
         QTimer.singleShot(0, self.load_data)
 
     def sizeHint(self):
@@ -294,7 +295,10 @@ class OWFile(widget.OWWidget, RecentPathsWComboMixin):
             self.data = None
             self.sheet_box.hide()
             self.Outputs.data.send(None)
-            self.info.setText("No data.")
+            self.info.set_output_summary(
+                self.info.Empty(brief="<em>Error</em>", format=Qt.RichText))
+            self.info_label.setText("No data.")
+            return
 
     def _try_load(self):
         # pylint: disable=broad-except
@@ -321,8 +325,7 @@ class OWFile(widget.OWWidget, RecentPathsWComboMixin):
             if warnings:
                 self.Warning.load_warning(warnings[-1].message.args[0])
 
-        self.info.setText(self._describe(data))
-
+        self.info_label.setText(self._describe(data))
         self.loaded_file = self.last_path()
         add_origin(data, self.loaded_file)
         self.data = data
@@ -428,6 +431,20 @@ class OWFile(widget.OWWidget, RecentPathsWComboMixin):
                 table.attributes = getattr(self.data, 'attributes', {})
 
         self.Outputs.data.send(table)
+        self.Outputs.data.send(table)
+        if table is None:
+            self.info.set_output_summary(self.info.NoOutput)
+        else:
+            from Orange.widgets.utils import summary
+            short = summary.summary_table_shape_inline(table)
+            self.info.set_output_summary(
+                short,
+                summary.render_field_list(
+                    [(t.capitalize(), d)
+                     for t, d in summary.summarize_table(table)]
+                ),
+                format=Qt.RichText
+            )
         self.apply_button.setEnabled(False)
 
     def get_widget_name_extension(self):

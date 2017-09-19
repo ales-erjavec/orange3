@@ -18,7 +18,7 @@ from AnyQt.QtWidgets import (
 )
 
 from AnyQt.QtCore import Qt, QObject, QTimer, QSize, QSizeF, QPointF, QRectF
-from AnyQt.QtCore import pyqtSignal as Signal
+from AnyQt.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
 
 import pyqtgraph as pg
 
@@ -902,7 +902,7 @@ class OWPaintData(OWWidget):
         redo.setShortcut(QKeySequence.Redo)
 
         self.addActions([undo, redo])
-        self.undo_stack.indexChanged.connect(lambda _: self.invalidate())
+        self.undo_stack.indexChanged.connect(self.invalidate)
 
         gui.separator(tBox)
         indBox = gui.indentedBox(tBox, sep=8)
@@ -1262,6 +1262,7 @@ class OWPaintData(OWWidget):
         self.plot.getAxis("left").setLabel(self.attr2)
         self.invalidate()
 
+    @Slot()
     def invalidate(self):
         self.data = self.__buffer.tolist()
         self.commit()
@@ -1270,6 +1271,7 @@ class OWPaintData(OWWidget):
         data = np.array(self.data)
         if len(data) == 0:
             self.Outputs.data.send(None)
+            self.info.set_output_summary(self.info.NoOutput)
             return
         if self.hasAttr2:
             X, Y = data[:, :2], data[:, 2]
@@ -1290,6 +1292,8 @@ class OWPaintData(OWWidget):
             data = Orange.data.Table.from_numpy(domain, X)
         data.name = self.table_name
         self.Outputs.data.send(data)
+        self.info.set_output_summary(
+            "{} row{}".format(len(data), "s" if len(data) != 1 else ""))
 
     def sizeHint(self):
         sh = super().sizeHint()

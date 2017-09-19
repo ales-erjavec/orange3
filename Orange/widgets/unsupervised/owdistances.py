@@ -84,12 +84,23 @@ class OWDistances(OWWidget):
 
         gui.auto_commit(self.controlArea, self, "autocommit", "Apply")
         self.layout().setSizeConstraint(self.layout().SetFixedSize)
+        self.info.set_input_summary(self.info.NoInput)
+        self.info.set_output_summary(self.info.NoOutput)
 
     @Inputs.data
     @check_sql_input
     def set_data(self, data):
         self.data = data
         self.refresh_metrics()
+        from ..data.owmergedata import summarize_data
+
+        if data is not None:
+            self.info.set_input_summary(
+                "{}x{}".format(len(data), len(data.domain.attributes)),
+                summarize_data(data), format=Qt.RichText
+            )
+        else:
+            self.info.set_input_summary(self.info.NoInput)
         self.unconditional_commit()
 
     def refresh_metrics(self):
@@ -103,6 +114,15 @@ class OWDistances(OWWidget):
         metric = METRICS[self.metric_idx][1]
         dist = self.compute_distances(metric, self.data)
         self.Outputs.distances.send(dist)
+        if dist is not None:
+            short = "{}x{}".format(*dist.shape)
+
+            items = [("Shape:", short)]
+            if dist.axis == 1:
+                items += [("Computed over:", ["rows", "columns"][self.axis])]
+            self.info.set_output_summary(short)
+        else:
+            self.info.set_output_summary(self.info.NoOutput)
 
     def compute_distances(self, metric, data):
         def _check_sparse():

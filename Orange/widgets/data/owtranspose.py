@@ -99,15 +99,28 @@ class OWTranspose(OWWidget):
 
     def apply(self):
         self.clear_messages()
+        data = self.data
+        from .owselectcolumns import summarize
+
+        def summary_short(data):
+            if data is not None:
+                return "{}x({})".format(
+                    len(data), summarize(data.domain, categorize_types=False))
+            else:
+                return ""
+        self.info.set_input_summary(summary_short(data))
+
         transposed = None
-        if self.data:
+        if data is not None:
             try:
                 transposed = Table.transpose(
                     self.data,
                     self.feature_type == self.FROM_META_ATTR and self.feature_names_column,
                     feature_name=self.feature_name or self.DEFAULT_PREFIX)
             except ValueError as e:
-                self.Error.value_error(e)
+                self.Error.value_error(e, exc_info=True)
+
+        self.info.set_output_summary(summary_short(transposed))
         self.Outputs.data.send(transposed)
 
     def send_report(self):

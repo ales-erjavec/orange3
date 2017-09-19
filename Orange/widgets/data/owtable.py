@@ -9,6 +9,7 @@ from collections import OrderedDict, namedtuple
 from typing import List, Tuple, Iterable  # pylint: disable=unused-import
 
 from math import isnan
+from typing import Union, Tuple
 
 import numpy
 from scipy.sparse import issparse
@@ -17,7 +18,7 @@ from AnyQt.QtWidgets import (
     QTableView, QHeaderView, QAbstractButton, QAction, QApplication,
     QStyleOptionHeader, QStyle, QStylePainter, QStyledItemDelegate
 )
-from AnyQt.QtGui import QColor, QKeySequence, QClipboard
+from AnyQt.QtGui import QColor, QKeySequence, QClipboard, QIcon
 from AnyQt.QtCore import (
     Qt, QSize, QEvent, QByteArray, QMimeData, QObject, QMetaObject,
     QAbstractProxyModel, QIdentityProxyModel, QModelIndex,
@@ -40,6 +41,7 @@ from Orange.widgets.utils import datacaching
 from Orange.widgets.utils.annotated_data import (create_annotated_table,
                                                  ANNOTATED_DATA_SIGNAL_NAME)
 from Orange.widgets.utils.itemmodels import TableModel
+from Orange.widgets.utils.messagewidget import MessagesWidget, Message
 
 
 class RichTableModel(TableModel):
@@ -442,6 +444,9 @@ class OWDataTable(widget.OWWidget):
         self.tabs = gui.tabWidget(self.mainArea)
         self.tabs.currentChanged.connect(self._on_current_tab_changed)
 
+        self.info.set_input_summary(self.info.NoInput)
+        self.info.set_output_summary(self.info.NoOutput)
+
     def copy_to_clipboard(self):
         self.copy()
 
@@ -719,19 +724,24 @@ class OWDataTable(widget.OWWidget):
             table.horizontalHeader().setSortIndicator(-1, Qt.AscendingOrder)
 
     def set_info(self, summary):
+        # type: (Union[Summary, ApproxSummary, None]) -> None
         if summary is None:
             self.info_ex.setText("No data on input.")
             self.info_attr.setText("")
             self.info_class.setText("")
             self.info_meta.setText("")
+            self.info.set_input_summary(self.info.NoInput)
         else:
-            info_len, info_attr, info_class, info_meta = \
-                format_summary(summary)
+            info_len, info_attr, info_class, info_meta = format_summary(summary)
 
             self.info_ex.setText(info_len)
             self.info_attr.setText(info_attr)
             self.info_class.setText(info_class)
             self.info_meta.setText(info_meta)
+            self.info.set_input_summary(
+                info_len,
+                details="\n".join([info_attr, info_class, info_meta])
+            )
 
     @Slot()
     def _update_info(self):
@@ -813,6 +823,7 @@ class OWDataTable(widget.OWWidget):
             if isinstance(table, SqlTable):
                 self.Outputs.selected_data.send(selected_data)
                 self.Outputs.annotated_data.send(None)
+                self.info.set_output_summary(self.info.NoOutput)
                 return
 
             rowsel, colsel = self.get_selection(view)
@@ -865,6 +876,19 @@ class OWDataTable(widget.OWWidget):
 
         self.Outputs.selected_data.send(selected_data)
         self.Outputs.annotated_data.send(create_annotated_table(table, rowsel))
+        if rowsel is None or len(rowsel) == 0:
+            self.info.set_output_summary(self.info.NoOutput)
+        elif self.select_rows:
+            self.info.set_output_summary(str(len(rowsel)))
+        else:
+            self.info.set_output_summary(
+                "{}x({}+{}+{})".format(
+                    len(selected_data),
+                    len(selected_data.domain.attributes),
+                    len(selected_data.domain.class_vars),
+                    len(selected_data.domain.metas),
+                )
+            )
 
     def copy(self):
         """
@@ -908,6 +932,7 @@ ApproxSummary = namedtuple(
 
 
 def table_summary(table):
+    # type: (Table) -> Union[Summary, ApproxSummary]
     if isinstance(table, SqlTable):
         approx_len = table.approx_len()
         len_future = concurrent.futures.Future()
@@ -953,6 +978,7 @@ def table_summary(table):
 
 
 def format_summary(summary):
+    # type: (Union[Summary, ApproxSummary]) -> Tuple[str, str, str, str]
     text = []
     if isinstance(summary, ApproxSummary):
         if summary.len.done():
@@ -1025,7 +1051,7 @@ def is_sortable(table):
         return False
 
 
-def test_main():
+def main():
     a = QApplication(sys.argv)
     ow = OWDataTable()
 
@@ -1059,4 +1085,4 @@ def test_model():
     return app.exec()
 
 if __name__ == "__main__":
-    sys.exit(test_main())
+    sys.exit(main())

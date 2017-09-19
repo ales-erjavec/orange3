@@ -1,6 +1,7 @@
 from enum import IntEnum
 from itertools import chain, product, tee
 
+from AnyQt.QtCore import Qt
 from AnyQt.QtWidgets import QApplication, QStyle, QSizePolicy
 
 import numpy as np
@@ -226,6 +227,37 @@ class OWMergeData(widget.OWWidget):
         self._find_best_match()
 
     def handleNewSignals(self):
+        short = []
+        detailed = None
+        if self.data is not None:
+            short += ["data ({}x{})"
+                      .format(len(self.data),
+                              len(self.data.domain.variables) +
+                              len(self.data.domain.metas))]
+        if self.extra_data is not None:
+            short += ["extra data ({}x{})"
+                      .format(len(self.extra_data),
+                              len(self.extra_data.domain.variables) +
+                              len(self.extra_data.domain.metas))]
+        if short:
+            items = [("Data", summarize_data(self.data)),
+                     ("Extra data", summarize_data(self.extra_data))]
+            detailed = render_field_list(items, tag="dl")
+
+        if self.data is not None and self.extra_data is not None:
+            summary = self.info.Summary
+        elif self.data is not None or self.extra_data is not None:
+            summary = self.info.Partial
+        else:
+            summary = self.info.Empty
+
+        if short:
+            self.info.set_input_summary(
+                summary(brief=", ".join(short).capitalize(),
+                        details=detailed, format=Qt.RichText)
+            )
+        else:
+            self.info.set_input_summary(self.info.NoInput)
         self._invalidate()
 
     def dataInfoText(self, data):
@@ -249,6 +281,19 @@ class OWMergeData(widget.OWWidget):
                 if len(set(var_names)) != len(var_names):
                     self.Warning.duplicate_names()
         self.Outputs.data.send(merged_data)
+        if merged_data is None:
+            self.info.set_output_summary(self.info.NoOutput)
+        else:
+            self.info.set_output_summary(
+                "{} rows, {} columns <sub>({}+{}+{})</sub>".format(
+                    len(merged_data),
+                    len(merged_data.domain.variables) +
+                        len(merged_data.domain.metas),
+                    len(merged_data.domain.attributes),
+                    len(merged_data.domain.class_vars),
+                    len(merged_data.domain.metas)),
+                format=Qt.RichText
+            )
 
     def _invalidate(self):
         self.commit()
@@ -396,6 +441,18 @@ class OWMergeData(widget.OWWidget):
                       prepare(right, indices[1], str_right)))
         return res
 
+
+
+from .owselectcolumns import summarize_domain_long_items, \
+    render_field_list
+
+def summarize_data(data):
+    if data is None:
+        return "none"
+    else:
+        return render_field_list(
+            [("Rows", str(len(data)))] +
+            summarize_domain_long_items(data.domain))
 
 def main():
     app = QApplication([])

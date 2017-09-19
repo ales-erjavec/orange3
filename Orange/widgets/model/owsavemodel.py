@@ -74,13 +74,19 @@ class OWSaveModel(widget.OWWidget):
         else:
             self.selectedIndex = -1
             self.filename = None
+        self.info.set_input_summary(self.info.NoInput)
 
     @Inputs.model
-    def setModel(self, model):
+    def setModel(self, model: Model):
         """Set input model."""
-        self.model = model
+        self.model = model  # type: Model
         self.savebutton.setEnabled(
             not (model is None or self.filename is None))
+        if self.model is None:
+            self.info.set_input_summary(self.info.NoInput)
+        else:
+            self.info.set_input_summary(
+                getattr(model, "name", type(model).__name__))
 
     def save(self, filename):
         """Save the model to filename (model must not be None)."""

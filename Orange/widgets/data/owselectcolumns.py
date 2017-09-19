@@ -248,6 +248,8 @@ class OWSelectAttributes(widget.OWWidget):
         self.output_data = None
         self.original_completer_items = []
 
+        self.info.set_input_summary(self.info.NoInput)
+        self.info.set_output_summary(self.info.NoOutput)
         self.resize(500, 600)
 
     @Inputs.data
@@ -255,6 +257,7 @@ class OWSelectAttributes(widget.OWWidget):
         self.update_domain_role_hints()
         self.closeContext()
         self.data = data
+
         if data is not None:
             self.openContext(data)
             all_vars = data.domain.variables + data.domain.metas
@@ -302,6 +305,14 @@ class OWSelectAttributes(widget.OWWidget):
             self.meta_attrs[:] = []
             self.available_attrs[:] = []
 
+        if data is not None:
+            self.info.set_input_summary(
+                summarize(data.domain),
+                summarize_domain_long(data.domain),
+                format=Qt.RichText
+            )
+        else:
+            self.info.set_input_summary(self.info.NoInput)
         self.unconditional_commit()
 
     def update_domain_role_hints(self):
@@ -430,10 +441,16 @@ class OWSelectAttributes(widget.OWWidget):
             self.output_data = newdata
             self.Outputs.data.send(newdata)
             self.Outputs.features.send(widget.AttributeList(attributes))
+            self.info.set_output_summary(
+                summarize(newdata.domain),
+                summarize_domain_long(newdata.domain),
+                format=Qt.RichText
+            )
         else:
             self.output_data = None
             self.Outputs.data.send(None)
             self.Outputs.features.send(None)
+            self.info.set_output_summary(self.info.NoOutput)
 
     def reset(self):
         if self.data is not None:
@@ -459,6 +476,262 @@ class OWSelectAttributes(widget.OWWidget):
             if diff:
                 text = "%i (%s)" % (len(diff), ", ".join(x.name for x in diff))
                 self.report_items((("Removed", text),))
+
+
+import collections
+
+
+def summarize(domain, categorize_types=True):
+    """
+    Parameters
+    ----------
+    domain
+    categorize_types
+
+    Returns
+    -------
+
+    Examples
+    --------
+    """
+    nfeat = len(domain.attributes)
+    ntarg = len(domain.class_vars)
+    nmeta = len(domain.metas)
+
+    part_feat, part_target, part_meta = None, None, None
+    part_feat = str(nfeat)
+
+    if categorize_types:
+        part_feat = summarize_var_type_counts(domain.attributes)
+
+    if ntarg:
+        if categorize_types:
+            part_target = summarize_var_type_counts(domain.class_vars)
+        else:
+            part_target = str(ntarg)
+
+    if nmeta:
+        if categorize_types:
+            part_meta = summarize_var_type_counts(domain.metas)
+        else:
+            part_meta = str(nmeta)
+
+    text = part_feat
+    if part_target:
+        text = text + " | " + part_target
+    if part_meta:
+        text = text + " : " + part_meta
+    return text
+
+
+def var_type_name(vartype):
+    # type: (Union[Type[Orange.data.Variable], Orange.data.Variable]) -> str
+    """
+    Return the variable type name for display (i.e. 'categorical', 'numeric',
+    ...)
+
+    Parameters
+    ----------
+    vartype: Orange.data.Variable
+
+    Returns
+    -------
+    name: str
+        Display name for the variable type
+    """
+    if not isinstance(vartype, type):
+        vartype = type(vartype)
+
+    if issubclass(vartype, Orange.data.DiscreteVariable):
+        return "categorical"
+    elif issubclass(vartype, Orange.data.TimeVariable):
+        return "time"
+    elif issubclass(vartype, Orange.data.ContinuousVariable):
+        return "numeric"
+    elif issubclass(vartype, Orange.data.StringVariable):
+        return "string"
+    else:
+        return vartype.__qualname__.lower()
+
+
+def summarize_var_type_counts(vars):
+    t = collections.Counter([var_type_name(v)[0].upper() for v in vars])
+    N = len(vars)
+    if len(t) == 0:
+        return "0"
+    elif len(t) == 1:
+        return "{1}{0}".format(*next(iter(t.items())))
+    else:
+        return "{} ({})".format(
+            N, " + ".join("{}{}".format(count, typecode)
+                          for typecode, count in t.items())
+        )
+
+
+def summarize_domain_long_items(domain, categorize_types=True,
+                                categorize_roles=True, drop_empty=False):
+    # type: (Orange.data.Domain, bool, bool, str) -> List[Tuple[str, str]]
+    """
+    Return a 'field list' (name, body) pairs describing the domain.
+
+    Parameters
+    ----------
+    domain : Orange.data.Domain
+        Domain to describe.
+    categorize_types : bool
+        Summarize constituent variable types.
+    categorize_roles : bool
+        Summarize variables by domain role (i.e. report attributes,
+        class_vars metas separately).
+    drop_empty : bool
+        Omit field summaries that contain no variables instead of
+        reporting 0 counts.
+
+    Returns
+    -------
+    fields : List[Tuple[str, str]]
+        `name, body` pairs describing the domain.
+
+    See also
+    --------
+    render_field_list
+    render_description_list
+
+    Examples
+    --------
+    >>> iris = Orange.data.Table("iris")
+    >>> summarize_domain_long_items(iris.domain)  # doctest: +ELLIPSIS
+    [('Features', '4 (numeric)'), ('Target', 'categorical with 3 values'), ...
+    >>> hd = Orange.data.Table("heart_disease")
+    >>> summarize_domain_long_items(hd.domain)    # doctest: +ELLIPSIS
+    [('Features', '13 (categorical: 7, numeric: 6)'), ...
+    >>> summarize_domain_long_items(hd.domain, categorize_types=False) # doctest: +ELLIPSIS
+    [('Features', '13'), ('Target', 'categorical ...
+    >>> summarize_domain_long_items(hd.domain, categorize_roles=False)
+    [('Columns', '14 (categorical: 8, numeric: 6)')]
+    """
+    # Preferred order of variable types in the summary
+    order = [
+        Orange.data.DiscreteVariable,
+        Orange.data.ContinuousVariable,
+        Orange.data.TimeVariable,
+        Orange.data.StringVariable,
+    ]
+
+    def summarize_variable(var):
+        # type: (Orange.data.Variable) -> str
+        if var.is_discrete:
+            return "{} with {} value{s}".format(
+                var_type_name(var), len(var.values),
+                s="s" if len(var.values) != 1 else ""
+            )
+        else:
+            return var_type_name(var)
+
+    def summarize_variable_types(variables):
+        # type: (List[Orange.data.Variable]) -> str
+        counts = collections.Counter(type(var) for var in variables)
+        if len(counts) == 0:
+            return "none"
+        elif len(counts) == 1:
+            var_type, count = next(iter(counts.items()))
+            return var_type_name(var_type)
+        else:
+            def index(type):
+                try:
+                    return order.index(type)
+                except ValueError:
+                    return sys.maxsize
+            counts = sorted(counts.items(), key=lambda item: index(item[0]))
+            return ", ".join("{}: {}".format(var_type_name(vartype), count)
+                            for vartype, count in counts)
+
+    def summarize_variables(variables, categorize_types=True,
+                            fold_single=False):
+        size = len(variables)
+        if size == 0:
+            body = "none"
+        elif size == 1 and fold_single:
+            body = summarize_variable(variables[0])
+        elif categorize_types:
+            body = "{} ({})".format(size, summarize_variable_types(variables))
+        else:
+            body = "{}".format(size)
+        return body
+
+    def describe_part(name, variables, singular=False):
+        body = summarize_variables(
+            variables, categorize_types=categorize_types, fold_single=singular
+        )
+        if singular and len(variables) > 1:
+            name = name + "s"
+        return name, body
+
+    if not categorize_roles:
+        return [describe_part("Column", (domain.attributes + domain.class_vars +
+                                         domain.metas),
+                              singular=True)]
+
+    parts = []
+    if domain.attributes or not drop_empty:
+        parts.append(describe_part("Features", domain.attributes))
+
+    if domain.class_vars or not drop_empty:
+        parts.append(describe_part("Target", domain.class_vars, singular=True))
+
+    if domain.metas or not drop_empty:
+        parts.append(describe_part("Metas", domain.metas))
+    return parts
+
+
+def summarize_domain_long(domain, categorize_types=True, roles=True, drop_empty=False,
+                          type="table"):
+    fields = summarize_domain_long_items(domain, categorize_types, roles, drop_empty=drop_empty)
+    return render_field_list([(name + ":", body) for name, body in fields], type)
+
+
+def render_field_list(items, tag="table"):
+    # type: (Sequence[Tuple[str, str], str]) -> str
+    if tag == "dl":
+        dl, dt, dd = "dl", "dt", "dd"
+    elif tag == "table":
+        dl, dt, dd = "table", "th", "td"
+    else:
+        raise ValueError
+    dtframe = "<{dt} class='field-name'>{{title}}</{dt}>".format(dt=dt)
+    ddframe = "<{dd} class='field-body'>{{description}}</{dd}>".format(dd=dd)
+
+    if tag == "table":
+        dlframe = ("<table class='field-list'>\n"
+                   "{}"
+                   "</table>"
+                   )
+        ditemframe = "<tr>" + dtframe + ddframe + "</tr>"
+    else:
+        dlframe = ("<{dl} class='field-list'>\n"
+                   "{{}}\n"
+                   "</{dl}>\n"
+                   .format(dl=dl))
+        ditemframe = dtframe + ddframe
+
+    parts_rendered = []
+    for title, content in items:
+        parts_rendered.append(
+            ditemframe.format(title=title, description=content))
+    return dlframe.format("  \n".join(parts_rendered))
+
+
+def render_description_list(items):
+    # type: (Sequence[Tuple[str, str]]) -> str
+    return render_description_list(items, type="dl")
+
+field_list_item_template = '<tr><th class="field-name">{name}</th><td class="field-body">{body}</tr>'
+
+
+def render_field_list_items(
+        items,
+        itemformat="<dt>{name}</dt><dd>{body}</dd>".format):
+    return (itemformat(title=name, body=body) for name, body in items)
 
 
 def main(argv=None):  # pragma: no cover

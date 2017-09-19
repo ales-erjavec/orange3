@@ -1031,6 +1031,8 @@ class OWPreprocess(widget.OWWidget):
         gui.auto_commit(box, self, "autocommit", "Send", box=False)
 
         self._initialize()
+        self.info.set_input_summary(self.info.NoInput)
+        self.info.set_output_summary(self.info.NoOutput)
 
     def _initialize(self):
         for pp_def in self.PREPROCESSORS:
@@ -1152,6 +1154,15 @@ class OWPreprocess(widget.OWWidget):
         self.data = data
 
     def handleNewSignals(self):
+        from .owmergedata import summarize_data
+        if self.data is not None:
+            self.info.set_input_summary(
+                summary_short(self.data),
+                summarize_data(self.data),
+                format=Qt.RichText
+            )
+        else:
+            self.info.set_input_summary(self.info.NoInput)
         self.apply()
 
     def __activated(self, index):
@@ -1198,6 +1209,26 @@ class OWPreprocess(widget.OWWidget):
 
         self.Outputs.preprocessor.send(preprocessor)
         self.Outputs.preprocessed_data.send(data)
+        short = []
+        detailed = []
+        if preprocessor is not None:
+            short += ["preprocessor"]
+            detailed += [("Preprocesor", repr(preprocessor))]
+        if data is not None:
+            short += ["data"]
+            from .owmergedata import summarize_data
+            detailed += [("Data", summarize_data(data))]
+
+        if short:
+            short = " and ".join(short).capitalize()
+            from .owselectcolumns import render_field_list
+
+            self.info.set_output_summary(
+                short, render_field_list(detailed, tag="dl"),
+                format=Qt.RichText
+            )
+        else:
+            self.info.set_output_summary(self.info.NoOutput)
 
     def commit(self):
         if not self._invalidated:
@@ -1250,6 +1281,48 @@ class OWPreprocess(widget.OWWidget):
               for i, w in enumerate(self.controler.view.widgets())]
         if len(pp):
             self.report_items("Settings", pp)
+
+
+def summary_shape_inline(data):
+    """
+    Return a short inline shape summary of the `data`.
+
+    The domain shape is reported as 3
+    Parameters
+    ----------
+    data : Orange.data.Table
+
+    Returns
+    -------
+    text : str
+
+    Example
+    -------
+    >>> hd = Orange.data.Table("heart_disease")
+    >>> summary_short(hd)
+    '303 × (13 | 1)'
+    """
+    # 12 x 5   # X only
+    # 12 x (4 | 1)  # X + Y
+    # 12 x (4 | 1 : 2)  # X + Y + M
+    # 12 x (0 | 1 : 1)
+    # 12 x (0 : 1)
+    # 12 x 0
+    N = len(data)
+    M_a = len(data.domain.attributes)
+    M_c = len(data.domain.class_vars)
+    M_m = len(data.domain.metas)
+    fmt = ["{M_a}"]
+    if M_c:
+        fmt += ["| {M_c}"]
+    if M_m:
+        fmt += [": {M_m}"]
+    fmt = " ".join(fmt)
+    if M_c + M_m:
+        fmt = "(" + fmt + ")"
+    return ("{N} \N{MULTIPLICATION SIGN} " + fmt).format(N=N, M_a=M_a, M_c=M_c, M_m=M_m)
+
+summary_short = summary_shape_inline
 
 
 def test_main(argv=sys.argv):

@@ -99,6 +99,8 @@ class OWSave(widget.OWWidget):
         )
         self.save_as.setMinimumWidth(220)
         self.adjustSize()
+        self.info.set_input_summary(self.info.Empty())
+
 
     def get_writer_selected(self):
         writer = FileFormat.get_reader(self.type_ext)
@@ -129,6 +131,8 @@ class OWSave(widget.OWWidget):
         self.data = data
         self.save.setDisabled(data is None)
         self.save_as.setDisabled(data is None)
+        self.info.set_input_summary(summary_table(data))
+
         if data is not None:
             self.save_file()
 
@@ -183,6 +187,22 @@ class OWSave(widget.OWWidget):
     def _update_text(self):
         self.update_extension()
         self.adjust_label()
+
+
+from Orange.widgets.utils import summary
+from AnyQt.QtCore import Qt
+
+
+def summary_table(table):
+    if table is not None:
+        items = summary.summarize_table(table, categorize_types=False)
+        return widget.StateInfo.Summary(
+            brief=summary.summary_table_shape_inline(table),
+            details=summary.render_field_list(items),
+            format=Qt.RichText,
+        )
+    else:
+        return widget.StateInfo.Empty()
 
 
 if __name__ == "__main__":

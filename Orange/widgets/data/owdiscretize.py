@@ -257,6 +257,12 @@ class OWDiscretize(widget.OWWidget):
             self._update_points()
         else:
             self._clear()
+        if self.data is None:
+            self.info.set_input_summary(self.info.NoInput)
+        else:
+            from .owselectcolumns import summarize
+            self.info.set_input_summary(
+                "{}x({})".format(len(self.data), summarize(self.data.domain, True)))
         self.unconditional_commit()
 
     def _initialize(self, data):
@@ -475,6 +481,12 @@ class OWDiscretize(widget.OWWidget):
         if self.data is not None and len(self.data):
             domain = self.discretized_domain()
             output = self.data.transform(domain)
+        if output is None:
+            self.info.set_output_summary(None)
+        else:
+            from .owselectcolumns import summarize
+            self.info.set_output_summary(
+                "{}x({})".format(len(output), summarize(output.domain)))
         self.Outputs.data.send(output)
 
     def storeSpecificSettings(self):

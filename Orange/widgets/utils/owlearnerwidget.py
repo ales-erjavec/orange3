@@ -104,6 +104,8 @@ class OWBaseLearner(OWWidget, metaclass=OWBaseLearnerMeta):
         self.outdated_settings = False
 
         self.setup_layout()
+        self.info.set_input_summary(self.info.NoInput)
+        self.info.set_output_summary(self.info.NoOutput)
         QTimer.singleShot(0, getattr(self, "unconditional_apply", self.apply))
 
     def create_learner(self):
@@ -126,6 +128,7 @@ class OWBaseLearner(OWWidget, metaclass=OWBaseLearnerMeta):
     @Inputs.preprocessor
     def set_preprocessor(self, preprocessor):
         self.preprocessors = preprocessor
+        self.update_input_summary()
         self.apply()
 
     @Inputs.data
@@ -138,12 +141,47 @@ class OWBaseLearner(OWWidget, metaclass=OWBaseLearnerMeta):
             self.Error.data_error("Data has no target variable.")
             self.data = None
 
+        self.update_input_summary()
         self.update_model()
+
+    def update_input_summary(self):
+        """
+        Update the input summary.
+
+        Called when `set_data` `set_preprocessor` are called.
+        """
+        # summarize shape, domain (mixed, classification...)
+        data = self.data
+        preproc = self.preprocessors
+        short = ""
+        # if data only: (data shape)
+        # if preprocessor only: Preprocessor
+        # if both: Data and preprocessor
+        from Orange.widgets.utils import summary
+        if data is not None and preproc is None:
+            short = "data {}".format(summary.summary_table_shape_inline(data))
+        elif data is None and preproc is not None:
+            short = "preprocessor"
+        elif data is not None and preproc is not None:
+            short = "data and preprocessor"
+
+        if short:
+            self.info.set_input_summary(
+                short.capitalize(),
+                summary.render_field_list(
+                    (t.capitalize(), d)
+                    for t, d in summary.summarize_table(data)
+                ) if data is not None else "",
+                format=Qt.RichText
+            )
+        else:
+            self.info.set_input_summary(self.info.NoInput)
 
     def apply(self):
         """Applies learner and sends new model."""
         self.update_learner()
         self.update_model()
+        self.update_output_summary()
 
     def update_learner(self):
         self.learner = self.create_learner()
@@ -172,6 +210,28 @@ class OWBaseLearner(OWWidget, metaclass=OWBaseLearnerMeta):
                 self.model.name = self.learner_name
                 self.model.instances = self.data
         self.Outputs.model.send(self.model)
+        self.update_output_summary()
+
+    def update_output_summary(self):
+        """
+        Update the output summary.
+
+        Called after update_model and/or update_learner are called.
+
+        Subclasses can reimplement this method to customize the output summary
+        generation.
+        """
+        short = []
+        if self.learner is not None:
+            short += ["learner"]
+
+        if self.model is not None:
+            short += ["model"]
+
+        if short:
+            self.info.set_output_summary(", ".join(short).capitalize())
+        else:
+            self.info.set_output_summary(self.info.NoOutput)
 
     def check_data(self):
         self.valid_data = False
@@ -294,3 +354,21 @@ class OWBaseLearner(OWWidget, metaclass=OWBaseLearnerMeta):
         if cls.inputs:
             desc["inputs"].extend(cls.get_signals("inputs", True))
         return desc
+
+
+def summarize_data_and_preprocessor(data, preprocessor):
+    """
+    Parameters
+    ----------
+    data
+    preprocessor
+
+    Returns
+    -------
+
+    """
+    # Data:
+    #      Rows 150
+    #  Features 4 (numeric)
+    #    Target categorical with 3 values
+    # Preprocessor: None

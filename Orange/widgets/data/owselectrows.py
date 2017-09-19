@@ -200,6 +200,8 @@ class OWSelectRows(widget.OWWidget):
 
         self.set_data(None)
         self.resize(600, 400)
+        self.info.set_input_summary(self.info.NoInput)
+        self.info.set_output_summary(self.info.NoOutput)
 
     def add_row(self, attr=None, condition_type=None, condition_value=None):
         model = self.cond_list.model()
@@ -429,6 +431,9 @@ class OWSelectRows(widget.OWWidget):
             self.add_row()
 
         self.update_info(data, self.data_in_variables, "In: ")
+        self.info.set_input_summary(
+            self._summary(data) if data is not None else self.info.NoInput
+        )
         self.unconditional_commit()
 
     def conditions_changed(self):
@@ -557,6 +562,19 @@ class OWSelectRows(widget.OWWidget):
         self.nonmatch_desc = report.describe_data_brief(non_matching_output)
 
         self.update_info(matching_output, self.data_out_rows, "Out: ")
+        self.info.set_output_summary(
+            self._summary(matching_output) if matching_output is not None
+            else self.info.NoOutput)
+
+    def _summary(self, data):
+        def sp(s, capitalize=True):
+            return s and s or ("No" if capitalize else "no"), "s" * (s != 1)
+        if data is None:
+            return None
+        return ("~%s row%s, %s variable%s" %
+                (sp(data.approx_len()) +
+                 sp(len(data.domain.variables) +
+                 len(data.domain.metas))))
 
     def update_info(self, data, lab1, label):
         def sp(s, capitalize=True):
@@ -565,11 +583,7 @@ class OWSelectRows(widget.OWWidget):
         if data is None:
             lab1.setText("")
         else:
-            lab1.setText(label + "~%s row%s, %s variable%s" %
-                         (sp(data.approx_len()) +
-                          sp(len(data.domain.variables) +
-                             len(data.domain.metas)))
-                        )
+            lab1.setText(label + self._summary(data))
 
     def send_report(self):
         if not self.data:

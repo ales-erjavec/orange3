@@ -16,7 +16,7 @@ from Orange.widgets import widget, settings, gui
 from Orange.widgets.utils.annotated_data import (create_annotated_table,
                                                  ANNOTATED_DATA_SIGNAL_NAME)
 from Orange.widgets.widget import Msg, Input, Output
-
+from Orange.widgets.evaluate import utils
 
 def confusion_matrix(res, index):
     """
@@ -273,8 +273,10 @@ class OWConfusionMatrix(widget.OWWidget):
 
         if results is None:
             self.report_button.setDisabled(True)
+            self.info.set_input_summary(self.info.NoInput)
         else:
             self.report_button.setDisabled(False)
+            self.info.set_input_summary(utils.summarize_results(results))
 
             nmodels = results.predicted.shape[0]
             self.headers = class_values + \
@@ -411,6 +413,10 @@ class OWConfusionMatrix(widget.OWWidget):
 
         self.Outputs.selected_data.send(data)
         self.Outputs.annotated_data.send(annotated_data)
+        if data is None:
+            self.info.set_output_summary(self.info.NoOutput)
+        else:
+            self.info.set_output_summary("{}".format(len(data)))
 
     def _invalidate(self):
         indices = self.tableview.selectedIndexes()

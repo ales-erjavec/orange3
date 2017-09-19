@@ -16,6 +16,7 @@ from Orange.widgets import gui, widget
 from Orange.widgets.settings import Setting
 from Orange.widgets.utils.sql import check_sql_input
 from Orange.widgets.widget import Input, Output
+from Orange.widgets.utils import summary
 
 
 class OWContinuize(widget.OWWidget):
@@ -107,10 +108,17 @@ class OWContinuize(widget.OWWidget):
     @check_sql_input
     def setData(self, data):
         self.data = data
-        if data is None:
-            self.Outputs.data.send(None)
+        if data is not None:
+            assert isinstance(data, Orange.data.Table)
+            self.info.set_input_summary(
+                summary.summary_table_shape_inline(data),
+                summary.render_field_list(
+                    summary.summarize_domain_long(data.domain)),
+                format=Qt.RichText,
+            )
         else:
-            self.unconditional_commit()
+            self.info.set_input_summary(self.info.NoInput)
+        self.unconditional_commit()
 
     def constructContinuizer(self):
         conzer = DomainContinuizer(
@@ -121,22 +129,24 @@ class OWContinuize(widget.OWWidget):
         )
         return conzer
 
-    # def sendPreprocessor(self):
-    #     continuizer = self.constructContinuizer()
-    #     self.send("Preprocessor", PreprocessedLearner(
-    #         lambda data, weightId=0, tc=(self.targetValue if self.classTreatment else -1):
-    #             Table(continuizer(data, weightId, tc)
-    #                 if data.domain.has_discrete_class
-    #                 else continuizer(data, weightId), data)))
-
     def commit(self):
         continuizer = self.constructContinuizer()
         if self.data is not None and len(self.data):
             domain = continuizer(self.data)
             data = self.data.transform(domain)
-            self.Outputs.data.send(data)
         else:
-            self.Outputs.data.send(self.data)  # None or empty data
+            data = self.data  # None or empty data (why? insufficient stats should error)
+        self.Outputs.data.send(data)
+        if data is not None:
+            self.info.set_output_summary(
+                summary.summary_table_shape_inline(data),
+                summary.render_field_list(
+                    summary.summarize_table(data),
+                ),
+                format=Qt.RichText,
+            )
+        else:
+            self.info.set_output_summary(self.info.NoOutput)
 
     def send_report(self):
         self.report_items(
