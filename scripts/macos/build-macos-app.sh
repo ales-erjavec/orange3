@@ -147,12 +147,35 @@ PYTHON="${APPDIR}"/Contents/MacOS/python
 
 "${PYTHON}" -m pip install "${PIP_REQ_ARGS[@]}"
 
+python-package-version() {
+    "${PYTHON}" -m pip show "${1:?}" | grep -E '^Version:' | cut -d " " -f 2
+}
+
 VERSION=$("${PYTHON}" -m pip show orange3 | grep -E '^Version:' |
           cut -d " " -f 2)
+VERSION=$(python-package-version orange3)
 
-m4 -D__VERSION__="${VERSION:?}" "${APPDIR}"/Contents/Info.plist.in \
-    > "${APPDIR}"/Contents/Info.plist
-rm "${APPDIR}"/Contents/Info.plist.in
+# PyQt5 versions follow Qt5
+QT5VER=$(python-package-version pyqt5)
+QT5MINORVER=$(cut -d "." -f 2 <<<${QT5VER})
+
+case ${QT5MINORVER} in
+    6)   MINMACOS=10.7.0 ;;
+    7|8) MINMACOS=10.9.0 ;;
+    9)   MINMACOS=10.10.0 ;;
+    10)  MINMACOS=10.11.0 ;;
+    *)
+        MINMACOS=10.6.0
+        echo "WARNING: Unknown minimum supported macOS version " \
+             "for PyQt5 ${QT5VER}. Using ${MINMACOS}" >&2
+        ;;
+
+esac
+
+m4 -D__VERSION__="${VERSION:?}" \
+   -D__MINMACOSVER__="${MINMACOS:?}" \
+   "${APPDIR}"/Contents/Info.plist.in \
+        > "${APPDIR}"/Contents/Info.plist
 
 # Sanity check
 (
