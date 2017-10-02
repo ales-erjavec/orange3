@@ -572,9 +572,18 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
                 sb.addWidget(in_msg)
                 sb.addWidget(out_msg)
 
+                class Message_(MessagesWidget.Message):
+                    def asHtml(self):
+                        return MessagesWidget.Message(
+                            icon=self.icon,
+                            text=self.informativeText,
+                            textFormat=self.textFormat,
+                        ).asHtml()
+
                 def set_message(msgwidget, m):
                     # type: (MessagesWidget, StateInfo.Summary) -> None
-                    message = MessagesWidget.Message(
+                    # message = MessagesWidget.Message(
+                    message = Message_(
                         icon=m.icon, text=m.brief, informativeText=m.details,
                         textFormat=m.format
                     )

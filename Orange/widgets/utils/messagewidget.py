@@ -58,6 +58,21 @@ class Severity(enum.IntEnum):
     Error = QMessageBox.Critical
 
 
+def render_header(icon, content, content_type, opt):
+    parts = ['<table class="icon-header"><tr>']
+    fm = opt.fontMetrics
+    if not icon.isNull():
+        iconsize = opt.iconSize
+        if iconsize.isNull():
+            iconsize = QSize(fm.height(), fm.height)
+        iconsrc = image_data(icon.pixmap(iconsize))
+        parts += ['<th valign="middle" >'
+                  '<img src="{iconsrc}" width={size} height={size}>'
+                  '</th>'.format(iconsrc=iconsrc, size=iconsize.size())]
+    parts += ['<td valign="middle">{}</td>'.format(content)]
+
+
+
 class Message(
         NamedTuple(
             "Message", [
@@ -498,6 +513,22 @@ class MessagesWidget(QWidget):
             return summarize(messages)
         else:
             return Message()
+
+    def displayContents(self, msg):
+        # type: (Message) -> str
+        """
+        Return a html rendered representation of message
+
+        Subclasses can re-reimplement this method to customize message display.
+        """
+        parts = (
+            "<table><tr>"
+            "<th style=\"vertical-align: top\" ><img href=\"{src}\"></th>"
+            "<td>{contents}</td>"
+            "<td><a href=#anchor-id><img src=\"{chevron-down}\"></a></td>"
+            "</tr></table>"
+        ).format()
+
 
     @staticmethod
     def __styled(css, html):
