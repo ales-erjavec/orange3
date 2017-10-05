@@ -1000,7 +1000,11 @@ class BarPlotItem(QGraphicsWidget):
         return super().event(event)
 
     def sizeHint(self, which, constraint=QSizeF()):
-        return QSizeF(300, (self.__barsize + self.__spacing) * self.count())
+        N = self.count()
+        if N:
+            return QSizeF(300, self.__barsize * N + self.__spacing * (N - 1))
+        else:
+            return QSizeF(300, 0)
 
     def setPreferredBarSize(self, size):
         if self.__barsize != size:
