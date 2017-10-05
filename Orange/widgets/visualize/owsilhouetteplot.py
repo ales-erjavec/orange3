@@ -158,7 +158,8 @@ class OWSilhouettePlot(widget.OWWidget):
         self.controlArea.layout().addWidget(self.buttonsArea)
 
         self.scene = QGraphicsScene()
-        self.view = QGraphicsView(self.scene)
+        self.ensurePolished()
+        self.view = GraphicsView(self.scene)
         self.view.setRenderHint(QPainter.Antialiasing, True)
         self.view.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.mainArea.layout().addWidget(self.view)
@@ -443,6 +444,42 @@ class SelectAction(enum.IntEnum):
     NoUpdate, Clear, Select, Deselect, Toogle, Current = 1, 2, 4, 8, 16, 32
 
 
+class GraphicsView(QGraphicsView):
+    """
+    Propagate style and palette changes to the visualized scene.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.ensurePolished()
+
+        if self.scene() is not None:
+            self.scene().setPalette(self.palette())
+            self.scene().setStyle(self.style())
+
+    def setScene(self, scene):
+        super().setScene(scene)
+        if self.scene() is not None:
+            self.scene().setPalette(self.palette())
+            self.scene().setStyle(self.style())
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.PaletteChange and \
+                self.scene() is not None and self.scene().parent() is self:
+            self.scene().setPalette(self.palette())
+        elif event.type == QEvent.StyleChange and \
+                self.scene() is not None and self.scene().parent() is self:
+            self.scene().setStyle(self.style())
+        super().changeEvent(event)
+
+
+class AxisItem(pg.AxisItem):
+    def changeEvent(self, event):
+        if event.type() == QEvent.PaletteChange:
+            self.setPen(QPen(self.palette().brush(QPalette.Foreground), 1))
+        super().changeEvent(event)
+
+
 class SilhouettePlot(QGraphicsWidget):
     """
     A silhouette plot widget.
@@ -604,10 +641,10 @@ class SilhouettePlot(QGraphicsWidget):
 
         font = self.font()
         font.setPixelSize(self.__barHeight)
-        axispen = QPen(Qt.black)
-
-        ax = pg.AxisItem(parent=self, orientation="top", maxTickLength=7,
-                         pen=axispen)
+        foreground = self.palette().brush(QPalette.Foreground)
+        axispen = QPen(foreground, 1.0)
+        ax = AxisItem(parent=self, orientation="top", maxTickLength=7,
+                      pen=axispen)
         ax.setRange(smin, smax)
         self.layout().addItem(ax, 0, 2)
 
@@ -626,6 +663,8 @@ class SilhouettePlot(QGraphicsWidget):
                 label = QGraphicsSimpleTextItem(self)
                 label.setText("{} ({})".format(escape(group.label),
                                                len(group.scores)))
+                label.setBrush(foreground)
+                label.setPen(QPen(Qt.NoPen))
                 item = WrapperLayoutItem(label, Qt.Vertical, parent=self)
                 self.layout().addItem(item, i + 1, 0, Qt.AlignCenter)
 
@@ -642,8 +681,8 @@ class SilhouettePlot(QGraphicsWidget):
 
             self.layout().addItem(textlist, i + 1, 3)
 
-        ax = pg.AxisItem(parent=self, orientation="bottom", maxTickLength=7,
-                         pen=axispen)
+        ax = AxisItem(parent=self, orientation="bottom", maxTickLength=7,
+                      pen=axispen)
         ax.setRange(smin, smax)
         self.layout().addItem(ax, len(self.__groups) + 1, 2)
 
@@ -662,6 +701,14 @@ class SilhouettePlot(QGraphicsWidget):
             self.__updateTextSizeConstraint()
             self.resize(self.effectiveSizeHint(Qt.PreferredSize))
         return super().event(event)
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.PaletteChange:
+            for item in map(self.layout().itemAt, range(self.layout().count())):
+                if isinstance(item, WrapperLayoutItem) and \
+                        isinstance(item.item, QGraphicsSimpleTextItem):
+                    item.item.setBrush(self.palette().brush(QPalette.Foreground))
+        super().changeEvent(event)
 
     def __setHoveredItem(self, item):
         # Set the current hovered `item` (:class:`QGraphicsRectItem`)
@@ -954,11 +1001,8 @@ class Line(QGraphicsWidget):
 
     def paint(self, painter, option, widget=None):
         # type: (QPainter, QStyleOptionGraphicsItem, Optional[QWidget]) -> None
-        palette = option.palette  # type: QPalette
-        role = QPalette.WindowText
-        if widget is not None:
-            role = widget.foregroundRole()
-        color = palette.color(role)
+        palette = self.palette()  # type: QPalette
+        color = palette.color(QPalette.Foreground)
         painter.setPen(QPen(color, 1))
         rect = self.contentsRect()
         center = rect.center()
@@ -1157,16 +1201,25 @@ class TextListWidget(QGraphicsWidget):
             font = self.font()
             for item in self.__textitems:
                 item.setFont(font)
+        elif event.type() == QEvent.PaletteChange:
+            palette = self.palette()  # type: QPalette
+            brush = palette.brush(QPalette.WindowText)
+            for item in self.__textitems:
+                item.setBrush(brush)
+        super().changeEvent(event)
 
     def __setup(self):
         self.__clear()
         font = self.font()
+        palette = self.palette()  # type: QPalette
+        brush = palette.brush(QPalette.WindowText)
         group = QGraphicsItemGroup(self)
 
         for text in self.__items:
             t = QGraphicsSimpleTextItem(text, group)
             t.setData(0, text)
             t.setFont(font)
+            t.setBrush(brush)
             t.setToolTip(text)
             self.__textitems.append(t)
 
