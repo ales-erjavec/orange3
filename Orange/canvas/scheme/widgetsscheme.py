@@ -24,10 +24,12 @@ import itertools
 from collections import namedtuple, deque
 from urllib.parse import urlencode
 from weakref import finalize
-from typing import List, Tuple
+from functools import partial
+from typing import List, Tuple, Iterator
+
 import sip
 
-from AnyQt.QtWidgets import QWidget, QShortcut, QLabel, QSizePolicy, QAction
+from AnyQt.QtWidgets import QWidget, QLabel, QSizePolicy, QAction, QMenu
 from AnyQt.QtGui import QKeySequence, QWhatsThisClickedEvent
 
 from AnyQt.QtCore import (
@@ -639,9 +641,36 @@ class WidgetManager(QObject):
             help_action.triggered.connect(self.__on_help_request)
 
         # Up shortcut (activate/open parent)
-        up_shortcut = QShortcut(
-            QKeySequence(Qt.ControlModifier + Qt.Key_Up), widget)
-        up_shortcut.activated.connect(self.__on_activate_parent)
+        menu = widget.findChild(QMenu, "menu-window")
+        raise_canvas = QAction(
+            "Raise Canvas to Front", widget,
+            objectName="action-canvas-raise-canvas",
+            toolTip="Raise containing canvas workflow window",
+            shortcut=QKeySequence(Qt.ControlModifier | Qt.Key_Up)
+        )
+        raise_canvas.triggered.connect(self.__on_activate_parent)
+        raise_descendants = QAction(
+            "Raise Descendants", widget,
+            objectName="action-canvas-raise-descendants",
+            shortcut=QKeySequence(
+                Qt.ControlModifier | Qt.ShiftModifier | Qt.Key_Right)
+        )
+        raise_descendants.triggered.connect(
+            partial(self.__on_raise_descendants, widget)
+        )
+        raise_ancestors = QAction(
+            "Raise Ancestors", widget,
+            objectName="action-canvas-raise-ancestors",
+            shortcut=QKeySequence(
+                Qt.ControlModifier | Qt.ShiftModifier | Qt.Key_Left)
+        )
+        raise_ancestors.triggered.connect(
+            partial(self.__on_raise_ancestors, widget)
+        )
+        if menu is not None:
+            menu.addAction(raise_canvas)
+            menu.addAction(raise_ancestors)
+            menu.addAction(raise_descendants)
 
         # Call setters only after initialization.
         widget.setWindowIcon(
@@ -757,16 +786,7 @@ class WidgetManager(QObject):
         widgets = filter(
             lambda w: w.isVisible() if w is not None else False,
             map(self.__widget_for_node.get, workflow.nodes))
-        widgets = sorted(
-            widgets, key=lambda _: _.property("__activation_order") or 0,
-        )
-        widgets = list(widgets)
-        w = None
-        for w in widgets:
-            w.raise_()
-        if w is not None:
-            # give focus to the top window
-            w.activateWindow()
+        self.__raise_and_activate(widgets)
 
     def __mark_activated(self, widget):
         # type: (QWidget) ->  None
@@ -804,7 +824,7 @@ class WidgetManager(QObject):
         the scheme and hope someone responds to it.
 
         """
-        # Sender is the QShortcut, and parent the OWBaseWidget
+        # Sender is the QAction, and parent the OWWidget
         widget = self.sender().parent()
         try:
             node = self.node_for_widget(widget)
@@ -822,6 +842,43 @@ class WidgetManager(QObject):
         """
         event = ActivateParentEvent()
         QCoreApplication.sendEvent(self.scheme(), event)
+
+    def __on_raise_ancestors(self, widget):
+        """
+        Raise all the ancestor widgets of `widget`.
+        """
+        node = self.__node_for_widget.get(widget)
+        if node is not None:
+            scheme = self.scheme()
+            ancestors = [self.__widget_for_node.get(p)
+                         for p in scheme.parents(node)]
+            self.__raise_and_activate(filter(None, reversed(ancestors)))
+
+    def __on_raise_descendants(self, widget):
+        """
+        Raise all the descendants widgets of `widget`.
+        """
+        node = self.__node_for_widget.get(widget)
+        if node is not None:
+            scheme = self.scheme()
+            descendants = [self.__widget_for_node.get(p)
+                           for p in scheme.children(node)]
+            self.__raise_and_activate(filter(None, reversed(descendants)))
+
+    def __raise_and_activate(self, widgets):
+        # type: (Iterator[QWidget]) -> None
+        """Show and raise a set of widgets."""
+        # preserve the tracked stacking order
+        widgets = sorted(
+            widgets, key=lambda _: _.property("__activation_order") or 0,
+        )
+        w = None
+        for w in widgets:
+            w.show()
+            w.raise_()
+        if w is not None:
+            # give focus to the last activated top window
+            w.activateWindow()
 
     def __initialize_widget_state(self, node, widget):
         """
