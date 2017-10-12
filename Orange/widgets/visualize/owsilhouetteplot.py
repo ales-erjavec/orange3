@@ -585,8 +585,6 @@ class SilhouettePlot(QGraphicsWidget):
             for baritem, tooltip in zip(baritems, tooltips):
                 baritem.setToolTip(tooltip)
 
-        self.layout().activate()
-
     def setRowNamesVisible(self, visible):
         if self.__rowNamesVisible != visible:
             self.__rowNamesVisible = visible
@@ -623,7 +621,8 @@ class SilhouettePlot(QGraphicsWidget):
         scene = self.scene()
         for child in self.childItems():
             child.setParentItem(None)
-            scene.removeItem(child)
+            if scene is not None:
+                scene.removeItem(child)
         self.__groups = []
 
     def __setup(self):
@@ -1142,11 +1141,11 @@ from Orange.widgets.visualize.owheatmap import scaled
 
 class TextListWidget(QGraphicsWidget):
     def __init__(self, parent=None, items=None, **kwargs):
-        super().__init__(parent, **kwargs)
+        super().__init__(None, **kwargs)
         self.setFlag(QGraphicsWidget.ItemClipsChildrenToShape, True)
         self.__items = []
         self.__textitems = []
-        self.__group = None
+        self.__group = None  # type: Optional[QGraphicsItemGroup]
         self.__spacing = 0
 
         sp = QSizePolicy(QSizePolicy.Preferred,
@@ -1156,6 +1155,9 @@ class TextListWidget(QGraphicsWidget):
 
         if items is not None:
             self.setItems(items)
+
+        if parent is not None:
+            self.setParentItem(parent)
 
     def setItems(self, items):
         self.__clear()
@@ -1213,10 +1215,10 @@ class TextListWidget(QGraphicsWidget):
         font = self.font()
         palette = self.palette()  # type: QPalette
         brush = palette.brush(QPalette.WindowText)
-        group = QGraphicsItemGroup(self)
+        self.__group = QGraphicsItemGroup(self)
 
         for text in self.__items:
-            t = QGraphicsSimpleTextItem(text, group)
+            t = QGraphicsSimpleTextItem(text, self.__group)
             t.setData(0, text)
             t.setFont(font)
             t.setBrush(brush)
@@ -1242,16 +1244,12 @@ class TextListWidget(QGraphicsWidget):
             item.setPos(crect.left(), crect.top() + i * (th + spacing))
 
     def __clear(self):
-        def remove(items, scene):
-            for item in items:
-                item.setParentItem(None)
-                if scene is not None:
-                    scene.removeItem(item)
-
-        remove(self.__textitems, self.scene())
+        scene = self.scene()
         if self.__group is not None:
-            remove([self.__group], self.scene())
-
+            self.__group.setParentItem(None)
+            if scene is not None:
+                scene.removeItem(self.__group)
+            self.__group = None
         self.__textitems = []
 
 
