@@ -262,7 +262,7 @@ class TestOWScatterPlot(WidgetTest, WidgetOutputsTestMixin):
         self.send_signal(self.widget.Inputs.data, self.data)  # iris
         self.widget.graph.select_by_rectangle(QRectF(4, 3, 3, 1))
         selected_inds = np.flatnonzero(self.widget.graph.selection)
-        settings = self.widget.settingsHandler.pack_data(self.widget)
+        settings = self.widget.saveState()
         np.testing.assert_equal(selected_inds, [i for i, g in settings["selection_group"]])
 
     def test_points_selection(self):
@@ -304,7 +304,7 @@ class TestOWScatterPlot(WidgetTest, WidgetOutputsTestMixin):
         GH-2240
         """
         self.send_signal(self.widget.Inputs.data, self.data)
-        settings = self.widget.settingsHandler.pack_data(self.widget)
+        settings = self.widget.saveState()
         graph_settings = settings["context_settings"][0].values["graph"]
         graph_settings["attr_label"] = ("sepal length", -2)
         graph_settings["attr_color"] = ("sepal width", -2)

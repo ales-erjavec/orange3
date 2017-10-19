@@ -183,7 +183,7 @@ class WidgetsScheme(Scheme):
         widget = self.widget_for_node(node)
 
         pp = SettingsPrinter(indent=4)
-        pp.pprint(widget.settingsHandler.pack_data(widget))
+        pp.pprint(widget.saveState())
 
     def event(self, event):
         if event.type() == QEvent.Close and \
@@ -359,7 +359,7 @@ class WidgetManager(QObject):
         """
         state = self.__initstate_for_node[node]
         if isinstance(state, WidgetManager.Materialized):
-            return state.widget.settingsHandler.pack_data(state.widget)
+            return state.widget.saveState()
         else:
             return node.properties
 
@@ -469,7 +469,7 @@ class WidgetManager(QObject):
                         type(widget).__init__))
 
     def _widget_settings(self, widget):
-        return widget.settingsHandler.pack_data(widget)
+        return widget.saveState()
 
     def _delete_widget(self, widget):
         """

@@ -180,7 +180,7 @@ class TestOWSelectRows(WidgetTest):
         self.widget.remove_all_button.click()
         self.enterFilter(sepal_width, "is below", "5.2")
         self.enterFilter(sepal_length, "is at most", "4")
-        data = self.widget.settingsHandler.pack_data(self.widget)
+        data = self.widget.saveState()
 
         w2 = self.create_widget(OWSelectRows, data)
         self.send_signal(self.widget.Inputs.data, iris, widget=w2)
@@ -208,7 +208,7 @@ class TestOWSelectRows(WidgetTest):
         self.assertEqual(len(self.get_output("Data")), len(data))
 
         # Test saving of settings
-        self.widget.settingsHandler.pack_data(self.widget)
+        self.widget.saveState()
 
     def test_output_filter(self):
         """

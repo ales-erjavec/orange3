@@ -666,6 +666,16 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
         """
         self.settingsHandler.update_defaults(self)
 
+    def saveState(self):
+        """
+        Save the widget state.
+
+        Returns
+        -------
+        state : Dict[str, Any]
+        """
+        return self.settingsHandler.pack_data(self)
+
     def onDeleteWidget(self):
         """
         Invoked by the canvas to notify the widget it has been deleted
