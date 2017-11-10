@@ -259,12 +259,12 @@ def main(argv=None):
 
     style = options.style
     defaultstylesheet = "orange.qss"
-    fusiontheme = None
+    colortheme = None
 
     if style is not None:
-        if style.startswith("fusion:"):
-            qt_argv += ["-style", "fusion"]
-            _, _, fusiontheme = style.partition(":")
+        if style.startswith("fusion:") or style.startswith("windows:"):
+            style, _, colortheme = style.partition(":")
+            qt_argv += ["-style", style]
         else:
             qt_argv += ["-style", style]
 
@@ -278,9 +278,9 @@ def main(argv=None):
 
     log.debug("Starting CanvasApplicaiton with argv = %r.", qt_argv)
     app = CanvasApplication(qt_argv)
-    if app.style().metaObject().className() == "QFusionStyle":
-        if fusiontheme == "breeze-dark":
-            app.setPalette(breeze_dark())
+    if app.style().metaObject().className() in {"QFusionStyle", "QWindowsStyle"}:
+        if colortheme in colorthemes:
+            app.setPalette(colorthemes[colortheme]())
             defaultstylesheet = "darkorange.qss"
 
     palette = app.palette()
@@ -529,6 +529,52 @@ def breeze_dark():
     palette.setColor(QPalette.Link, link)
     return palette
 
+
+def zion_reversed():
+    text = Qt.white
+    textdisabled = QColor(85, 85, 85)
+    window = QColor(16, 16, 16)
+    base = Qt.black
+    highlight = QColor(0, 49, 110)
+    highlight_disabled = window
+    link = QColor(128, 181, 255)
+
+    light = QColor(174, 174, 174)
+    mid = QColor(89, 89, 89)
+    dark = QColor(118, 118, 118)
+    shadow = QColor(141, 141, 141)
+
+    palette = QPalette()
+    palette.setColor(QPalette.Window, window)
+    palette.setColor(QPalette.WindowText, text)
+    palette.setColor(QPalette.Disabled, QPalette.WindowText, textdisabled)
+    palette.setColor(QPalette.Base, base)
+    palette.setColor(QPalette.AlternateBase, window)
+    palette.setColor(QPalette.Disabled, QPalette.Base, window)
+    palette.setColor(QPalette.Disabled, QPalette.AlternateBase, window)
+    palette.setColor(QPalette.ToolTipBase, window)
+    palette.setColor(QPalette.ToolTipText, text)
+    palette.setColor(QPalette.Text, text)
+    palette.setColor(QPalette.Disabled, QPalette.Text, textdisabled)
+    palette.setColor(QPalette.Button, window)
+    palette.setColor(QPalette.ButtonText, text)
+    palette.setColor(QPalette.Disabled, QPalette.ButtonText, textdisabled)
+    palette.setColor(QPalette.BrightText, Qt.white)
+    palette.setColor(QPalette.Highlight, highlight)
+    palette.setColor(QPalette.Disabled, QPalette.Highlight, highlight_disabled)
+    palette.setColor(QPalette.HighlightedText, text)
+    palette.setColor(QPalette.Light, light)
+    palette.setColor(QPalette.Mid, mid)
+    palette.setColor(QPalette.Dark, dark)
+    palette.setColor(QPalette.Shadow, shadow)
+    palette.setColor(QPalette.Link, link)
+    return palette
+
+
+colorthemes = {
+    "breeze-dark": breeze_dark,
+    "dark": zion_reversed
+}
 
 if __name__ == "__main__":
     sys.exit(main())
