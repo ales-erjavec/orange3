@@ -473,6 +473,9 @@ class OWConfusionMatrix(widget.OWWidget):
                         [0, 240][i == j], 160,
                         255 if _isinvalid(col_val) else int(255 - 30 * col_val))
                     item.setData(QBrush(bkcolor), Qt.BackgroundRole)
+                    item.setData(QBrush(Qt.black if bkcolor.value() > 127
+                                        else Qt.white),
+                                 Qt.ForegroundRole)
                     item.setData("trbl", BorderRole)
                     item.setToolTip("actual: {}\npredicted: {}".format(
                         self.headers[i], self.headers[j]))

@@ -16,7 +16,7 @@ from AnyQt.QtWidgets import (
 )
 from AnyQt.QtGui import (
     QTransform, QPainterPath, QPainterPathStroker, QColor, QBrush, QPen,
-    QFont, QFontMetrics, QPolygonF, QKeySequence
+    QFont, QFontMetrics, QPolygonF, QKeySequence, QPalette
 )
 from AnyQt.QtCore import Qt, QSize, QSizeF, QPointF, QRectF, QLineF, QEvent
 from AnyQt.QtCore import pyqtSignal as Signal
@@ -294,8 +294,10 @@ class DendrogramWidget(QGraphicsWidget):
         self.clear()
         self._root = root
         if root is not None:
-            pen = make_pen(Qt.blue, width=1, cosmetic=True,
+            foreground = self.palette().color(QPalette.Foreground)
+            pen = make_pen(foreground, width=1, cosmetic=True,
                            join_style=Qt.MiterJoin)
+
             for node in postorder(root):
                 item = DendrogramWidget.ClusterGraphicsItem(self._itemgroup)
                 item.setAcceptHoverEvents(True)
@@ -360,19 +362,24 @@ class DendrogramWidget(QGraphicsWidget):
         if self._highlighted_item is item:
             return
 
-        def branches(item):
-            return [self._items[ch] for ch in item.node.branches]
-
-        if self._highlighted_item:
-            pen = make_pen(Qt.blue, width=1, cosmetic=True)
-            for it in postorder(self._highlighted_item, branches):
+        def set_pen(item, pen):
+            def branches(item):
+                return [self._items[ch] for ch in item.node.branches]
+            for it in postorder(item, branches):
                 it.setPen(pen)
 
+        if self._highlighted_item:
+            # Restore the previous item
+            highlight = self.palette().color(QPalette.Foreground)
+            set_pen(self._highlighted_item,
+                    make_pen(highlight, width=1, cosmetic=True))
+
         self._highlighted_item = item
+
         if item:
-            hpen = make_pen(Qt.blue, width=2, cosmetic=True)
-            for it in postorder(item, branches):
-                it.setPen(hpen)
+            hpen = make_pen(self.palette().color(QPalette.Highlight),
+                            width=2, cosmetic=True)
+            set_pen(item, hpen)
 
     def leaf_items(self):
         """Iterate over the dendrogram leaf items (:class:`QGraphicsItem`).
@@ -942,6 +949,7 @@ class OWHierarchicalClustering(widget.OWWidget):
 
         def axis_view(orientation):
             ax = pg.AxisItem(orientation=orientation, maxTickLength=7)
+            ax.setPen(QPen(self.palette().color(QPalette.Text)))
             scene = QGraphicsScene()
             scene.addItem(ax)
             view = QGraphicsView(
@@ -1491,9 +1499,12 @@ class GraphicsSimpleTextList(QGraphicsWidget):
         """Set the text labels."""
         self.clear()
         orientation = Qt.Horizontal if self.orientation == Qt.Vertical else Qt.Vertical
+        font = self.font()
+        brush = self.palette().text()
         for text in labels:
             item = QGraphicsSimpleTextItem(text, self)
-            item.setFont(self.font())
+            item.setFont(font)
+            item.setBrush(brush)
             item.setToolTip(text)
             witem = WrapperLayoutItem(item, orientation, parent=self)
             self.layout().addItem(witem)
@@ -1518,6 +1529,8 @@ class GraphicsSimpleTextList(QGraphicsWidget):
     def changeEvent(self, event):
         if event.type() == QEvent.FontChange:
             self.__update_font()
+        elif event.type() == QEvent.PaletteChange:
+            self.__update_color()
         return super().changeEvent(event)
 
     def __iter__(self):
@@ -1533,6 +1546,11 @@ class GraphicsSimpleTextList(QGraphicsWidget):
 
         self.layout().invalidate()
         self.updateGeometry()
+
+    def __update_color(self):
+        brush = self.palette().text()
+        for item in self.label_items:
+            item.setBrush(brush)
 
 
 class WrapperLayoutItem(QGraphicsLayoutItem):

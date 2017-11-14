@@ -457,7 +457,6 @@ class OWHeatMap(widget.OWWidget):
         self.colorSettings = None
         self.selectedSchemaIndex = 0
 
-        self.palette = None
         self.keep_aspect = False
 
         #: The original data with all features (retained to
@@ -976,6 +975,7 @@ class OWHeatMap(widget.OWWidget):
         for i, rowitem in enumerate(parts.rows):
             if rowitem.title:
                 title = QGraphicsSimpleTextItem(rowitem.title, widget)
+                title.setBrush(self.palette().text())
                 item = GraphicsSimpleTextLayoutItem(title, parent=grid)
                 grid.addItem(item, Row0 + i * 2, Col0)
 
@@ -1005,6 +1005,7 @@ class OWHeatMap(widget.OWWidget):
         for j, colitem in enumerate(parts.columns):
             if colitem.title:
                 title = QGraphicsSimpleTextItem(colitem.title, widget)
+                title.setBrush(self.palette().text())
                 item = GraphicsSimpleTextLayoutItem(title, parent=grid)
                 grid.addItem(item, 1, Col0 + j)
 
@@ -1458,7 +1459,7 @@ class OWHeatMap(widget.OWWidget):
         rects = self.selection_manager.selection_rects
         for rect in rects:
             item = QGraphicsRectItem(rect, None)
-            pen = QPen(Qt.black, 2)
+            pen = QPen(self.palette().highlight(), 2)
             pen.setCosmetic(True)
             item.setPen(pen)
             self.heatmap_scene.addItem(item)
@@ -1994,6 +1995,7 @@ class GraphicsSimpleTextList(QGraphicsWidget):
             item = QGraphicsSimpleTextItem(text, self)
             item.setFont(self.font())
             item.setToolTip(text)
+            item.setBrush(self.palette().text())
             item = GraphicsSimpleTextLayoutItem(item, orientation, parent=self)
             self.layout().addItem(item)
             self.layout().setAlignment(item, self.alignment)
@@ -2095,7 +2097,9 @@ class GradientLegendWidget(QGraphicsWidget):
         layout.addItem(layout_labels)
         layout_labels.setContentsMargins(0, 0, 0, 0)
         label_lo = QGraphicsSimpleTextItem("%.2f" % low, self)
+        label_lo.setBrush(self.palette().text())
         label_hi = QGraphicsSimpleTextItem("%.2f" % high, self)
+        label_hi.setBrush(self.palette().text())
         self.item_low = GraphicsSimpleTextLayoutItem(label_lo, parent=self)
         self.item_high = GraphicsSimpleTextLayoutItem(label_hi, parent=self)
 

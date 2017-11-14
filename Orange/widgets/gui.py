@@ -2806,7 +2806,7 @@ class IndicatorItemDelegate(QtWidgets.QStyledItemDelegate):
         if indicator:
             painter.save()
             painter.setRenderHints(QtGui.QPainter.Antialiasing)
-            painter.setBrush(QtGui.QBrush(Qt.black))
+            painter.setBrush(option.palette.brush(QtGui.QPalette.Foreground))
             painter.drawEllipse(rect.center(),
                                 self.indicatorSize, self.indicatorSize)
             painter.restore()

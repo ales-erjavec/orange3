@@ -8,6 +8,7 @@ from collections import namedtuple
 import numpy as np
 
 from AnyQt.QtWidgets import QListWidget
+from AnyQt.QtGui import QPalette, QPen
 
 import pyqtgraph as pg
 
@@ -79,16 +80,22 @@ class OWCalibrationPlot(widget.OWWidget):
         gui.checkBox(box, self, "display_rug", "Show rug",
                      callback=self._on_display_rug_changed)
 
-        self.plotview = pg.GraphicsView(background="w")
+
+        self.plotview = pg.GraphicsView(background=None)
+        self.plotview.setBackgroundRole(QPalette.Base)
+
         self.plot = pg.PlotItem(enableMenu=False)
         self.plot.setMouseEnabled(False, False)
         self.plot.hideButtons()
 
+        pen = QPen(self.palette().color(QPalette.Text))
         axis = self.plot.getAxis("bottom")
         axis.setLabel("Predicted Probability")
+        axis.setPen(pen)
 
         axis = self.plot.getAxis("left")
         axis.setLabel("Observed Average")
+        axis.setPen(pen)
 
         self.plot.setRange(xRange=(0.0, 1.0), yRange=(0.0, 1.0), padding=0.05)
         self.plotview.setCentralItem(self.plot)

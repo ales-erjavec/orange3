@@ -101,7 +101,8 @@ class OWLiftCurve(widget.OWWidget):
         gui.checkBox(box, self, "display_convex_hull",
                      "Show lift convex hull", callback=self._replot)
 
-        self.plotview = pg.GraphicsView(background="w")
+        self.plotview = pg.GraphicsView(background=None)
+        self.plotview.setBackgroundRole(QPalette.Base)
         self.plotview.setFrameStyle(QtWidgets.QFrame.StyledPanel)
 
         self.plot = pg.PlotItem(enableMenu=False)

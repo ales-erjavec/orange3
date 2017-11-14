@@ -393,8 +393,10 @@ class OWROCAnalysis(widget.OWWidget):
         grid.addWidget(QLabel("Prior target class probability:"))
         grid.addWidget(sp, 2, 1)
 
-        self.plotview = pg.GraphicsView(background="w")
+        self.plotview = pg.GraphicsView(background=None)
+        self.plotview.setBackgroundRole(QPalette.Base)
         self.plotview.setFrameStyle(QFrame.StyledPanel)
+        self.plotview.scene().setPalette(self.palette())
 
         self.plot = pg.PlotItem(enableMenu=False)
         self.plot.setMouseEnabled(False, False)
@@ -415,7 +417,7 @@ class OWROCAnalysis(widget.OWWidget):
         axis.setPen(pen)
         axis.setLabel("TP Rate (Sensitivity)")
 
-        self.plot.showGrid(True, True, alpha=0.1)
+        self.plot.showGrid(True, True, alpha=0.2)
         self.plot.setRange(xRange=(0.0, 1.0), yRange=(0.0, 1.0), padding=0.05)
 
         self.plotview.setCentralItem(self.plot)
@@ -520,6 +522,7 @@ class OWROCAnalysis(widget.OWWidget):
 
         curves = [self.plot_curves(target, i) for i in selected]
         selected = [self.curve_data(target, i) for i in selected]
+        foreground = self.plotview.scene().palette().color(QPalette.Text)
 
         if self.roc_averaging == OWROCAnalysis.Merge:
             for curve in curves:
@@ -542,7 +545,7 @@ class OWROCAnalysis(widget.OWWidget):
             hull_curves = [curve.merged.hull for curve in selected]
             if hull_curves:
                 self._rocch = convex_hull(hull_curves)
-                iso_pen = QPen(QColor(Qt.black), 1)
+                iso_pen = QPen(foreground, 1)
                 iso_pen.setCosmetic(True)
                 self._perf_line = InfiniteLine(pen=iso_pen, antialias=True)
                 self.plot.addItem(self._perf_line)
@@ -577,12 +580,15 @@ class OWROCAnalysis(widget.OWWidget):
 
         if self.display_convex_hull and hull_curves:
             hull = convex_hull(hull_curves)
-            hull_pen = QPen(QColor(200, 200, 200, 100), 2)
+            hull_color = QColor(foreground)
+            hull_color.setAlpha(100)
+            hull_pen = QPen(hull_color, 2)
             hull_pen.setCosmetic(True)
+            hull_color.setAlpha(50)
             item = self.plot.plot(
                 hull.fpr, hull.tpr,
                 pen=hull_pen,
-                brush=QBrush(QColor(200, 200, 200, 50)),
+                brush=QBrush(hull_color),
                 fillLevel=0)
             item.setZValue(-10000)
 

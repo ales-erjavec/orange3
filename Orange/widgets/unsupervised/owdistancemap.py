@@ -11,7 +11,7 @@ from AnyQt.QtWidgets import (
 )
 from AnyQt.QtGui import (
     QFontMetrics, QPen, QIcon, QPixmap, QLinearGradient, QPainter, QColor,
-    QBrush, QTransform
+    QBrush, QTransform, QPalette
 )
 from AnyQt.QtCore import Qt, QRect, QRectF, QSize, QPointF
 from AnyQt.QtCore import pyqtSignal as Signal
@@ -341,7 +341,8 @@ class OWDistanceMap(widget.OWWidget):
         gui.auto_commit(self.controlArea, self, "autocommit",
                         "Send Selected")
 
-        self.view = pg.GraphicsView(background="w")
+        self.view = pg.GraphicsView(background=None)
+        self.view.setBackgroundRole(QPalette.Base)
         self.mainArea.layout().addWidget(self.view)
 
         self.grid_widget = pg.GraphicsWidget()

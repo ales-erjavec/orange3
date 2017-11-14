@@ -9,7 +9,9 @@ from scipy.stats import linregress
 
 from AnyQt.QtCore import Qt, QObject, QEvent, QRectF, QPointF, QSize
 from AnyQt.QtGui import (
-    QStaticText, QColor, QPen, QBrush, QPainterPath, QTransform, QPainter, QKeySequence)
+    QStaticText, QColor, QPen, QBrush, QPainterPath, QTransform, QPainter,
+    QKeySequence, QPalette
+)
 from AnyQt.QtWidgets import QApplication, QToolTip, QPinchGesture, \
     QGraphicsTextItem, QGraphicsRectItem, QAction
 
@@ -477,6 +479,30 @@ def _make_pen(color, width):
     return p
 
 
+class PlotWidget(pg.PlotWidget):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if self.scene() is not None:
+            self.scene().setPalette(self.palette())
+            self.scene().setStyle(self.style())
+
+    def setScene(self, scene):
+        super().setScene(scene)
+        if self.scene() is not None:
+            self.scene().setPalette(self.palette())
+            self.scene().setStyle(self.style())
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.PaletteChange and \
+                self.scene() is not None and self.scene().parent() is self:
+            self.scene().setPalette(self.palette())
+        elif event.type == QEvent.StyleChange and \
+                self.scene() is not None and self.scene().parent() is self:
+            self.scene().setStyle(self.style())
+        super().changeEvent(event)
+
+
 class OWScatterPlotGraph(gui.OWComponent, ScaleScatterPlotData):
     attr_color = ContextSetting(None, required=ContextSetting.OPTIONAL)
     attr_label = ContextSetting(None, required=ContextSetting.OPTIONAL)
@@ -501,8 +527,18 @@ class OWScatterPlotGraph(gui.OWComponent, ScaleScatterPlotData):
     def __init__(self, scatter_widget, parent=None, _="None", view_box=InteractiveViewBox):
         gui.OWComponent.__init__(self, scatter_widget)
         self.view_box = view_box(self)
-        self.plot_widget = pg.PlotWidget(viewBox=self.view_box, parent=parent,
-                                         background="w")
+        plot = self.plot_widget = PlotWidget(
+            viewBox=self.view_box, parent=parent, background=None)
+        plot.setBackgroundRole(QPalette.Base)
+        plot = self.plot_widget
+
+        axispen = QPen(plot.palette().color(QPalette.Text))
+        axis = plot.getAxis("bottom")
+        axis.setPen(axispen)
+
+        axis = plot.getAxis("left")
+        axis.setPen(axispen)
+
         self.plot_widget.getPlotItem().buttonsHidden = True
         self.plot_widget.setAntialiasing(True)
         self.plot_widget.sizeHint = lambda: QSize(500, 500)
@@ -1014,15 +1050,16 @@ class OWScatterPlotGraph(gui.OWComponent, ScaleScatterPlotData):
         label_column = self._create_label_column()
         formatter = self.attr_label.str_val
         label_data = map(formatter, label_column)
-        black = pg.mkColor(0, 0, 0)
+        # black = pg.mkColor(0, 0, 0)
+        foreground = self.plot_widget.palette().color(QPalette.Text)
         selection = self.selection[self.valid_data] if self.selection is not None else []
         if self.label_only_selected:
             for label, text, selected \
                     in zip(self.labels, label_data, selection):
-                label.setText(text if selected else "", black)
+                label.setText(text if selected else "", foreground)
         else:
             for label, text in zip(self.labels, label_data):
-                label.setText(text, black)
+                label.setText(text, foreground)
 
     def compute_symbols(self):
         self.master.Information.missing_shape.clear()
