@@ -664,7 +664,7 @@ class FancyWelcomeScreen(QWidget):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.setFocusPolicy(Qt.TabFocus | Qt.ClickFocus)
+        self.setFocusPolicy(Qt.TabFocus)
         vlayout = QVBoxLayout(spacing=1)
         vlayout.setContentsMargins(0, 0, 0, 0)
         self.__currentIndex = -1
