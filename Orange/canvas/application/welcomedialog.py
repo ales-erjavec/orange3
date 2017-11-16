@@ -241,6 +241,9 @@ class PagedWidget(QFrame):
         widget = ...   # type: QWidget
 
     class TabView(LinearIconView):
+        def __init__(self, *args, focusPolicy=Qt.TabFocus, **kwargs):
+            super().__init__(*args, focusPolicy=focusPolicy, **kwargs)
+
         def viewOptions(self):
             # type: () -> QStyleOptionViewItem
             option = super().viewOptions()
