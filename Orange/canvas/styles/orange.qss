@@ -432,6 +432,9 @@ CanvasMainWindow PagedDialog TabView {
 
 CanvasMainWindow PagedDialog TabView::item {
     padding-top: 0.5em;
+    border-top: 1px solid transparent;
+    border-left: 1px solid transparent;
+    border-right: 1px solid transparent;
     border-bottom: 1px solid palette(dark);
 }
 
@@ -450,10 +453,6 @@ CanvasMainWindow PagedDialog PagedWidget {
     border-left: none;
     border-right: none;
     border-top: none;
-}
-
-CanvasMainWindow PagedDialog PreviewBrowser * {
-    color: #1A1A1A;
 }
 
 CanvasMainWindow PagedDialog PreviewBrowser TextLabel#path-text {
