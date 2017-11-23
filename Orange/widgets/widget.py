@@ -21,13 +21,14 @@ from AnyQt.QtCore import (
 )
 from AnyQt.QtGui import QIcon, QKeySequence, QDesktopServices, QPainter
 
-from Orange.data import FileFormat
-from Orange.widgets import settings, gui
-from Orange.canvas.registry import description as widget_description
 # OutputSignal and InputSignal are imported for compatibility, but shouldn't
 # be used; use Input and Output instead
 # pylint: disable=unused-import
-from Orange.canvas.registry import WidgetDescription, OutputSignal, InputSignal
+from orangecanvas.registry import description as widget_description, \
+    OutputSignal, InputSignal
+
+from Orange.data import FileFormat
+from Orange.widgets import settings, gui
 from Orange.widgets.report import Report
 from Orange.widgets.gui import OWComponent, VerticalScrollArea
 from Orange.widgets.io import ClipboardFormat
