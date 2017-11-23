@@ -44,7 +44,10 @@ class TestOWMDS(WidgetTest, WidgetOutputsTestMixin):
 
 
     def tearDown(self):
+        self.widgets.remove(self.widget)
         self.widget.onDeleteWidget()
+        self.widget.deleteLater()
+        self.widget = None
         super().tearDown()
 
     def _select_data(self):

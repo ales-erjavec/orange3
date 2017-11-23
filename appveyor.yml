@@ -20,8 +20,8 @@ environment:
     # (https://github.com/numpy/numpy/issues/7607)
     BUILD_GLOBAL_OPTIONS: build -j1
     BUILD_ENV: wheel==0.29.0 pip==9.0.1 numpy==1.9.3
-    # SIP 4.19.4+ with PyQt5==5.9.1+ segfault our tests (GH-2756)
-    TEST_ENV: sip==4.19.6 PyQt5==5.9.2 numpy==1.12.1 scipy==1.0.0b1 scikit-learn pandas==0.21.1
+    TEST_ENV: sip==4.19.6 PyQt5==5.9.2 numpy~=1.13.1 scipy~=1.0.0 scikit-learn pandas==0.21.1
+
 
   matrix:
     - PYTHON: C:\Python34
@@ -32,7 +32,7 @@ environment:
 
     - PYTHON: C:\Python34-x64
       BUILD_GLOBAL_OPTIONS: build
-      TEST_ENV: numpy==1.12.1 scipy==1.0.0b1 scikit-learn PyQt5==5.5.1
+      TEST_ENV: numpy==1.12.1 scipy~=1.0.0 scikit-learn PyQt5==5.5.1
 
     - PYTHON: C:\Python35
 
@@ -82,7 +82,7 @@ test_script:
   # Raise OrangeDeprecationWarnings as errors
   - set ORANGE_DEPRECATIONS_ERROR=1
   - set PYTHONWARNINGS=module
-  - python -m unittest -b -v Orange.tests Orange.widgets.tests
+  - python -X faulthandler -m unittest -b -v Orange.tests Orange.widgets.tests
   - cd ..\..
 
 artifacts:

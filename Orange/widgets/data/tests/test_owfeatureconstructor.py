@@ -225,7 +225,7 @@ class FeatureFuncTest(unittest.TestCase):
 
 class OWFeatureConstructorTests(WidgetTest):
     def setUp(self):
-        self.widget = OWFeatureConstructor()
+        self.widget = self.create_widget(OWFeatureConstructor)
 
     def test_create_variable_with_no_data(self):
         self.widget.addFeature(

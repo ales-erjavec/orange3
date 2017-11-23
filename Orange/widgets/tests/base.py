@@ -2,6 +2,7 @@ from contextlib import contextmanager
 import os
 import gc
 import time
+import traceback
 import unittest
 from unittest.mock import Mock
 # pylint: disable=unused-import
@@ -14,10 +15,11 @@ except ImportError:  # pragma: no cover
 import numpy as np
 import sip
 
-from AnyQt.QtCore import Qt
+from AnyQt.QtCore import Qt, QTimer
 from AnyQt.QtTest import QTest, QSignalSpy
 from AnyQt.QtWidgets import (
-    QApplication, QComboBox, QSpinBox, QDoubleSpinBox, QSlider
+    QApplication, QComboBox, QSpinBox, QDoubleSpinBox, QSlider, QWidget,
+    QGraphicsScene, QGraphicsWidget
 )
 import pyqtgraph
 
@@ -40,9 +42,91 @@ from Orange.widgets.utils.annotated_data import (
 from Orange.widgets.widget import OWWidget
 from Orange.widgets.utils.owlearnerwidget import OWBaseLearner
 
-sip.setdestroyonexit(False)
+sip.setdestroyonexit(True)
 
 app = None
+
+import atexit
+import sys
+
+
+@atexit.register
+def cleanup():
+    gc.collect()
+    global app
+    del app
+    gc.collect()
+    _objs = gc.get_objects()
+    excluded = [sys._getframe(), _objs]
+    memo = set()
+    for obj in _objs:
+        if isinstance(obj, (QWidget, QGraphicsScene, QGraphicsWidget)) \
+                and not sip.isdeleted(obj):
+
+            if isinstance(obj, QWidget):
+                obj = obj.window()
+                if id(obj) in memo:
+                    continue
+
+            # elif isinstance(obj, QGraphicsScene):
+            #     if obj.parent() is not None:
+            #         if isinstance(obj.parent()):
+            #             pass
+            # print(":::", obj, "name={!r}".format(obj.objectName()), end="")
+
+            print(":::", obj, "name={!r}".format(obj.objectName()),
+                  "parent={!r}".format(obj.parent()), end="")
+            if isinstance(obj, QWidget) and obj.window() is not obj:
+                print(" (tlw:", obj.window(), end=")\n")
+            else:
+                print("")
+            memo.add(id(obj))
+            try:
+                dump_refs(1, 1, obj, excluded, set(memo))
+            except Exception:
+                traceback.print_exc(file=sys.stdout)
+
+
+def dump_refs(level, depth, obj, excludestack, memo):
+    assert level >= 0 and depth > 0
+    excludestack.append(sys._getframe())
+    referrers = gc.get_referrers(obj)
+    excludestack.append(referrers)
+
+    for r in referrers:
+        if not all(r is not _ for _ in excludestack):
+            continue
+
+        ns = False
+        if id(r) in memo:
+            continue
+
+        if type(r) is dict:
+            # is r a instance namespace dict (a.__dict__) of some object.
+            for k in gc.get_referrers(r):
+                if r is getattr(k, "__dict__", None):
+                    r = k
+                    ns = True
+                    break
+            k = None
+
+        if all(r is not _ for _ in excludestack):
+            if isinstance(r, dict) and "__name__" in r and "__builtins__" in r:
+                print("  |" * level, "-> globals of", r["__name__"])
+            elif type(r) is list and len(r) > 1 and \
+                    isinstance(r[0], type(sys._getframe())):
+                print("  |" * level, "-> tb? ...",
+                      "[{!r}, ... ({})]".format(r[0], len(r) - 1), r[2:])
+            else:
+                print("  |" * level, "-> (ns of)" if ns else "->", type(r), end=" ")
+                print(r)
+                memo.add(id(r))
+                if level < depth:
+                    dump_refs(level + 1, depth, r, excludestack, memo)
+
+    assert excludestack.pop(-1) is referrers
+    assert excludestack.pop(-1) is sys._getframe()
+
 
 DEFAULT_TIMEOUT = 5000
 
@@ -72,8 +156,11 @@ class GuiTest(unittest.TestCase):
         Ensure that a (single copy of) QApplication has been created
         """
         global app
+        app = QApplication.instance()
         if app is None:
-            app = QApplication([])
+            app = QApplication(["-widgetcount"])
+            app.destroyed.connect(lambda: print("DID DELETE APP"))
+            app.aboutToQuit.connect(lambda: print("About to quit"))
 
         pyqtgraph.setConfigOption("exitCleanup", False)
 
@@ -104,23 +191,31 @@ class WidgetTest(GuiTest):
 
         report = OWReport()
         cls.widgets.append(report)
+        cls.__gi = OWReport.get_instance
         OWReport.get_instance = lambda: report
         Variable._clear_all_caches()
 
     @classmethod
     def tearDownClass(cls):
+        OWReport.get_instance = cls.__gi
         for w in cls.widgets:
             w.close()
             w.onDeleteWidget()
             w.deleteLater()
+
         QTest.qWait(1)
         del cls.widgets[:]
+        cls.signal_manager = None
         gc.collect()
+        QTimer.singleShot(0, app.quit)
+        app.exec()
         super().tearDownClass()
 
     def tearDown(self):
         """Process any pending events before the next test is executed."""
-        QTest.qWait(1)
+        if hasattr(self, "widget"):
+            self.widget = None
+        self.signal_manager.outputs.clear()
         super().tearDown()
 
     def create_widget(self, cls, stored_settings=None, reset_default_settings=True):

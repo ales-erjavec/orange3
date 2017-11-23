@@ -355,10 +355,13 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
         # These buttons are inserted in buttons_area, if it exists
         # Otherwise it is up to the widget to add them to some layout
         if self.graph_name is not None:
-            self.graphButton = QPushButton("&Save Image", autoDefault=False)
+            self.graphButton = QPushButton("&Save Image", self, autoDefault=False,
+                                           objectName="save-image-button")
+            self.graphButton.hide()
             self.graphButton.clicked.connect(self.save_graph)
         if hasattr(self, "send_report"):
-            self.report_button = QPushButton("&Report", autoDefault=False)
+            self.report_button = QPushButton("&Report", self, autoDefault=False, objectName="b")
+            self.report_button.hide()
             self.report_button.clicked.connect(self.show_report)
 
     def set_basic_layout(self):

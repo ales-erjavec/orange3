@@ -90,12 +90,6 @@ class TestOWROCAnalysis(WidgetTest, EvaluateTest):
             }
         )  # type: OWROCAnalysis
 
-    def tearDown(self):
-        super().tearDown()
-        self.widget.onDeleteWidget()
-        self.widgets.remove(self.widget)
-        self.widget = None
-
     def test_basic(self):
         res = self.res
         self.send_signal(self.widget.Inputs.evaluation_results, res)
