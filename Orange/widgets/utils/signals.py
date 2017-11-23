@@ -1,7 +1,7 @@
 import copy
 import itertools
 
-from Orange.canvas.registry.description import InputSignal, OutputSignal
+from orangecanvas.registry.description import InputSignal, OutputSignal
 from Orange.widgets.utils import getmembers
 
 # increasing counter for ensuring the order of Input/Output definitions
@@ -14,7 +14,7 @@ class _Signal:
     @staticmethod
     def get_flags(multiple, default, explicit, dynamic):
         """Compute flags from arguments"""
-        from Orange.canvas.registry.description import \
+        from orangecanvas.registry.description import \
             Single, Multiple, Default, NonDefault, Explicit, Dynamic
         return (Multiple if multiple else Single) | \
                 (Default if default else NonDefault) | \
