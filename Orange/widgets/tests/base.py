@@ -19,6 +19,7 @@ from AnyQt.QtTest import QTest, QSignalSpy
 from AnyQt.QtWidgets import (
     QApplication, QComboBox, QSpinBox, QDoubleSpinBox, QSlider
 )
+import pyqtgraph
 
 from Orange.base import SklModel, Model
 from Orange.canvas.report.owreport import OWReport
@@ -73,6 +74,8 @@ class GuiTest(unittest.TestCase):
         global app
         if app is None:
             app = QApplication([])
+
+        pyqtgraph.setConfigOption("exitCleanup", False)
 
 
 class WidgetTest(GuiTest):
