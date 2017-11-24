@@ -240,8 +240,8 @@ class OWBoxPlot(widget.OWWidget):
                         "Send Selection", "Send Automatically")
 
         gui.vBox(self.mainArea, addSpace=True)
-        self.box_scene = QGraphicsScene()
-        self.box_scene.selectionChanged.connect(self.commit)
+        self.box_scene = QGraphicsScene(self)
+        self.box_scene.selectionChanged.connect(self._selection_changed)
         self.box_view = QGraphicsView(self.box_scene)
         self.box_view.setRenderHints(QPainter.Antialiasing |
                                      QPainter.TextAntialiasing |
@@ -258,6 +258,9 @@ class OWBoxPlot(widget.OWWidget):
         self.is_continuous = False
 
         self.update_display_box()
+
+    def _selection_changed(self):
+        self.commit()
 
     def sizeHint(self):
         return QSize(100, 500)  # Vertical size is regulated by mainArea
