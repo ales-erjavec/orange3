@@ -39,3 +39,4 @@ class TestWorkflows(WidgetTest):
                 except Exception as e:
                     self.fail("Old workflow '{}' could not be loaded\n'{}'".
                               format(ows_file, str(e)))
+            new_scheme.clear()
