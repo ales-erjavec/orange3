@@ -124,7 +124,7 @@ class OWVennDiagram(widget.OWWidget):
         gui.auto_commit(box, self, "autocommit", "Send Selection", "Send Automatically", box=False)
 
         # Main area view
-        self.scene = QGraphicsScene()
+        self.scene = QGraphicsScene(self)
         self.view = QGraphicsView(self.scene)
         self.view.setRenderHint(QPainter.Antialiasing)
         self.view.setBackgroundRole(QPalette.Window)

@@ -422,7 +422,7 @@ class OWTreeViewer2D(OWWidget):
         gui.rubber(self.controlArea)
         self.resize(800, 500)
 
-        self.scene = TreeGraphicsScene(self)
+        self.scene = TreeGraphicsScene(self, self)
         self.scene_view = TreeGraphicsView(self.scene)
         self.scene_view.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
         self.mainArea.layout().addWidget(self.scene_view)
