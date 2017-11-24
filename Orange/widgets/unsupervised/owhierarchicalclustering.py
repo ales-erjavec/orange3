@@ -938,6 +938,7 @@ class OWHierarchicalClustering(widget.OWWidget):
             verticalScrollBarPolicy=Qt.ScrollBarAlwaysOn,
             alignment=Qt.AlignLeft | Qt.AlignVCenter
         )
+        self.scene.setParent(self.view)
 
         def axis_view(orientation):
             ax = pg.AxisItem(orientation=orientation, maxTickLength=7)
@@ -949,6 +950,7 @@ class OWHierarchicalClustering(widget.OWWidget):
                 verticalScrollBarPolicy=Qt.ScrollBarAlwaysOn,
                 alignment=Qt.AlignLeft | Qt.AlignVCenter
             )
+            scene.setParent(view)
             view.setFixedHeight(ax.size().height())
             ax.line = SliderLine(orientation=Qt.Horizontal,
                                  length=ax.size().height())
