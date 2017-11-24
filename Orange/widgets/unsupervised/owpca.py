@@ -509,6 +509,10 @@ class OWPCA(widget.OWWidget):
         if settings.get("ncomponents", 0) > MAX_COMPONENTS:
             settings["ncomponents"] = MAX_COMPONENTS
 
+    def onDeleteWidget(self):
+        self.plot.close()
+        super().onDeleteWidget()
+
 
 def main():
     import gc

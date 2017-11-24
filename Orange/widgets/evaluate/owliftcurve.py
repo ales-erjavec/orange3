@@ -235,6 +235,11 @@ class OWLiftCurve(widget.OWWidget):
         self.report_plot()
         self.report_caption(caption)
 
+    def onDeleteWidget(self):
+        self.clear()
+        self.plotview.close()
+        super().onDeleteWidget()
+
 
 def lift_curve_from_results(results, target, clf_idx, subset=slice(0, -1)):
     actual = results.actual[subset]

@@ -441,6 +441,10 @@ class InteractiveViewBox(ViewBox):
 
         return True
 
+    def close(self):
+        self.graph = None
+        super().close()
+
 
 class ScatterPlotItem(pg.ScatterPlotItem):
     def paint(self, painter, option, widget=None):

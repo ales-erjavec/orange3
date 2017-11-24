@@ -309,6 +309,11 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
 
         self.report_plot()
 
+    def onDeleteWidget(self):
+        self.clear()
+        self.plot.close()
+        super().onDeleteWidget()
+
 
 def burt_table(data, variables):
     """

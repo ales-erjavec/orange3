@@ -679,9 +679,10 @@ class OWMDS(OWWidget):
         self.Outputs.annotated_data.send(annotated)
 
     def onDeleteWidget(self):
-        super().onDeleteWidget()
-        self._clear_plot()
         self._clear()
+        self._clear_plot()
+        self.plot.close()
+        super().onDeleteWidget()
 
     def send_report(self):
         if self.data is None:

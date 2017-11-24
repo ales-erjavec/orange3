@@ -19,7 +19,6 @@ import Orange
 from Orange.widgets import widget, gui, settings
 from Orange.widgets.evaluate.utils import check_results_adequacy
 from Orange.widgets.utils import colorpalette, colorbrewer
-from Orange.widgets.io import FileFormat
 from Orange.widgets.widget import Input
 from Orange.canvas import report
 
@@ -644,6 +643,8 @@ class OWROCAnalysis(widget.OWWidget):
 
     def onDeleteWidget(self):
         self.clear()
+        self.plotview.close()
+        super().onDeleteWidget()
 
     def send_report(self):
         if self.results is None:

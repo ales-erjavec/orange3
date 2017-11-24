@@ -212,6 +212,11 @@ class OWCalibrationPlot(widget.OWWidget):
         self.report_plot()
         self.report_caption(caption)
 
+    def onDeleteWidget(self):
+        self.clear()
+        self.plotview.close()
+        super().onDeleteWidget()
+
 
 def gaussian_smoother(x, y, sigma=1.0):
     x = np.asarray(x)

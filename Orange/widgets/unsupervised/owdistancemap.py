@@ -645,8 +645,9 @@ class OWDistanceMap(widget.OWWidget):
         self.Outputs.features.send(featuresubset)
 
     def onDeleteWidget(self):
-        super().onDeleteWidget()
         self.clear()
+        self.view.close()
+        super().onDeleteWidget()
 
     def send_report(self):
         annot = self.annot_combo.currentText()

@@ -1296,7 +1296,8 @@ class OWPaintData(OWWidget):
         return sh.expandedTo(QSize(570, 690))
 
     def onDeleteWidget(self):
-        self.plot.clear()
+        self.plotview.close()
+        super().onDeleteWidget()
 
     def send_report(self):
         if self.data is None:
