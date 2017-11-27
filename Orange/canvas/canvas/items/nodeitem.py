@@ -553,7 +553,7 @@ class NodeAnchorItem(GraphicsPathObject):
 
     def shape(self):
         if self.__shape is not None:
-            return self.__shape
+            return QPainterPath(self.__shape)
         else:
             return GraphicsPathObject.shape(self)
 
@@ -795,14 +795,14 @@ class NodeItem(QGraphicsWidget):
         self.setFlag(QGraphicsItem.ItemIsFocusable, True)
 
         # central body shape item
-        self.shapeItem = None
+        self.shapeItem = None         # type: NodeBodyItem
 
         # in/output anchor items
-        self.inputAnchorItem = None
-        self.outputAnchorItem = None
+        self.inputAnchorItem = None   # type: SourceAnchorItem
+        self.outputAnchorItem = None  # type: SinkAnchorItem
 
         # title text item
-        self.captionTextItem = None
+        self.captionTextItem = None   # type: NameTextItem
 
         # error, warning, info items
         self.errorItem = None
@@ -825,6 +825,7 @@ class NodeItem(QGraphicsWidget):
         self.setupGraphics()
 
         self.setWidgetDescription(widget_description)
+        self.__updatePalette()
 
     @classmethod
     def from_node(cls, node):
@@ -1294,7 +1295,23 @@ class NodeItem(QGraphicsWidget):
         return super().itemChange(change, value)
 
     def __updatePalette(self):
-        self.captionTextItem.setPalette(self.palette())
+        palette = self.palette()
+        self.captionTextItem.setPalette(palette)
+        base = palette.color(QPalette.Background)
+        outline = base
+        foreground = palette.color(QPalette.Foreground)
+        foreground = merged_color(outline, foreground, 50)  # mid foreground
+        highlight = palette.color(QPalette.Highlight)
+        normal = merged_color(foreground, highlight, 65)
+        connected = normal
+        self.outputAnchorItem.normalBrush = normal
+        self.inputAnchorItem.normalBrush = normal
+        self.outputAnchorItem.connectedBrush = connected
+        self.inputAnchorItem.connectedBrush = connected
+        self.outputAnchorItem.setBrush(normal)
+        self.inputAnchorItem.setBrush(normal)
+        self.outputAnchorItem.update()
+        self.inputAnchorItem.update()
 
     def __updateFont(self):
         self.prepareGeometryChange()
