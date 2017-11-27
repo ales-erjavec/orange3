@@ -15,6 +15,14 @@ def saturated(color, factor=150):
     return QColor.fromHsvF(h, s, v, a).convertTo(color.spec())
 
 
+def merged_color(a, b, factor=50):
+    # type: (QColor, QColor, int) -> QColor
+    assert 0 <= factor <= 100
+    return QColor((a.red() * factor + b.red() * (100 - factor)) // 100,
+                  (a.green() * factor + b.green() * (100 - factor)) // 100,
+                  (a.blue() * factor + b.blue() * (100 - factor)) // 100)
+
+
 def sample_path(path, num=10):
     """Sample `num` equidistant points from the `path` (`QPainterPath`).
     """

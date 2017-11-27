@@ -22,7 +22,7 @@ from AnyQt.QtCore import (
 from AnyQt.QtCore import pyqtSignal as Signal, pyqtProperty as Property
 
 from .graphicspathobject import GraphicsPathObject
-from .utils import saturated, radial_gradient
+from .utils import saturated, radial_gradient, merged_color
 
 from ...scheme.node import UserMessage
 from ...registry import NAMED_COLORS
@@ -68,7 +68,6 @@ def animation_restart(animation):
 
 
 SHADOW_COLOR = "#9CACB4"
-FOCUS_OUTLINE_COLOR = "#609ED7"
 
 
 class NodeBodyItem(GraphicsPathObject):
@@ -86,19 +85,14 @@ class NodeBodyItem(GraphicsPathObject):
         self.__hasFocus = False
         self.__hover = False
         self.__shapeRect = QRectF(-10, -10, 20, 20)
+        self.__palette = default_palette()
 
         self.setAcceptHoverEvents(True)
 
         self.setFlag(QGraphicsItem.ItemSendsScenePositionChanges, True)
         self.setFlag(QGraphicsItem.ItemSendsGeometryChanges, True)
-
-        self.setPen(QPen(Qt.NoPen))
-
-        self.setPalette(default_palette())
-
         self.shadow = QGraphicsDropShadowEffect(
             blurRadius=3,
-            color=QColor(SHADOW_COLOR),
             offset=QPointF(0, 0),
         )
         self.shadow.setEnabled(True)
@@ -109,7 +103,6 @@ class NodeBodyItem(GraphicsPathObject):
         # non devicePixelRatio aware.
         shadowitem = GraphicsPathObject(self, objectName="shadow-shape-item")
         shadowitem.setPen(Qt.NoPen)
-        shadowitem.setBrush(QBrush(QColor(SHADOW_COLOR).lighter()))
         shadowitem.setGraphicsEffect(self.shadow)
         shadowitem.setFlag(QGraphicsItem.ItemStacksBehindParent)
         self.__shadow = shadowitem
@@ -121,6 +114,9 @@ class NodeBodyItem(GraphicsPathObject):
         self.__pingAnimation = QPropertyAnimation(self, b"scale", self)
         self.__pingAnimation.setDuration(250)
         self.__pingAnimation.setKeyValues([(0.0, 1.0), (0.5, 1.1), (1.0, 1.0)])
+
+        self.setPalette(default_palette())
+        self.__updateColors()
 
     # TODO: The body item should allow the setting of arbitrary painter
     # paths (for instance rounded rect, ...)
@@ -140,8 +136,15 @@ class NodeBodyItem(GraphicsPathObject):
         """
         Set the body color palette (:class:`QPalette`).
         """
-        self.palette = palette
-        self.__updateBrush()
+        if self.__palette != palette:
+            self.__palette = QPalette(palette)
+            self.__updateColors()
+
+    def palette(self):
+        if self.__palette is not None:
+            return QPalette(self.__palette)
+        elif self.parent() is not None:
+            return self.parent().palette()
 
     def setAnimationEnabled(self, enabled):
         """
@@ -198,7 +201,7 @@ class NodeBodyItem(GraphicsPathObject):
             # Set the clip to shape so the meter does not overflow the shape.
             painter.save()
             painter.setClipPath(self.shape(), Qt.ReplaceClip)
-            color = self.palette.color(QPalette.ButtonText)
+            color = self.palette().color(QPalette.ButtonText)
             pen = QPen(color, 5)
             painter.setPen(pen)
             painter.setRenderHints(QPainter.Antialiasing)
@@ -207,12 +210,6 @@ class NodeBodyItem(GraphicsPathObject):
             painter.restore()
 
     def __updateShadowState(self):
-        if self.__hasFocus:
-            color = QColor(FOCUS_OUTLINE_COLOR)
-            self.setPen(QPen(color, 1.5))
-        else:
-            self.setPen(QPen(Qt.NoPen))
-
         radius = 3
         enabled = False
 
@@ -237,18 +234,29 @@ class NodeBodyItem(GraphicsPathObject):
         else:
             self.shadow.setBlurRadius(radius)
 
-    def __updateBrush(self):
-        palette = self.palette
+    def __updateColors(self):
+        palette = self.palette()
         if self.__isSelected:
             cg = QPalette.Active
         else:
             cg = QPalette.Inactive
-
-        palette.setCurrentColorGroup(cg)
-        c1 = palette.color(QPalette.Light)
-        c2 = palette.color(QPalette.Button)
+        c1 = palette.color(cg, QPalette.Light)
+        c2 = palette.color(cg, QPalette.Button)
         grad = radial_gradient(c2, c1)
+
+        if self.__hasFocus:
+            outline = palette.brush(QPalette.Highlight)
+        else:
+            outline = palette.brush(cg, QPalette.Button)
+        self.setPen(QPen(outline, 1.5))
         self.setBrush(QBrush(grad))
+        foreground = palette.color(QPalette.Foreground)
+        foreground = merged_color(foreground,
+                                  palette.color(QPalette.Highlight), 30)
+        if foreground.value() < 127:
+            foreground.setAlpha(200)
+        self.shadow.setColor(foreground)
+        self.__shadow.setBrush(QBrush(foreground))
 
     # TODO: The selected and focus states should be set using the
     # QStyle flags (State_Selected. State_HasFocus)
@@ -261,8 +269,9 @@ class NodeBodyItem(GraphicsPathObject):
                   This property is instead controlled by the parent NodeItem.
 
         """
-        self.__isSelected = selected
-        self.__updateBrush()
+        if self.__isSelected != selected:
+            self.__isSelected = selected
+            self.__updateColors()
 
     def setHasFocus(self, focus):
         """
@@ -273,6 +282,7 @@ class NodeBodyItem(GraphicsPathObject):
 
         """
         self.__hasFocus = focus
+        self.__updateColors()
         self.__updateShadowState()
 
     def __on_finished(self):
