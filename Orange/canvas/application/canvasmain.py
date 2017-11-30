@@ -1627,7 +1627,7 @@ class CanvasMainWindow(QMainWindow):
             "New", toolTip="Create a new workflow")
         s = QShortcut(QKeySequence.New, newbutton)
         s.activated.connect(newbutton.click)
-        buttons.addButton(newbutton, QDialogButtonBox.ActionRole)
+        buttons.addButton(newbutton, QDialogButtonBox.AcceptRole)
 
         openexisting = QPushButton(
             "Open Existing\N{HORIZONTAL ELLIPSIS}",
@@ -1635,14 +1635,16 @@ class CanvasMainWindow(QMainWindow):
         )
         s = QShortcut(QKeySequence.Open, dlg)
         s.activated.connect(openexisting.click)
-        buttons.addButton(openexisting, QDialogButtonBox.ActionRole)
+        buttons.addButton(openexisting, QDialogButtonBox.AcceptRole)
 
         show_start_key = "startup/show-welcome-screen"
         show_start = QCheckBox(
             "Show at startup",
             checked=settings.value(show_start_key, True, type=bool)
         )
-        buttons.addButton(show_start, QDialogButtonBox.ActionRole)
+        # Abusing ResetRole to push the check box to the left in all button
+        # layouts.
+        buttons.addButton(show_start, QDialogButtonBox.ResetRole)
 
         def update_show_at_startup(value):
             settings.setValue(show_start_key, value)
