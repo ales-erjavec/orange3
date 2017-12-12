@@ -35,6 +35,164 @@ def stress(X, distD):
     return delta_sq.sum(axis=0) / 2
 
 
+import scipy.linalg.blas as blas
+
+
+def check_symetric_packed(ar, name):
+    m, = ar.shape
+    N = int(np.floor(np.sqrt(m * 2)))
+    if N * (N + 1) != 2 * m:
+        raise ValueError(
+            "'{name}' is not in packed format (N * (N + 1) != 2 * {m} "
+            "for all N)"
+            .format(name=name, m=m))
+    if not ar.flags.c_contiguous:
+        raise ValueError("'{name}' array is not contiguous".format(name=name))
+    return ar, N
+
+
+def sym_matrix_sum_packed(ap, lower=False):
+    # type: (np.ndarray, bool) -> np.ndarray
+    ap, N = check_symetric_packed(ap, name="ap")
+    ones = np.ones(N, dtype=ap.dtype)
+    return spmv(ap, ones, lower=lower)
+
+
+def spmv(ap, x, alpha=None, beta=None, y=None, lower=False):
+    # type: (np.ndarray, np.ndarray, ...) -> np.ndarray
+    ap, N = check_symetric_packed(ap, name="ap")
+    if ap.dtype.char == "d":
+        spmv = blas.dspmv
+    elif ap.dtype.char == "f":
+        spmv = blas.sspmv
+    elif ap.dtype.char == "c":
+        spmv = blas.cspmv
+    else:
+        raise TypeError("Unsupported dtype: {}".format(ap.dtype))
+
+    if alpha is None:
+        alpha = 1.0
+    lower_f = not lower
+
+    if y is None:
+        assert beta is None or beta == 0.0
+        y = np.empty(N, ap.dtype)
+        overwrite_y = True
+    else:
+        overwrite_y = False
+    # incx = x.strides[0] // x.itemsize
+    # incy = y.strides[0] // y.itemsize
+    out = spmv(N, alpha, ap, x,
+               # incx=incx,
+               beta=beta, y=y,
+               # incy=incy,
+               lower=int(lower_f), overwrite_y=overwrite_y)
+    return out
+
+
+def stress_packed(d1, d2):
+    # type: (np.ndarray, np.ndarray) -> float
+    assert d1.shape == d2.shape
+    m, = d1.shape
+    N = int(np.floor(np.sqrt(m * 2)))
+    if N * (N + 1) != m * 2:
+        raise ValueError("Input is not a matrix in packed form")
+
+    delta = d1 - d2
+    delta **= 2
+    return delta.sum()
+
+
+def graph_laplacian_packed(WP, overwrite_wp=False):
+    m, = WP.shape
+    N = int(np.floor(np.sqrt(m * 2)))
+    assert N * (N + 1) == 2 * m, "{N} * ({N} + 1) != 2 * {m}".format(N=N, m=m)
+    if overwrite_wp:
+        Lw = np.negative(WP, out=WP)
+    else:
+        Lw = -WP
+    indices = np.empty(N, dtype=np.intp)
+    indices[0] = 0
+    np.cumsum(np.arange(N, 1, -1), out=indices[1:])
+    Lw[indices] = 0
+    Lw[indices] = -sym_matrix_sum_packed(Lw, lower=False)
+    return Lw
+
+
+def smacof_update_matrix_packed(dist, delta, out=None):
+    with np.errstate(divide="ignore", invalid="ignore"):
+        S = np.reciprocal(dist, out=out)
+    finitemask = np.isfinite(S)
+    np.logical_not(finitemask, out=finitemask)
+    S[finitemask] = 0
+    del finitemask
+    B = np.multiply(delta, S, out=S)
+    del S
+    B = graph_laplacian_packed(B, overwrite_wp=True)
+    return B
+
+
+def condensed_to_sym_p(a):
+    """
+    Extend a hollow condensed symetric matrix (scipy.distance format) to
+    packed format (blas).
+
+    Parameters
+    ----------
+    a
+
+    Returns
+    -------
+
+    """
+    a, N_ = check_symetric_packed(a, name="a")
+    N = N_ + 1
+    out = np.zeros((N + 1) * N // 2, dtype=a.dtype)
+    mask = np.ones(out.shape, dtype=bool)
+    mask[0] = False
+    indices = np.arange(N, 1, -1)
+    np.cumsum(indices, out=indices)
+    mask[indices] = False
+    # np.place(out, mask, a)  # expensive ! on the order of pdist itself
+    out.ravel()[mask] = a  # roughly twice as fast
+    return out
+
+
+def condensed_to_sym_p_1(a):
+    # TODO: Test if this is faster then np.place (:( it is not)
+    a, N_ = check_symetric_packed(a, name="a")
+    N = N_ + 1
+    out = np.zeros((N + 1) * N // 2, dtype=a.dtype)
+    start = 1
+    end = N
+
+    for i in range(N):
+        out.flat[start: end] = a[start - i - 1: end - i -1]
+        start = end + 1
+        end += N - i - 1
+    return out
+
+
+def smacof_step(X, delta):
+    """
+    Run a single SMACOF update step.
+    """
+    N, _ = X.shape
+    assert delta.shape == ((N * (N + 1)) // 2, ), "{} != {}".format(delta.shape, N)
+
+    dist_ = scipy.spatial.distance.pdist(X, metric="euclidean")
+    # from hollow condensed -> symmetric packed format
+    dist = condensed_to_sym_p(dist_)
+    B_p = smacof_update_matrix_packed(dist, delta)
+    assert B_p.shape == delta.shape
+
+    # X_out = 1. / N * B @ X
+    X_out = np.empty_like(X)
+    for i in range(X.shape[1]):
+        X_out[:, i] = spmv(B_p, X[:, i], alpha=1. / N)
+    return X_out
+
+
 #: Maximum number of displayed closest pairs.
 MAX_N_PAIRS = 10000
 
@@ -361,7 +519,15 @@ class OWMDS(OWProjectionWidget):
         if step_size == -1:
             step_size = self.max_iter
 
-        def update_loop(X, max_iter, step, init):
+        if init is None:
+            if self.initialization == OWMDS.PCA:
+                init = torgerson(X)
+            else:
+                init = np.random.random(size=(X.shape[0], 2))
+
+        dist_packed = X[np.triu_indices(X.shape[0])]
+
+        def update_loop(diss, max_iter, step, embedding):
             """
             return an iterator over successive improved MDS point embeddings.
             """
@@ -369,32 +535,26 @@ class OWMDS(OWProjectionWidget):
             done = False
             iterations_done = 0
             oldstress = np.finfo(np.float).max
-            init_type = "PCA" if self.initialization == OWMDS.PCA else "random"
-
+            # init_type = "PCA" if self.initialization == OWMDS.PCA else "random"
             while not done:
-                step_iter = min(max_iter - iterations_done, step)
-                mds = MDS(
-                    dissimilarity="precomputed", n_components=2,
-                    n_init=1, max_iter=step_iter,
-                    init_type=init_type, init_data=init
-                )
+                embedding_new = smacof_step(embedding, diss)
+                iterations_done += 1
 
-                mdsfit = mds(X)
-                iterations_done += step_iter
-
-                embedding, stress = mdsfit.embedding_, mdsfit.stress_
-                stress /= np.sqrt(np.sum(embedding ** 2, axis=1)).sum()
+                # embedding, stress = mdsfit.embedding_, mdsfit.stress_
+                # stress = stress_packed(d1, d2)
+                # stress /= np.sqrt(np.sum(embedding ** 2, axis=1)).sum()
 
                 if iterations_done >= max_iter:
                     done = True
-                elif (oldstress - stress) < mds.params["eps"]:
-                    done = True
-                init = embedding
-                oldstress = stress
+                # elif (oldstress - stress) < mds.params["eps"]:
+                #     done = True
+                # init = embedding
+                # oldstress = stress
+                embedding = embedding_new
+                yield embedding, 1.0, iterations_done / max_iter
+                # yield embedding, mdsfit.stress_, iterations_done / max_iter
 
-                yield embedding, mdsfit.stress_, iterations_done / max_iter
-
-        self.__set_update_loop(update_loop(X, self.max_iter, step_size, init))
+        self.__set_update_loop(update_loop(dist_packed, self.max_iter, step_size, init))
         self.progressBarInit(processEvents=None)
 
     def __set_update_loop(self, loop):
@@ -457,7 +617,7 @@ class OWMDS(OWProjectionWidget):
             self.__set_update_loop(None)
             self.graph.resume_drawing_pairs()
         except Exception as exc:
-            self.Error.optimization_error(str(exc))
+            self.Error.optimization_error(str(exc), exc_info=True)
             self.__set_update_loop(None)
             self.graph.resume_drawing_pairs()
         else:
