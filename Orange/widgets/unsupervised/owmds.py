@@ -60,13 +60,20 @@ def sym_matrix_sum_packed(ap, lower=False):
 
 def spmv(ap, x, alpha=None, beta=None, y=None, lower=False):
     # type: (np.ndarray, np.ndarray, ...) -> np.ndarray
+    """
+    Example
+    -------
+    >>> a = np.array([1, 0, 0, 2, 0, 1], dtype=float)
+    >>> spmv(a, np.array([1., 2., 3.], ))
+    array([ 1.,  4.,  3.])
+    """
     ap, N = check_symetric_packed(ap, name="ap")
     if ap.dtype.char == "d":
         spmv = blas.dspmv
     elif ap.dtype.char == "f":
         spmv = blas.sspmv
-    elif ap.dtype.char == "c":
-        spmv = blas.cspmv
+    elif ap.dtype.char == "D":
+        spmv = blas.zspmv
     else:
         raise TypeError("Unsupported dtype: {}".format(ap.dtype))
 
@@ -80,12 +87,7 @@ def spmv(ap, x, alpha=None, beta=None, y=None, lower=False):
         overwrite_y = True
     else:
         overwrite_y = False
-    # incx = x.strides[0] // x.itemsize
-    # incy = y.strides[0] // y.itemsize
-    out = spmv(N, alpha, ap, x,
-               # incx=incx,
-               beta=beta, y=y,
-               # incy=incy,
+    out = spmv(N, alpha, ap, x, beta=beta, y=y,
                lower=int(lower_f), overwrite_y=overwrite_y)
     return out
 
@@ -97,10 +99,14 @@ def stress_packed(d1, d2):
     N = int(np.floor(np.sqrt(m * 2)))
     if N * (N + 1) != m * 2:
         raise ValueError("Input is not a matrix in packed form")
-
+    ss = scipy.spatial.distance.cdist(
+        d1.reshape((1, -1)), d2.reshape(1, -1),
+        metric="sqeuclidean"
+    )
+    return ss / (N ** 2)
     delta = d1 - d2
     delta **= 2
-    return delta.sum()
+    return delta.sum() / (N ** 2)
 
 
 def graph_laplacian_packed(WP, overwrite_wp=False):
@@ -120,7 +126,7 @@ def graph_laplacian_packed(WP, overwrite_wp=False):
 
 
 def smacof_update_matrix_packed(dist, delta, out=None):
-    with np.errstate(divide="ignore", invalid="ignore"):
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
         S = np.reciprocal(dist, out=out)
     finitemask = np.isfinite(S)
     np.logical_not(finitemask, out=finitemask)
@@ -133,17 +139,18 @@ def smacof_update_matrix_packed(dist, delta, out=None):
 
 
 def condensed_to_sym_p(a):
+    # type: (np.ndarray) -> np.ndarray
     """
-    Extend a hollow condensed symetric matrix (scipy.distance format) to
+    Extend a hollow condensed symmetric matrix (scipy.distance format) to
     packed format (blas).
 
     Parameters
     ----------
-    a
+    a : (N - 1) * N // 2 array
 
     Returns
     -------
-
+    a : ((N + 1) * N // 2) array
     """
     a, N_ = check_symetric_packed(a, name="a")
     N = N_ + 1
@@ -153,37 +160,38 @@ def condensed_to_sym_p(a):
     indices = np.arange(N, 1, -1)
     np.cumsum(indices, out=indices)
     mask[indices] = False
-    # np.place(out, mask, a)  # expensive ! on the order of pdist itself
-    out.ravel()[mask] = a  # roughly twice as fast
+    out[mask] = a
     return out
 
 
-def condensed_to_sym_p_1(a):
-    # TODO: Test if this is faster then np.place (:( it is not)
-    a, N_ = check_symetric_packed(a, name="a")
-    N = N_ + 1
-    out = np.zeros((N + 1) * N // 2, dtype=a.dtype)
-    start = 1
-    end = N
-
-    for i in range(N):
-        out.flat[start: end] = a[start - i - 1: end - i -1]
-        start = end + 1
-        end += N - i - 1
-    return out
-
-
-def smacof_step(X, delta):
+def smacof_step(X, dissimilarity, delta=None):
+    # type: (np.ndarary, np.ndarray, Optional[np.ndarray]) -> np.ndarray
     """
     Run a single SMACOF update step.
+
+    Parameters
+    ----------
+    X : (N, k) ndarray
+        The current point configuration
+    dissimilarity : ((N + 1) * N // 2,) ndarray
+        The optimal (desired) point dissimilarity in symmetric packed storage
+        (blas sp format)
+    delta : ((N + 1) * N // 2,) ndarray, optional
+        Precomputed pairwise distances between X.
+    References
+    ----------
+    Jan de Leeuw - Applications of Convex Analysis to Multidimensional Scaling
     """
     N, _ = X.shape
-    assert delta.shape == ((N * (N + 1)) // 2, ), "{} != {}".format(delta.shape, N)
+    assert dissimilarity.shape == ((N * (N + 1)) // 2, ), \
+           "{} != {}".format(dissimilarity.shape, N)
 
-    dist_ = scipy.spatial.distance.pdist(X, metric="euclidean")
-    # from hollow condensed -> symmetric packed format
-    dist = condensed_to_sym_p(dist_)
-    B_p = smacof_update_matrix_packed(dist, delta)
+    if delta is None:
+        delta = scipy.spatial.distance.pdist(X, metric="euclidean")
+        # from hollow condensed -> symmetric packed format
+        delta = condensed_to_sym_p(delta)
+
+    B_p = smacof_update_matrix_packed(delta, dissimilarity)
     assert B_p.shape == delta.shape
 
     # X_out = 1. / N * B @ X
@@ -535,21 +543,24 @@ class OWMDS(OWProjectionWidget):
             done = False
             iterations_done = 0
             oldstress = np.finfo(np.float).max
+            delta = None
             # init_type = "PCA" if self.initialization == OWMDS.PCA else "random"
             while not done:
-                embedding_new = smacof_step(embedding, diss)
+                embedding_new = smacof_step(embedding, diss, delta)
                 iterations_done += 1
-
+                delta = scipy.spatial.distance.pdist(embedding_new)
+                delta = condensed_to_sym_p(delta)
                 # embedding, stress = mdsfit.embedding_, mdsfit.stress_
-                # stress = stress_packed(d1, d2)
+                stress = stress_packed(diss, delta)
                 # stress /= np.sqrt(np.sum(embedding ** 2, axis=1)).sum()
 
                 if iterations_done >= max_iter:
                     done = True
                 # elif (oldstress - stress) < mds.params["eps"]:
-                #     done = True
+                elif np.isclose(oldstress, stress, rtol=1e-5):
+                    done = True
                 # init = embedding
-                # oldstress = stress
+                oldstress = stress
                 embedding = embedding_new
                 yield embedding, 1.0, iterations_done / max_iter
                 # yield embedding, mdsfit.stress_, iterations_done / max_iter
