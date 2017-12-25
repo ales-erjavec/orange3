@@ -1,11 +1,13 @@
 import sys
+from concurrent.futures import Future
 from typing import Optional
 
 import numpy as np
 import scipy.spatial.distance
 
-from AnyQt.QtWidgets import QApplication
-from AnyQt.QtCore import Qt, QTimer
+from AnyQt.QtWidgets import QFormLayout, QApplication
+from AnyQt.QtCore import Qt, QTimer, QObject, QThread
+from AnyQt.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
 
 import pyqtgraph as pg
 
@@ -20,6 +22,7 @@ from Orange.widgets.utils.sql import check_sql_input
 from Orange.widgets.visualize.owscatterplotgraph import (
     OWScatterPlotBase, OWProjectionWidget
 )
+from Orange.widgets.utils import concurrent as qconcurrent
 from Orange.widgets.widget import Msg, OWWidget, Input, Output
 from Orange.widgets.utils.annotated_data import (
     ANNOTATED_DATA_SIGNAL_NAME, create_annotated_table, create_groups_table,
@@ -37,7 +40,6 @@ def stress(X, distD):
 
 
 import scipy.linalg.blas as blas
-
 
 def check_symetric_packed(ar, name):
     m, = ar.shape
@@ -68,6 +70,7 @@ def spmv(ap, x, alpha=None, beta=None, y=None, lower=False):
     >>> spmv(a, np.array([1., 2., 3.], ))
     array([ 1.,  4.,  3.])
     """
+    # Exposed in scipy 1.0.0
     ap, N = check_symetric_packed(ap, name="ap")
     if ap.dtype.char == "d":
         spmv = blas.dspmv
@@ -105,9 +108,6 @@ def stress_packed(d1, d2):
         metric="sqeuclidean"
     )
     return ss / (N ** 2)
-    # delta = d1 - d2
-    # delta **= 2
-    # return delta.sum() / (N ** 2)
 
 
 def graph_laplacian_packed(WP, overwrite_wp=False):
@@ -142,9 +142,11 @@ def graph_laplacian_packed(WP, overwrite_wp=False):
     return Lw
 
 
-def smacof_update_matrix_packed(dist, delta, out=None):
+def smacof_update_matrix_packed(dist, delta, weights=None, out=None):
     with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
         B = np.divide(delta, dist, out=out)
+        if weights is not None:
+            B = np.multiply(B, weights, out=B)
     finitemask = np.isfinite(B)
     np.logical_not(finitemask, out=finitemask)
     B[finitemask] = 0
@@ -227,6 +229,33 @@ def smacof_step(X, dissimilarity, delta=None, overwrite_delta=False):
     for i in range(X.shape[1]):
         X_out[:, i] = spmv(B_p, X[:, i], alpha=1. / N)
     return X_out
+
+
+def smacof_iter(diss, embedding, max_iter=300, rtol=1e-5):
+    """
+    Return an iterator over successive improved MDS point embeddings.
+    """
+    done = False
+    iterations_done = 0
+    stress = np.finfo(np.float).max
+    delta = None
+    while not done:
+        embedding_new = smacof_step(
+            embedding, diss, delta, overwrite_delta=delta is not None)
+        iterations_done += 1
+        delta = scipy.spatial.distance.pdist(embedding_new)
+        delta = condensed_to_sym_p(delta)
+        stress_new = stress_packed(diss, delta)
+
+        if iterations_done >= max_iter:
+            done = True
+        elif np.isclose(stress, stress_new, rtol=rtol, atol=0.0):
+            done = True
+        elif not np.isfinite(stress_new):
+            raise RuntimeError("Non-finite stress value. Aborting")
+        stress = stress_new
+        embedding = embedding_new
+        yield embedding, stress, iterations_done / max_iter
 
 
 #: Maximum number of displayed closest pairs.
@@ -373,10 +402,12 @@ class OWMDS(OWProjectionWidget):
         self._invalidated = False
         self.effective_matrix = None
 
+        self.__smacof_task = None
+
         self.__update_loop = None
         # timer for scheduling updates
         self.__timer = QTimer(self, singleShot=True, interval=0)
-        self.__timer.timeout.connect(self.__next_step)
+        # self.__timer.timeout.connect(self.__next_step)
         self.__state = OWMDS.Waiting
         self.__in_next_step = False
 
@@ -418,6 +449,7 @@ class OWMDS(OWProjectionWidget):
                         "Send Selection", "Send Automatically")
 
         self._initialize()
+        self._executor = qconcurrent.ThreadExecutor(self)
 
     def selection_changed(self):
         self.commit()
@@ -481,7 +513,7 @@ class OWMDS(OWProjectionWidget):
 
     def _clear(self):
         self.graph.set_effective_matrix(None)
-        self.__set_update_loop(None)
+        self.__set_smacof_task(None)
         self.__state = OWMDS.Waiting
 
     def _initialize(self):
@@ -533,9 +565,11 @@ class OWMDS(OWProjectionWidget):
 
     def start(self):
         if self.__state == OWMDS.Running:
+            assert self.__smacof_task is not None
             return
         elif self.__state == OWMDS.Finished:
             # Resume/continue from a previous run
+            assert self.__smacof_task is None
             self.__start()
         elif self.__state == OWMDS.Waiting and \
                 self.effective_matrix is not None:
@@ -543,134 +577,116 @@ class OWMDS(OWProjectionWidget):
 
     def stop(self):
         if self.__state == OWMDS.Running:
-            self.__set_update_loop(None)
+            assert self.__smacof_task is not None
+            self.__set_smacof_task(None)
 
     def __start(self):
         self.graph.pause_drawing_pairs()
         X = self.effective_matrix
-        init = self.embedding
+        embedding = self.embedding
 
-        # number of iterations per single GUI update step
-        _, step_size = OWMDS.RefreshRate[self.refresh_rate]
-        if step_size == -1:
-            step_size = self.max_iter
-
-        if init is None:
+        if embedding is None:
             if self.initialization == OWMDS.PCA:
-                init = torgerson(X)
+                embedding = torgerson(X)
             else:
-                init = np.random.random(size=(X.shape[0], 2))
+                embedding = np.random.random(size=(X.shape[0], 2))
 
         dist_packed = X[np.triu_indices(X.shape[0])]
 
-        def update_loop(diss, max_iter, step, embedding):
-            """
-            return an iterator over successive improved MDS point embeddings.
-            """
-            # NOTE: this code MUST NOT call into QApplication.processEvents
+        class State(QObject):
+            updateReady = Signal()
+            stop = False
+            #: The current updated embedings, stress and % of  (max) iterations
+            #: done
+            current = (None, None, None)
+
+        state = State()
+        smacof_loop = smacof_iter(dist_packed, embedding, self.max_iter)
+
+        def run():
             done = False
-            iterations_done = 0
-            oldstress = np.finfo(np.float).max
-            delta = None
-            # init_type = "PCA" if self.initialization == OWMDS.PCA else "random"
+            X_new = None
             while not done:
-                embedding_new = smacof_step(
-                    embedding, diss, delta, overwrite_delta=True)
-                del delta
-                iterations_done += 1
-                delta = scipy.spatial.distance.pdist(embedding_new)
-                delta = condensed_to_sym_p(delta)
-                # embedding, stress = mdsfit.embedding_, mdsfit.stress_
-                stress = stress_packed(diss, delta)
-                # stress /= np.sqrt(np.sum(embedding ** 2, axis=1)).sum()
-
-                if iterations_done >= max_iter:
+                try:
+                    X_new, stress, pdone = next(smacof_loop)
+                except StopIteration:
                     done = True
-                # elif (oldstress - stress) < mds.params["eps"]:
-                elif np.isclose(oldstress, stress, rtol=1e-5):
-                    done = True
-                # init = embedding
-                oldstress = stress
-                embedding = embedding_new
-                if iterations_done % step == 0 or done:
-                    print(iterations_done)
-                    yield embedding, stress, iterations_done / max_iter
-                # yield embedding, mdsfit.stress_, iterations_done / max_iter
+                else:
+                    state.current = (X_new, stress, pdone)
+                    state.updateReady.emit()
+                if state.stop:
+                    smacof_loop.close()
+                    raise KeyboardInterrupt
+            assert X_new is not None
+            return X_new
+        f = self._executor.submit(run)
 
-        self.__set_update_loop(update_loop(dist_packed, self.max_iter, step_size, init))
-        self.progressBarInit(processEvents=None)
+        state.updateTimer = QTimer(interval=0, singleShot=True)
+        state.updateTimer.timeout.connect(self.__update_current_embedding)
+        state.updateReady.connect(state.updateTimer.start)
+        state.f = f
+        state.watcher = qconcurrent.FutureWatcher(f)
+        state.watcher.done.connect(self.__finish)
+        self.__set_smacof_task(state)
 
-    def __set_update_loop(self, loop):
-        """
-        Set the update `loop` coroutine.
+    def __set_smacof_task(self, task):
+        if self.__smacof_task is not None:
+            self.__smacof_task.updateTimer.timeout.disconnect(
+                self.__update_current_embedding)
+            self.__smacof_task.watcher.done.disconnect(self.__finish)
+            self.__smacof_task.stop = True
+            # wait until completed and update the last updated X
+            if self.__smacof_task.f.exception() is None:
+                pass
+                # self.embedding = self.__smacof_task.current[0]
+            self.__smacof_task = None
 
-        The `loop` is a generator yielding `(embedding, stress, progress)`
-        tuples where `embedding` is a `(N, 2) ndarray` of current updated
-        MDS points, `stress` is the current stress and `progress` a float
-        ratio (0 <= progress <= 1)
-
-        If an existing update coroutine loop is already in place it is
-        interrupted (i.e. closed).
-
-        .. note::
-            The `loop` must not explicitly yield control flow to the event
-            loop (i.e. call `QApplication.processEvents`)
-
-        """
-        if self.__update_loop is not None:
-            self.__update_loop.close()
-            self.__update_loop = None
-            self.progressBarFinished(processEvents=None)
-
-        self.__update_loop = loop
-
-        if loop is not None:
+        self.__smacof_task = task
+        if task is not None:
             self.setBlocking(True)
-            self.progressBarInit(processEvents=None)
-            self.setStatusMessage("Running")
+            self.progressBarInit()
+            self.setStatusMessage("Running...")
             self.runbutton.setText("Stop")
             self.__state = OWMDS.Running
-            self.__timer.start()
         else:
             self.setBlocking(False)
+            self.progressBarFinished()
             self.setStatusMessage("")
             self.runbutton.setText("Start")
-            self.__state = OWMDS.Finished
-            self.__timer.stop()
+            self.__state = OWMDS.Waiting
 
-    def __next_step(self):
-        if self.__update_loop is None:
-            return
+    def __update_current_embedding(self):
+        assert self.thread() is QThread.currentThread()
+        X, stress, progress = self.__smacof_task.current
+        self.embedding = X
+        self.progressBarSet(np.round(progress * 100, 1))
+        self._update_plot()
 
-        assert not self.__in_next_step
-        self.__in_next_step = True
-
-        loop = self.__update_loop
-        self.Error.out_of_memory.clear()
+    def __finish(self, f):
+        # type: (Future[np.ndarray]) -> None
+        self.setBlocking(False)
+        self.progressBarFinished()
+        self.setStatusMessage("")
+        self.runbutton.setText("Start")
+        self.__state = OWMDS.Finished
+        assert f.done()
+        assert self.__smacof_task is not None
+        assert self.__smacof_task.f is f
+        self.__smacof_task = None
         try:
-            embedding, _, progress = next(self.__update_loop)
-            assert self.__update_loop is loop
-        except StopIteration:
-            self.__set_update_loop(None)
-            self.unconditional_commit()
-            self.graph.resume_drawing_pairs()
-            self.graph.update_coordinates()
+            embedding = f.result()
         except MemoryError:
             self.Error.out_of_memory()
-            self.__set_update_loop(None)
             self.graph.resume_drawing_pairs()
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             self.Error.optimization_error(str(exc), exc_info=True)
-            self.__set_update_loop(None)
             self.graph.resume_drawing_pairs()
         else:
-            self.progressBarSet(100.0 * progress, processEvents=None)
             self.embedding = embedding
+            self.graph.resume_drawing_pairs()
             self.graph.update_coordinates()
-            # schedule next update
-            self.__timer.start()
-
-        self.__in_next_step = False
+            self.unconditional_commit()
+            self._update_plot()
 
     def do_PCA(self):
         self.__invalidate_embedding(self.PCA)
@@ -691,8 +707,10 @@ class OWMDS(OWProjectionWidget):
         if self.embedding is None:
             return
         state = self.__state
-        if self.__update_loop is not None:
-            self.__set_update_loop(None)
+        # if self.__update_loop is not None:
+        #     self.__set_update_loop(None)
+        if self.__smacof_task is not None:
+            self.__set_smacof_task(None)
 
         X = self.effective_matrix
 
@@ -713,8 +731,10 @@ class OWMDS(OWProjectionWidget):
     def __invalidate_refresh(self):
         state = self.__state
 
-        if self.__update_loop is not None:
-            self.__set_update_loop(None)
+        # if self.__update_loop is not None:
+        #     self.__set_update_loop(None)
+        if self.__smacof_task is not None:
+            self.__set_smacof_task(None)
 
         # restart the optimization if it was interrupted.
         # TODO: decrease the max iteration count by the already
@@ -763,7 +783,9 @@ class OWMDS(OWProjectionWidget):
                                      ["mds-x", "mds-y"])
             domain = Domain([ContinuousVariable(names[0]),
                              ContinuousVariable(names[1])])
-            output = embedding = Table.from_numpy(domain, self.embedding)
+            output = embedding = Table.from_numpy(
+                domain, self.embedding[:, :2]
+            )
         else:
             output = embedding = None
 
@@ -789,7 +811,7 @@ class OWMDS(OWProjectionWidget):
     def onDeleteWidget(self):
         super().onDeleteWidget()
         self.graph.clear()
-        self._clear()
+        self.__set_smacof_task(None)
 
     def send_report(self):
         if self.data is None:

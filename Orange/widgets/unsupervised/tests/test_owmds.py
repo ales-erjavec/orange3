@@ -86,7 +86,8 @@ class TestOWMDS(WidgetTest, WidgetOutputsTestMixin, ProjectionWidgetTestMixin):
         self.send_signal(self.widget.Inputs.data, data, wait=1000)
         combobox_run_through_all()
 
-    @patch("Orange.projection.MDS.__call__", Mock(side_effect=MemoryError))
+    @patch("Orange.widgets.unsupervised.owmds.smacof_step",
+           Mock(side_effect=MemoryError))
     def test_out_of_memory(self):
         with patch("sys.excepthook", Mock()) as hook:
             self.send_signal(self.widget.Inputs.data, self.data)
@@ -94,7 +95,8 @@ class TestOWMDS(WidgetTest, WidgetOutputsTestMixin, ProjectionWidgetTestMixin):
             hook.assert_not_called()
             self.assertTrue(self.widget.Error.out_of_memory.is_shown())
 
-    @patch("Orange.projection.MDS.__call__", Mock(side_effect=ValueError))
+    @patch("Orange.widgets.unsupervised.owmds.smacof_step",
+           Mock(side_effect=ValueError))
     def test_other_error(self):
         with patch("sys.excepthook", Mock()) as hook:
             self.send_signal(self.widget.Inputs.data, self.data)
