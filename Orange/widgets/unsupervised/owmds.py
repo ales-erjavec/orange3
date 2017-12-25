@@ -1,4 +1,5 @@
 import sys
+from typing import Optional
 
 import numpy as np
 import scipy.spatial.distance
@@ -104,12 +105,28 @@ def stress_packed(d1, d2):
         metric="sqeuclidean"
     )
     return ss / (N ** 2)
-    delta = d1 - d2
-    delta **= 2
-    return delta.sum() / (N ** 2)
+    # delta = d1 - d2
+    # delta **= 2
+    # return delta.sum() / (N ** 2)
 
 
 def graph_laplacian_packed(WP, overwrite_wp=False):
+    # type: (np.ndarray, bool) -> np.ndarray
+    """
+    Return a graph laplacian of the adjacency matrix `WP` in symmetric
+    packed storage.
+
+    Parameters
+    ----------
+    WP : ((N + 1) * N // 2, ) np.ndarray
+        An symmetric adjacency matrix in packed storage (blas sp format)
+    overwrite_wp:
+        If `True` then WP will be overwritten.
+
+    Returns
+    -------
+
+    """
     m, = WP.shape
     N = int(np.floor(np.sqrt(m * 2)))
     assert N * (N + 1) == 2 * m, "{N} * ({N} + 1) != 2 * {m}".format(N=N, m=m)
@@ -127,13 +144,11 @@ def graph_laplacian_packed(WP, overwrite_wp=False):
 
 def smacof_update_matrix_packed(dist, delta, out=None):
     with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
-        S = np.reciprocal(dist, out=out)
-    finitemask = np.isfinite(S)
+        B = np.divide(delta, dist, out=out)
+    finitemask = np.isfinite(B)
     np.logical_not(finitemask, out=finitemask)
-    S[finitemask] = 0
+    B[finitemask] = 0
     del finitemask
-    B = np.multiply(delta, S, out=S)
-    del S
     B = graph_laplacian_packed(B, overwrite_wp=True)
     return B
 
@@ -164,8 +179,8 @@ def condensed_to_sym_p(a):
     return out
 
 
-def smacof_step(X, dissimilarity, delta=None):
-    # type: (np.ndarary, np.ndarray, Optional[np.ndarray]) -> np.ndarray
+def smacof_step(X, dissimilarity, delta=None, overwrite_delta=False):
+    # type: (np.ndarary, np.ndarray, Optional[np.ndarray], bool) -> np.ndarray
     """
     Run a single SMACOF update step.
 
@@ -177,7 +192,16 @@ def smacof_step(X, dissimilarity, delta=None):
         The optimal (desired) point dissimilarity in symmetric packed storage
         (blas sp format)
     delta : ((N + 1) * N // 2,) ndarray, optional
-        Precomputed pairwise distances between X.
+        Precomputed pairwise distances between points in X in symmetric packed
+        storage.
+    overwrite_delta : bool
+        If `True` (and `delta` is supplied) then `delta` array is reused and
+        overwritten.
+
+    Returns
+    -------
+    X : (N, k) ndarray
+        The updated point embeddings.
     References
     ----------
     Jan de Leeuw - Applications of Convex Analysis to Multidimensional Scaling
@@ -190,8 +214,12 @@ def smacof_step(X, dissimilarity, delta=None):
         delta = scipy.spatial.distance.pdist(X, metric="euclidean")
         # from hollow condensed -> symmetric packed format
         delta = condensed_to_sym_p(delta)
-
-    B_p = smacof_update_matrix_packed(delta, dissimilarity)
+        B_p_out = delta
+    elif overwrite_delta:
+        B_p_out = delta
+    else:
+        B_p_out = None
+    B_p = smacof_update_matrix_packed(delta, dissimilarity, out=B_p_out)
     assert B_p.shape == delta.shape
 
     # X_out = 1. / N * B @ X
@@ -546,7 +574,9 @@ class OWMDS(OWProjectionWidget):
             delta = None
             # init_type = "PCA" if self.initialization == OWMDS.PCA else "random"
             while not done:
-                embedding_new = smacof_step(embedding, diss, delta)
+                embedding_new = smacof_step(
+                    embedding, diss, delta, overwrite_delta=True)
+                del delta
                 iterations_done += 1
                 delta = scipy.spatial.distance.pdist(embedding_new)
                 delta = condensed_to_sym_p(delta)
@@ -562,7 +592,9 @@ class OWMDS(OWProjectionWidget):
                 # init = embedding
                 oldstress = stress
                 embedding = embedding_new
-                yield embedding, 1.0, iterations_done / max_iter
+                if iterations_done % step == 0 or done:
+                    print(iterations_done)
+                    yield embedding, stress, iterations_done / max_iter
                 # yield embedding, mdsfit.stress_, iterations_done / max_iter
 
         self.__set_update_loop(update_loop(dist_packed, self.max_iter, step_size, init))
