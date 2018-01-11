@@ -4,12 +4,15 @@ import numbers
 import os
 import sys
 import traceback
+import tempfile
+import pickle
+import lzma
 
 from xml.sax.saxutils import escape
 from concurrent.futures import ThreadPoolExecutor, Future
 
 from types import SimpleNamespace as namespace
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict, Tuple, BinaryIO
 
 from AnyQt.QtWidgets import (
     QLabel, QLineEdit, QTextBrowser, QSplitter, QTreeView,
@@ -443,14 +446,15 @@ class OWDataSets(widget.OWWidget):
         self.__update_cached_state()
 
         if path is not None:
-            data = Orange.data.Table(path)
+            data = cache_load_table(path)
         else:
             data = None
         self.Outputs.data.send(data)
 
     def commit_cached(self, file_path):
         path = LocalFiles(self.local_cache_path).localpath(*file_path)
-        self.Outputs.data.send(Orange.data.Table(path))
+        data = cache_load_table(path)
+        self.Outputs.data.send(data)
 
     @Slot()
     def __progress_advance(self):
@@ -547,6 +551,72 @@ def description_html(datainfo):
     return "\n".join(html)
 
 
+def cache_load_table(path):
+    """
+    Load/parse an file into Orange.data.Table instance, caching the
+    results in a compressed pickle file alongside `path` for future reuse
+    (faster loads).
+
+    Parameters
+    ----------
+    path : str
+        The path to the file to read (as accepted by `Orange.data.Table`)
+
+    Returns
+    -------
+    table : Orange.data.Table
+
+    Note
+    ----
+    The current user must have permission to create files in the same
+    directory where `path` points to.
+    """
+    cacheversion = 0x1
+    # TODO: Should also include some Orange.data.Table pickle tag.
+    systag = (sys.version_info[0], sys.version_info[1],
+              32 if sys.maxsize == 2 ** 31 - 2 else 64)
+
+    cache_path = path + ".cache.pickle.xz"
+    with open(path, "rb") as f:
+        stat = os.fstat(f.fileno())
+        fingerprint = (stat.st_mtime_ns, stat.st_size, stat.st_ino, systag)
+        # try to find/load a pickled cached file in the same dir
+        try:
+            with lzma.open(cache_path, "rb") as fcache:
+                cacheversion_ = pickle.load(fcache)
+                if cacheversion_ == cacheversion:
+                    fingerprint_ = pickle.load(fcache)
+                    if fingerprint_ == fingerprint:
+                        return pickle.load(fcache)
+        except (OSError, lzma.LZMAError, pickle.UnpicklingError):
+            pass
+        except Exception:
+            log.exception("cache_load_table: Could not load cached %s",
+                          path, exc_info=True)
+
+        # TODO: Should read from the opened `f`, but io lacks stream interface
+        table = Orange.data.Table(path)
+
+        tempfd, tempname = tempfile.mkstemp(
+            dir=os.path.dirname(cache_path),
+            prefix=os.path.basename(cache_path),
+        )
+        os.close(tempfd)
+        try:
+            os.chmod(tempname, stat.st_mode)
+            os.chown(tempname, stat.st_uid, stat.st_gid)
+            with lzma.LZMAFile(tempname, mode="w", preset=2) as xztemp:
+                pickle.dump(cacheversion, xztemp, protocol=pickle.HIGHEST_PROTOCOL)
+                pickle.dump(fingerprint, xztemp, protocol=pickle.HIGHEST_PROTOCOL)
+                pickle.dump(table, xztemp, protocol=pickle.HIGHEST_PROTOCOL)
+            os.replace(tempname, cache_path)
+        except BaseException:
+            os.unlink(tempname)
+            raise
+
+        return table
+
+
 def main(args=None):
     if args is None:
         args = sys.argv
@@ -559,6 +629,7 @@ def main(args=None):
     w.saveSettings()
     w.onDeleteWidget()
     return rv
+
 
 if __name__ == "__main__":
     sys.exit(main())
