@@ -614,8 +614,107 @@ class MahalanobisModel(DistanceModel):
         if x1.shape[1] != self.vi.shape[0] or \
                 x2 is not None and x2.shape[1] != self.vi.shape[0]:
             raise ValueError('Incorrect number of features.')
-        return skl_metrics.pairwise.pairwise_distances(
-            x1, x2, metric='mahalanobis', VI=self.vi)
+        if x2 is None:
+            import scipy.spatial.distance
+            return scipy.spatial.distance.squareform(
+                mahalanobis(x1, self.vi),
+                checks=False
+            )
+        else:
+            return mahalanobis2(x1, x2, self.vi)
+        # return skl_metrics.pairwise.pairwise_distances(
+        #     x1, x2, metric='mahalanobis', VI=self.vi)
+
+
+from scipy.linalg import blas
+
+
+def mahalanobis2(X1, X2, VI, _use_gemm=True, _use_symm=False):
+    dtype = np.result_type(X1, X2, VI)  # type: np.dtype
+    N, K = X1.shape
+    M, P = X2.shape
+    assert K == P
+    if dtype.char == "d":
+        gemm = blas.dgemm
+        symm = blas.dsymm
+    elif dtype.char == "f":
+        gemm = blas.sgemm
+        symm = blas.ssymm
+    else:
+        raise TypeError()
+
+    out = np.empty((N, M), dtype=dtype)
+    diff = np.empty((M, K), dtype=dtype, order="F")
+    if _use_gemm or _use_symm:
+        diff1_ = np.empty((M, K), dtype=dtype, order="F")
+    for i in range(0, N):
+        np.subtract(X1[i:i+1, :], X2, out=diff)
+        outview = out[i]
+        if not _use_gemm or _use_symm:
+            outview_ = np.einsum("ij,jk,ik->i", diff, VI, diff, out=outview,
+                                 optimize=True)
+            assert outview_.ctypes.data == outview.ctypes.data
+        else:
+            # using dsymm might be faster?
+            if _use_gemm:
+                diff1 = gemm(1.0, a=diff, b=VI.T, beta=0.0, c=diff1_,
+                             overwrite_c=True)
+            elif _use_symm:
+                diff1 = symm(1.0, a=VI.T, b=diff, beta=0.0, c=diff1_, side=1,
+                             overwrite_c=True)
+            assert diff1.ctypes.data == diff1_.ctypes.data
+            outview_ = np.einsum("ij,ij->i", diff1, diff, out=outview)
+            assert outview_.ctypes.data == outview.ctypes.data
+    return np.sqrt(out, out=out)
+
+
+def mahalanobis(X1, VI, _use_gemm=True, _use_symm=False):
+    dtype = np.result_type(X1, VI)  # type: np.dtype
+    N, M = X1.shape
+
+    n = N * (N - 1) // 2
+
+    if dtype.char == "d":
+        gemm = blas.dgemm
+        symm = blas.dsymm
+    elif dtype.char == "f":
+        gemm = blas.sgemm
+        symm = blas.dsymm
+    else:
+        raise TypeError("")
+    out = np.empty(n, dtype=dtype)
+    # diff = np.empty((N - 1, M), dtype=dtype, order="F")
+    diff_ = np.empty((N - 1) * M, dtype=dtype)
+    if _use_gemm or _use_symm:
+        diff1_ = np.empty((N - 1) * M, dtype=dtype)
+    out_i = 0
+    for i in range(1, N):
+        diff = np.frombuffer(diff_.data, dtype=dtype, count=(N - i) * M)
+        diff = diff.reshape(M, N - i).T
+        assert diff.flags.f_contiguous
+        diff = np.subtract(X1[i:, ], X1[i-1:i],
+                           out=diff[0:N - i])
+        assert diff.ctypes.data == diff_.ctypes.data
+        outview = out[out_i: out_i + N - i]
+        if not _use_gemm and not _use_symm:
+            outview_ = np.einsum("ij,jk,ik->i", diff, VI, diff, out=outview,
+                                 casting="no", optimize=True)
+
+        else:
+            diff1 = np.frombuffer(diff1_.data, dtype=dtype, count=(N - i) * M)
+            diff1 = diff1.reshape(M, N-i).T
+            if _use_gemm:
+                diff1 = gemm(1.0, a=diff, b=VI.T, beta=0.0, c=diff1,
+                             overwrite_c=True)
+            elif _use_symm:
+                diff1 = symm(1.0, a=VI.T, b=diff, beta=0.0, c=diff1, side=1,
+                             overwrite_c=True)
+            assert diff1_.ctypes.data == diff1.ctypes.data
+            outview_ = np.einsum("ij,ij->i", diff1, diff, out=outview,
+                                 casting="no")
+        assert outview_.ctypes.data == outview.ctypes.data
+        out_i += N - i
+    return np.sqrt(out, out=out)
 
 
 # TODO: Appears to have been used only in the Distances widget (where it had
