@@ -20,7 +20,7 @@ from AnyQt.QtWidgets import (
 from AnyQt.QtGui import QColor, QKeySequence, QClipboard
 from AnyQt.QtCore import (
     Qt, QSize, QEvent, QByteArray, QMimeData, QObject, QMetaObject,
-    QAbstractProxyModel, QIdentityProxyModel, QModelIndex,
+    QAbstractItemModel, QAbstractProxyModel, QIdentityProxyModel, QModelIndex,
     QItemSelectionModel, QItemSelection, QItemSelectionRange,
     QT_VERSION
 )
@@ -182,7 +182,39 @@ class BlockSelectionModel(QItemSelectionModel):
     """
     def __init__(self, model, parent=None, selectBlocks=True, **kwargs):
         super().__init__(model, parent, **kwargs)
+        assert isinstance(model, QAbstractItemModel)
         self.__selectBlocks = selectBlocks
+        model.layoutChanged.connect(self.__consolidate)
+
+    @Slot()
+    def __consolidate(self):
+        # Consolidate the selected blocks after a layout change.
+        # The base class only merges single block ranges spanning columns, ie.
+        # .xx.
+        # .xx.
+        # is merged in one range, but
+        # .xx.xx.
+        # .xx.xx.
+        # is four ranges
+        if not self.__selectBlocks:
+            return
+
+        def to_ranges(spans):
+            return list(range(*r) for r in spans)
+
+        selection = self.selection()
+        rows, cols = selection_blocks(selection)
+        model = self.model()
+        newselection = QItemSelection()
+
+        for row_range, col_range in \
+                itertools.product(to_ranges(rows), to_ranges(cols)):
+            newselection.select(
+                model.index(row_range.start, col_range.start),
+                model.index(row_range.stop - 1, col_range.stop - 1)
+            )
+
+        self.select(newselection, QItemSelectionModel.ClearAndSelect)
 
     def select(self, selection, flags):
         """Reimplemented."""
