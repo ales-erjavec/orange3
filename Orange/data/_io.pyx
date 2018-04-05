@@ -295,3 +295,16 @@ def sparse_read_float(fname):
 
 # TODO: this function needs to be bottlenecked (not literally;
 # adding 'char' and 'float32' should suffice)
+
+
+def list_str_strip_inplace(strlist):
+    # type: (List[str]) -> None
+    cdef str string
+    if not isinstance(strlist, list):
+        raise TypeError("`strlist` must be a `list`.")
+
+    for i in range(len(strlist)):
+        string = strlist[i]
+        strlist[i] = string.strip()
+
+    return strlist

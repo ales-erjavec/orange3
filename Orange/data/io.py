@@ -579,8 +579,13 @@ class FileFormat(metaclass=FileFormatMeta):
             lst.extend(['']*(rowlen - len(lst)))
             return lst
 
+        def _normalize_row(row):
+            row = list(row)
+            _io.list_str_strip_inplace(row)
+            return _equal_length(row)
+
         # Ensure all data is of equal width in a column-contiguous array
-        data = [_equal_length([s.strip() for s in row])
+        data = [_normalize_row(row)
                 for row in data if any(row)]
         data = np.array(data, dtype=object, order='F')
 
