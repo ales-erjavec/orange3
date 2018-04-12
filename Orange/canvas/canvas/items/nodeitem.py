@@ -803,6 +803,8 @@ class NodeItem(QGraphicsWidget):
         self.__processingState = 0
         self.__progress = -1
         self.__statusMessage = ""
+        #
+        self.__renderedText = ""
 
         self.__error = None
         self.__warning = None
@@ -815,6 +817,9 @@ class NodeItem(QGraphicsWidget):
         self.setupGraphics()
 
         self.setWidgetDescription(widget_description)
+        # 'Title text' update
+        self.__textUpdateTimer = QTimer(self, singleShot=True)
+        self.__textUpdateTimer.timeout.connect(self.__updateTitleText)
 
     @classmethod
     def from_node(cls, node):
@@ -948,7 +953,8 @@ class NodeItem(QGraphicsWidget):
 
         """
         self.__title = title
-        self.__updateTitleText()
+        self.__textUpdateTimer.start()
+        # self.__updateTitleText()
 
     def title(self):
         """
@@ -966,7 +972,8 @@ class NodeItem(QGraphicsWidget):
         if font != self.font():
             self.prepareGeometryChange()
             self.captionTextItem.setFont(font)
-            self.__updateTitleText()
+            self.__textUpdateTimer.start()
+            # self.__updateTitleText()
 
     def font(self):
         """
@@ -1023,7 +1030,8 @@ class NodeItem(QGraphicsWidget):
         if self.__progress != progress:
             self.__progress = progress
             self.shapeItem.setProgress(progress)
-            self.__updateTitleText()
+            self.__textUpdateTimer.start()
+            # self.__updateTitleText()
 
     def progress(self):
         """
@@ -1043,6 +1051,7 @@ class NodeItem(QGraphicsWidget):
         """
         if self.__statusMessage != message:
             self.__statusMessage = message
+            self.__textUpdateTimer.start()
             self.__updateTitleText()
 
     def statusMessage(self):
