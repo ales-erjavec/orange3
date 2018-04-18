@@ -517,19 +517,26 @@ class PyListModel(QAbstractListModel):
     def _is_index_valid(self, index):
         # This error would happen if one wraps a list into a model and then
         # modifies a list instead of a model
-        if len(self) != len(self._other_data):
+        if len(self._list) != len(self._other_data):
             raise RuntimeError("Mismatched length of model and its _other_data")
         if isinstance(index, QModelIndex) and index.isValid():
             row, column = index.row(), index.column()
-            return 0 <= row < len(self) and column == 0
+            return 0 <= row < len(self._list) and column == 0
         elif isinstance(index, int):
-            return -len(self) <= index < len(self)
+            return -len(self._list) <= index < len(self._list)
         else:
             return False
 
     def wrap(self, lst):
-        """ Wrap the list with this model. All changes to the model
-        are done in place on the passed list
+        # type: (list) -> None
+        """
+        Wrap the list with this model.
+
+        All changes to the model are done in place on the passed list.
+
+        Note
+        ----
+        While the lst instance is 'wrapped' the model is the only
         """
         self.beginResetModel()
         self._list = lst
@@ -540,7 +547,6 @@ class PyListModel(QAbstractListModel):
         if role == Qt.DisplayRole:
             return str(section)
 
-
     # noinspection PyMethodOverriding
     def rowCount(self, parent=QModelIndex()):
         return 0 if parent.isValid() else len(self._list)
@@ -550,55 +556,77 @@ class PyListModel(QAbstractListModel):
 
     def data(self, index, role=Qt.DisplayRole):
         row = index.row()
-        if role in [self.list_item_role, Qt.EditRole] \
-                and self._is_index_valid(index):
-            return self[row]
-        elif self._is_index_valid(row):
-            return self._other_data[row].get(role, None)
+        if index.isValid() and row < len(self._list) and index.column() == 0:
+            if role == Qt.EditRole or role == self.list_item_role:
+                return self._list[row]
+            elif row < len(self._other_data):
+                return self._other_data[row].get(role, None)
 
     def itemData(self, index):
-        mapping = QAbstractListModel.itemData(self, index)
-        if self._is_index_valid(index):
-            items = list(self._other_data[index.row()].items())
-        else:
-            items = []
-        for key, value in items:
-            mapping[key] = value
+        # type: (QModelIndex) -> Dict[int, Any]
+        mapping = {}
+        if index.isValid() and index.column() == 0:
+            row = index.row()
+            if row < len(self._list):
+                mapping[Qt.DisplayRole] = self._list[row]
+                mapping[self.list_item_role] = self._list[row]
+            if row < len(self._other_data):
+                mapping.update(self._other_data[row])
+
         return mapping
 
     def parent(self, index=QModelIndex()):
         return QModelIndex()
 
     def setData(self, index, value, role=Qt.EditRole):
-        if role == Qt.EditRole:
-            if self._is_index_valid(index):
+        row, col = index.row(), index.column()
+        if index.isValid() and col == 0 and row < len(self._list):
+            row = index.row()
+            if role == Qt.EditRole:
                 self[index.row()] = value  # Will emit proper dataChanged signal
                 return True
-        elif self._is_index_valid(index):
-            self._other_data[index.row()][role] = value
-            self.dataChanged.emit(index, index)
-            return True
+            else:
+                if row >= len(self._other_data):
+                    self._other_data.extend(
+                        _store() for _ in range(len(self._other_data), row + 1))
+                self._other_data[row][role] = value
+                self.dataChanged.emit(index, index)
+                return True
         return False
 
     def setItemData(self, index, data):
+        # type: (QModelIndex, Dict[int, Any]) -> bool
         data = dict(data)
+        row, col = index.row(), index.column()
+        if not (index.isValid() and row < len(self._list) and col == 0):
+            return False
+
+        if row >= len(self._other_data):
+            self._other_data.extend(
+                _store() for _ in range(len(self._other_data, row)))
+
+        # coalesce dataChanged signal emits at the end
         with signal_blocking(self):
             for role, value in data.items():
-                if role == Qt.EditRole and \
-                        self._is_index_valid(index):
-                    self[index.row()] = value
-                elif self._is_index_valid(index):
-                    self._other_data[index.row()][role] = value
+                if role == Qt.EditRole:
+                    self[row] = value
+                else:
+                    self._other_data[row][role] = value
 
-        self.dataChanged.emit(index, index)
+        if QT_VERSION >= 0x50000:
+            self.dataChanged.emit(index, index, data.keys())
+        else:
+            self.dataChanged.emit(index, index)
         return True
 
     def flags(self, index):
-        if self._is_index_valid(index):
+        # type: (QModelIndex) -> Qt.ItemFlags
+        row = index.row()
+        if index.isValid() and index.column() == 0 and \
+                row < len(self._other_data):
             return self._other_data[index.row()].get("flags", self._flags)
         else:
             return self._flags | Qt.ItemIsDropEnabled
-
 
     # noinspection PyMethodOverriding
     def insertRows(self, row, count, parent=QModelIndex()):
@@ -610,7 +638,6 @@ class PyListModel(QAbstractListModel):
             return True
         else:
             return False
-
 
     # noinspection PyMethodOverriding
     def removeRows(self, row, count, parent=QModelIndex()):
@@ -808,8 +835,9 @@ class VariableListModel(PyListModel):
         self.placeholder = placeholder
 
     def data(self, index, role=Qt.DisplayRole):
-        if self._is_index_valid(index):
-            var = self[index.row()]
+        if index.isValid() and index.row() < len(self._list) \
+                and index.column() == 0:
+            var = self._list[index.row()]
             if var is None and role == Qt.DisplayRole:
                 return self.placeholder or "None"
             if not isinstance(var, Variable):
