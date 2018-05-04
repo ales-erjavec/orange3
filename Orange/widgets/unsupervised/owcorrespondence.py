@@ -4,6 +4,9 @@ from collections import namedtuple, OrderedDict
 
 import numpy as np
 
+from scipy.linalg import svd as lapack_svd
+from scipy.sparse.linalg import svds as arpack_svd
+
 from AnyQt.QtWidgets import QListView, QApplication
 from AnyQt.QtGui import QBrush, QColor, QPainter
 from AnyQt.QtCore import QEvent, QItemSelectionModel, QItemSelection
@@ -204,7 +207,7 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         else:
             ctable = contingency.get_contingency(self.data, *ca_vars[::-1])
 
-        self.ca = correspondence(ctable, )
+        self.ca = correspondence_analysis(ctable, )
         rfs = self.ca.row_factors.shape[1]
         axes = ["{}".format(i + 1)
                 for i in range(rfs)]
@@ -370,7 +373,7 @@ def burt_table(data, variables):
 import scipy.linalg
 
 
-def wsvd(A, Wu=None, Wv=None):
+def wsvd(A, Wu=None, Wv=None, k=-1, svd_solver="auto"):
     """
     Compute a weighted SVD (also called generalized SVD)
     (https://en.wikipedia.org/wiki/Generalized_singular_value_decomposition)
@@ -378,7 +381,7 @@ def wsvd(A, Wu=None, Wv=None):
     Factors the matrix `A` as  `A = U @ np.diag(s) @ Vh` where
     `U.T @ Wu @ U = I` and `Vh @ Wv @ Vh.T = I`
 
-    The wu or wv can be passed as 1d arrays in which case they are taken
+    The `Wu` or `Wv` can be passed as 1d arrays in which case they are taken
     to be elements of a diagonal weighting matrix. If omitted they are
     assumed to be `I`
 
@@ -387,16 +390,15 @@ def wsvd(A, Wu=None, Wv=None):
     A : (M, N) array_like
 
     Wu : (M) or (M, M) array_like
-        The `u` weighting matrix. Must be a positive semi-definite matrix
+        The `u` (row) weighting matrix. Must be a positive semi-definite..
     Wv : (N) or (N, N) array_like
-        The `v` weighing matrix.
+        The `v` (column) weighing matrix. Must be a positive semi-definite.
 
     Returns
     -------
     U : array
     s : array
     Vh : array
-
     """
     A = np.asarray(A)
 
@@ -430,7 +432,7 @@ def wsvd(A, Wu=None, Wv=None):
     def inv(A):
         if A.ndim == 2:
             return np.linalg.inv(A)
-        elif 0 < A.ndim < 2:
+        elif A.ndim == 1:
             return np.reciprocal(A)
         else:
             raise ValueError
@@ -451,18 +453,40 @@ def wsvd(A, Wu=None, Wv=None):
     Wv_sqrt = sqrtm(Wv)
     # A_hat = Wu ** (1/2) @ A @
     A_hat = dot(dot(Wu_sqrt, A), Wv_sqrt)
-    U_hat, s, Vh_hat = np.linalg.svd(A_hat, full_matrices=False)
+    if svd_solver == "auto":
+        if min(n, m) > 200 and 0 < k < 10:
+            svd_solver = "arpack"
+        else:
+            svd_solver = "lapack"
+
+    if svd_solver == "lapack":
+        U_hat, s, Vh_hat = lapack_svd(A_hat, full_matrices=False, overwrite_a=True)
+        del A_hat
+        if k > 0:
+            U_hat = U_hat[:, :k]
+    elif svd_solver == "arpack":
+        if k < 0:
+            k_ = min(A_hat.shape)
+        else:
+            k_ = k
+        U_hat, s, Vh_hat = arpack_svd(A_hat, k=k_)
+        del A_hat
+    else:
+        raise ValueError("Invalid 'svd_solver': {}".format(svd_solver))
     U = dot(inv(Wu_sqrt), U_hat)
     Vh = dot(inv(Wv_sqrt), Vh_hat.T).T
     return U, s, Vh
 
 
-def correspondence(A):
+def correspondence_analysis(A, svd_solver="auto"):
+    # type: (np.ndarray, str) -> 'CA'
     """
     Parameters
     ----------
     A : np.ndarray
-
+        A contingency table.
+    method : str
+        Method for
     Returns
     -------
     ca : CA
@@ -496,7 +520,7 @@ def correspondence(A):
         V = (np.c_[Wv_sqrt ** -1] * Vb.T).T
         return U, D, V
 
-    U, D, V = wsvd(corr_mat - E, D_r, D_c)
+    U, D, V = wsvd(corr_mat - E, D_r, D_c, k=-1, svd_solver=svd_solver)
 
     F = np.c_[D_r] * U * D
     G = np.c_[D_c] * V.T * D
