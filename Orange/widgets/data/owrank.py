@@ -5,11 +5,16 @@ Rank
 Rank (score) features for prediction.
 
 """
+import sys
+import copy
+import logging
+import concurrent.futures
 
 from collections import namedtuple, OrderedDict
-import logging
 from functools import partial
 from itertools import chain
+
+from typing import List, Optional
 
 import numpy as np
 from scipy.sparse import issparse
@@ -20,7 +25,8 @@ from AnyQt.QtWidgets import (
     QStackedWidget, QHeaderView, QCheckBox, QItemDelegate,
 )
 from AnyQt.QtCore import (
-    Qt, QItemSelection, QItemSelectionRange, QItemSelectionModel,
+    Qt, QSize, QItemSelection, QItemSelectionRange, QItemSelectionModel,
+    QThread
 )
 
 from Orange.data import (Table, Domain, ContinuousVariable, DiscreteVariable,
@@ -35,8 +41,16 @@ from Orange.widgets.utils.itemmodels import PyTableModel
 from Orange.widgets.utils.sql import check_sql_input
 from Orange.widgets.widget import OWWidget, Msg, Input, Output, AttributeList
 
+from Orange.widgets.utils import concurrent as qconcurrent
+from Orange.widgets.utils.concurrent import FutureSetWatcher, Future
+from Orange.widgets.data.owimpute import Task as _TaskSet
 
 log = logging.getLogger(__name__)
+
+
+class TaskSet(_TaskSet):
+    # Indices of scores in the model (corresponding to the `futures` list)
+    indices = ...  # type: List[int]
 
 
 class ProblemType:
@@ -213,6 +227,9 @@ class OWRank(OWWidget):
         self.data = None
         self.problem_type_mode = ProblemType.CLASSIFICATION
 
+        self.executor = qconcurrent.ThreadExecutor()
+        self.__task = None  # type: Optional[TaskSet]
+
         if not self.selected_methods:
             self.selected_methods = {method.name for method in SCORES
                                      if method.is_default}
@@ -286,7 +303,8 @@ class OWRank(OWWidget):
 
         gui.auto_commit(selMethBox, self, "auto_apply", "Send", box=False)
 
-        self.resize(690, 500)
+    def sizeHint(self):
+        return QSize(690, 500)
 
     def switchProblemType(self, index):
         """
@@ -399,11 +417,13 @@ class OWRank(OWWidget):
         return scores, labels
 
     def updateScores(self):
+        self.cancel()
         if self.data is None:
             self.ranksModel.clear()
             self.Outputs.scores.send(None)
             return
 
+        data = self.data
         methods = [method
                    for method in SCORES
                    if (method.name in self.selected_methods and
@@ -419,41 +439,143 @@ class OWRank(OWWidget):
             else:
                 self.Error.inadequate_learner(scorer.name, scorer.learner_adequacy_err_msg)
 
-        method_scores = tuple(self.get_method_scores(method)
-                              for method in methods)
+        def score_one(method, data):
+            # type: (score.Scorer, Table) -> List[Optional[float]]
+            try:
+                return method(data)
+            except ValueError:
+                scores = []
+                for attr in data.domain.attributes:
+                    try:
+                        scores.append(method(data, attr))
+                    except ValueError:
+                        scores.append(None)
+                return scores
 
-        scorer_scores, scorer_labels = (), ()
-        if scorers:
-            scorer_scores, scorer_labels = zip(*(self.get_scorer_scores(scorer)
-                                                 for scorer in scorers))
-            scorer_labels = tuple(chain.from_iterable(scorer_labels))
+        futures = []
+        indices = []
+        for index, method in enumerate(methods):
+            scores_f = self.executor.submit(
+                score_one,  copy.deepcopy(method.scorer), data
+            )
+            indices.append(index)
+            futures.append(scores_f)
 
-        labels = tuple(method.shortname for method in methods) + scorer_labels
-        model_array = np.column_stack(
-            ([len(a.values) if a.is_discrete else np.nan
-              for a in self.data.domain.attributes],) +
-            (method_scores if method_scores else ()) +
-            (scorer_scores if scorer_scores else ())
-        )
-        for column, values in enumerate(model_array.T):
-            self.ranksModel.setExtremesFrom(column, values)
+        w = FutureSetWatcher(futures)
+        w.doneAt.connect(self._score_done)
+        w.doneAll.connect(self._finish)
+        w.doneAll.connect(self.commit)
+        w.progressChanged.connect(self._progress)
 
-        self.ranksModel.wrap(model_array.tolist())
-        self.ranksModel.setHorizontalHeaderLabels(('#',) + labels)
-        self.ranksView.setColumnWidth(0, 40)
+        self.progressBarInit()
+        self.setBlocking(True)
+        self.__task = TaskSet(futures, w)
+        self.__task.indices = indices
 
-        # Re-apply sort
+        # method_scores = tuple(self.get_method_scores(method)
+        #                       for method in methods)
+        #
+        # scorer_scores, scorer_labels = (), ()
+        # if scorers:
+        #     scorer_scores, scorer_labels = zip(*(self.get_scorer_scores(scorer)
+        #                                          for scorer in scorers))
+        #     scorer_labels = tuple(chain.from_iterable(scorer_labels))
+        #
+        # labels = tuple(method.shortname for method in methods) + scorer_labels
+        # model_array = np.column_stack(
+        #     ([len(a.values) if a.is_discrete else np.nan
+        #       for a in self.data.domain.attributes],) +
+        #     (method_scores if method_scores else ()) +
+        #     (scorer_scores if scorer_scores else ())
+        # )
+        # for column, values in enumerate(model_array.T):
+        #     self.ranksModel.setExtremesFrom(column, values)
+        #
+        # self.ranksModel.wrap(model_array.tolist())
+        # self.ranksModel.setHorizontalHeaderLabels(('#',) + labels)
+        # self.ranksView.setColumnWidth(0, 40)
+        #
+        # # Re-apply sort
+        # try:
+        #     sort_column, sort_order = self.sorting
+        #     if sort_column < len(labels):
+        #         # adds 1 for '#' (discrete count) column
+        #         self.ranksModel.sort(sort_column + 1, sort_order)
+        #         self.ranksView.horizontalHeader().setSortIndicator(
+        #             sort_column + 1, sort_order)
+        # except ValueError:
+        #     pass
+        #
+        # self.autoSelection()
+        # self.Outputs.scores.send(self.create_scores_table(labels))
+
+    def _score_done(self, index, f):
+        # type: (int, Future) -> None
+        assert QThread.currentThread() is self.thread()
+        assert f.done()
+        assert self.__task is not None
+        assert f in self.__task.futures
+
         try:
-            sort_column, sort_order = self.sorting
-            if sort_column < len(labels):
-                # adds 1 for '#' (discrete count) column
-                self.ranksModel.sort(sort_column + 1, sort_order)
-                self.ranksView.horizontalHeader().setSortIndicator(sort_column + 1, sort_order)
-        except ValueError:
-            pass
+            scores = f.result()
+        except qconcurrent.CancelledError:
+            return
+        except Exception:
+            log = logging.getLogger(__name__)
+            log.exception("")
+            scores = []
 
-        self.autoSelection()
-        self.Outputs.scores.send(self.create_scores_table(labels))
+        index = self.__task.indices[index]
+        # self.measure_scores[index] = list(scores)
+        model = self.ranksModel
+        t = model._table
+        if len(t) < len(scores):
+            t.extend([[0] * (index + 1) for _ in range(len(scores) - len(t))])
+
+        for i, s in enumerate(scores):
+            _r = t[i]
+            if len(_r) <= index:
+                _r.extend([0] * (index - len(_r) + 1))
+            _r[index] = s
+
+        model.wrap(t)
+        # model.dataChanged.emit(
+        #     model.index(0, index), model.index(len(scores) - 1, index),
+        #     [Qt.DisplayRole, Qt.EditRole]
+        # )
+
+        # model.beginResetModel()
+        # mask = [False] * len(self.measure_scores)
+        # mask[index] = True
+        # self.updateRankModel(mask)
+
+    def _progress(self, n, d):
+        self.progressBarSet(100. * n / d)
+
+    def _finish(self):
+        assert QThread.currentThread() is self.thread()
+        assert self.__task is not None
+        assert self.sender() is self.__task.watcher
+        self.__task = None
+        self.setBlocking(False)
+        self.progressBarFinished()
+
+    def cancel(self):
+        if self.__task is not None:
+            assert self.isBlocking()
+            task = self.__task
+            log = logging.getLogger(__name__)
+            log.debug("Canceling task %s", task)
+            task.watcher.doneAll.disconnect(self.commit)
+            task.cancel()
+            concurrent.futures.wait(task.futures)
+            log.debug("all waiting done: %s", _)
+            task.watcher.wait()
+            task.watcher.flush()
+            assert self.__task is None, '_finish was not invoked'
+            assert not self.isBlocking(), '_finish was not invoked'
+            task.watcher.doneAt.disconnect(self._score_done)
+            task.watcher.doneAll.disconnect(self._finish)
 
     def on_select(self):
         # Save indices of attributes in the original, unsorted domain
@@ -584,13 +706,34 @@ class OWRank(OWWidget):
             context.values['selected_rows'] = []
 
 
-if __name__ == "__main__":
+def main(argv=None):  # pragma: no cover
     from AnyQt.QtWidgets import QApplication
     from Orange.classification import RandomForestLearner
-    a = QApplication([])
+
+    logging.basicConfig(level=logging.DEBUG)
+    a = QApplication(list(argv) if argv else [])
+    argv = a.arguments()
+    if len(argv) > 1:
+        filename = argv[1]
+    else:
+        filename = "heart_disease.tab"
+
     ow = OWRank()
+    ow.set_data(Table(filename))
     ow.set_learner(RandomForestLearner(), (3, 'Learner', None))
-    ow.setData(Table("heart_disease.tab"))
+
+    ow.handleNewSignals()
     ow.show()
+    ow.raise_()
     a.exec_()
+    ow.setData(None)
+    ow.set_learner(None, (3, 'Learner', None))
+    ow.handleNewSignals()
     ow.saveSettings()
+    ow.onDeleteWidget()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
+
