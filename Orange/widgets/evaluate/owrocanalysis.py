@@ -6,6 +6,7 @@ ROC Analysis Widget
 import operator
 from functools import reduce, wraps
 from collections import namedtuple, deque, OrderedDict
+from typing import List, NamedTuple, Callable
 
 import numpy
 import sklearn.metrics as skl_metrics
@@ -16,148 +17,170 @@ from AnyQt.QtCore import Qt
 import pyqtgraph as pg
 
 import Orange
+import Orange.evaluation
 from Orange.widgets import widget, gui, settings
 from Orange.widgets.evaluate.utils import check_results_adequacy
 from Orange.widgets.utils import colorpalette, colorbrewer
-from Orange.widgets.io import FileFormat
 from Orange.widgets.widget import Input
 from Orange.widgets import report
 
 
-#: Points on a ROC curve
-ROCPoints = namedtuple(
-    "ROCPoints",
-    ["fpr",        # (N,) array of false positive rate coordinates (ascending)
-     "tpr",        # (N,) array of true positive rate coordinates
-     "thresholds"  # (N,) array of thresholds (in descending order)
-     ]
-)
-ROCPoints.is_valid = property(lambda self: self.fpr.size > 0)
+class ROCPoints(
+    NamedTuple(
+        "ROCPoints", [
+            #: (N,) array of false positive rate coordinates (ascending)
+            ("fpr", numpy.ndarray),
+            #: (N,) array of true positive rate coordinates
+            ("tpr", numpy.ndarray),
+            #: (N,) array of thresholds (in descending order)
+            ("thresholds", numpy.ndarray)
+        ])):
+    """Points on a ROC curve"""
+
+    @property
+    def is_valid(self):
+        return self.fpr.size > 0
+
 
 #: ROC Curve and it's convex hull
-ROCCurve = namedtuple(
-    "ROCCurve",
-    ["points",  # ROCPoints
-     "hull"     # ROCPoints of the convex hull
-    ]
-)
-ROCCurve.is_valid = property(lambda self: self.points.is_valid)
+class ROCCurve(
+    NamedTuple(
+        "ROCCurve", [
+            ("points", ROCPoints),  # ROCPoints
+            ("hull", ROCPoints)     # ROCPoints of the convex hull
+        ])):
+    @property
+    def is_valid(self):
+        return self.points.is_valid
+
 
 #: A ROC Curve averaged vertically
-ROCAveragedVert = namedtuple(
-    "ROCAveragedVert",
-    ["points",   # ROCPoints sampled by fpr
-     "hull",     # ROCPoints of the convex hull
-     "tpr_std",  # array standard deviation of tpr at each fpr point
-     ]
-)
-ROCAveragedVert.is_valid = property(lambda self: self.points.is_valid)
+class ROCAveragedVert(
+    NamedTuple(
+        "ROCAveragedVert", [
+            ("points", ROCPoints),   # ROCPoints sampled by fpr
+            ("hull", ROCPoints),     # ROCPoints of the convex hull
+            ("tpr_std", numpy.ndarray),  # array standard deviation of tpr at each fpr point
+        ])):
+
+    @property
+    def is_valid (self):
+        return self.points.is_valid
+
 
 #: A ROC Curve averaged by thresholds
-ROCAveragedThresh = namedtuple(
-    "ROCAveragedThresh",
-    ["points",   # ROCPoints sampled by threshold
-     "hull",     # ROCPoints of the convex hull
-     "tpr_std",  # array standard deviations of tpr at each threshold
-     "fpr_std"   # array standard deviations of fpr at each threshold
-     ]
-)
-ROCAveragedThresh.is_valid = property(lambda self: self.points.is_valid)
-
-#: Combined data for a ROC curve of a single algorithm
-ROCData = namedtuple(
-    "ROCData",
-    ["merged",  # ROCCurve merged over all folds
-     "folds",   # ROCCurve list, one for each fold
-     "avg_vertical",   # ROCAveragedVert
-     "avg_threshold",  # ROCAveragedThresh
-     ]
-)
+class ROCAveragedThresh(
+    NamedTuple(
+        "ROCAveragedThresh", [
+            ("points", ROCPoints),   # ROCPoints sampled by threshold
+            ("hull", ROCPoints),     # ROCPoints of the convex hull
+            ("tpr_std", numpy.ndarray),  # array standard deviations of tpr at each threshold
+            ("fpr_std", numpy.ndarray),  # array standard deviations of fpr at each threshold
+        ])):
+    is_valid = property(lambda self: self.points.is_valid)
 
 
-def ROCData_from_results(results, clf_index, target):
+class ROCData(
+    NamedTuple(
+        "ROCData", [
+            ("merged", ROCCurve),  # ROCCurve merged over all folds
+            ("folds", List[ROCCurve]),  # ROCCurve list, one for each fold
+            ("avg_vertical", ROCAveragedVert),    # ROCAveragedVert
+            ("avg_threshold", ROCAveragedThresh)  # ROCAveragedThresh
+        ])):
     """
-    Compute ROC Curve(s) from evaluation results.
-
-    :param Orange.evaluation.Results results:
-        Evaluation results.
-    :param int clf_index:
-        Learner index in the `results`.
-    :param int target:
-        Target class index (i.e. positive class).
-    :rval ROCData:
-        A instance holding the computed curves.
+    Combined data for a ROC curve of a single algorithm.
     """
-    merged = roc_curve_for_fold(results, slice(0, -1), clf_index, target)
-    merged_curve = ROCCurve(ROCPoints(*merged),
-                            ROCPoints(*roc_curve_convex_hull(merged)))
+    @staticmethod
+    def from_results(results, clf_index, target):
+        # type: (Orange.evaluation.Results, int, int) -> ROCData
 
-    folds = results.folds if results.folds is not None else [slice(0, -1)]
-    fold_curves = []
-    for fold in folds:
-        points = roc_curve_for_fold(results, fold, clf_index, target)
-        hull = roc_curve_convex_hull(points)
-        c = ROCCurve(ROCPoints(*points), ROCPoints(*hull))
-        fold_curves.append(c)
+        """
+        Compute ROC Curve(s) from evaluation results.
 
-    curves = [fold.points for fold in fold_curves
-              if fold.is_valid]
+        Parameters
+        ----------
+        results : Orange.evaluation.Results
+            Evaluation results.
+        clf_index: int
+            Learner index in the `results`.
+        target : int
+            Target class index (i.e. positive class).
 
-    if curves:
-        fpr, tpr, std = roc_curve_vertical_average(curves)
+        Returns
+        -------
+        curvedata: ROCData
+            A instance holding the computed curves.
+        """
+        merged = roc_curve_for_fold(results, slice(0, -1), clf_index, target)
+        merged_curve = ROCCurve(ROCPoints(*merged),
+                                ROCPoints(*roc_curve_convex_hull(merged)))
 
-        thresh = numpy.zeros_like(fpr) * numpy.nan
-        hull = roc_curve_convex_hull((fpr, tpr, thresh))
-        v_avg = ROCAveragedVert(
-            ROCPoints(fpr, tpr, thresh),
-            ROCPoints(*hull),
-            std
-        )
-    else:
-        # return an invalid vertical averaged ROC
-        v_avg = ROCAveragedVert(
-            ROCPoints(numpy.array([]), numpy.array([]), numpy.array([])),
-            ROCPoints(numpy.array([]), numpy.array([]), numpy.array([])),
-            numpy.array([])
-        )
+        folds = results.folds if results.folds is not None else [slice(0, -1)]
+        fold_curves = []
+        for fold in folds:
+            points = roc_curve_for_fold(results, fold, clf_index, target)
+            hull = roc_curve_convex_hull(points)
+            c = ROCCurve(ROCPoints(*points), ROCPoints(*hull))
+            fold_curves.append(c)
 
-    if curves:
-        all_thresh = numpy.hstack([t for _, _, t in curves])
-        all_thresh = numpy.clip(all_thresh, 0.0 - 1e-10, 1.0 + 1e-10)
-        all_thresh = numpy.unique(all_thresh)[::-1]
-        thresh = all_thresh[::max(all_thresh.size // 10, 1)]
+        curves = [fold.points for fold in fold_curves
+                  if fold.is_valid]
 
-        (fpr, fpr_std), (tpr, tpr_std) = \
-            roc_curve_threshold_average(curves, thresh)
+        if curves:
+            fpr, tpr, std = roc_curve_vertical_average(curves)
 
-        hull = roc_curve_convex_hull((fpr, tpr, thresh))
+            thresh = numpy.zeros_like(fpr) * numpy.nan
+            hull = roc_curve_convex_hull((fpr, tpr, thresh))
+            v_avg = ROCAveragedVert(
+                ROCPoints(fpr, tpr, thresh),
+                ROCPoints(*hull),
+                std
+            )
+        else:
+            # return an invalid vertical averaged ROC
+            v_avg = ROCAveragedVert(
+                ROCPoints(numpy.array([]), numpy.array([]), numpy.array([])),
+                ROCPoints(numpy.array([]), numpy.array([]), numpy.array([])),
+                numpy.array([])
+            )
 
-        t_avg = ROCAveragedThresh(
-            ROCPoints(fpr, tpr, thresh),
-            ROCPoints(*hull),
-            tpr_std,
-            fpr_std
-        )
-    else:
-        # return an invalid threshold averaged ROC
-        t_avg = ROCAveragedThresh(
-            ROCPoints(numpy.array([]), numpy.array([]), numpy.array([])),
-            ROCPoints(numpy.array([]), numpy.array([]), numpy.array([])),
-            numpy.array([]),
-            numpy.array([])
-        )
-    return ROCData(merged_curve, fold_curves, v_avg, t_avg)
+        if curves:
+            all_thresh = numpy.hstack([t for _, _, t in curves])
+            all_thresh = numpy.clip(all_thresh, 0.0 - 1e-10, 1.0 + 1e-10)
+            all_thresh = numpy.unique(all_thresh)[::-1]
+            thresh = all_thresh[::max(all_thresh.size // 10, 1)]
 
-ROCData.from_results = staticmethod(ROCData_from_results)
+            (fpr, fpr_std), (tpr, tpr_std) = \
+                roc_curve_threshold_average(curves, thresh)
 
-#: A curve item to be displayed in a plot
-PlotCurve = namedtuple(
-    "PlotCurve",
-    ["curve",        # ROCCurve source curve
-     "curve_item",   # pg.PlotDataItem main curve
-     "hull_item"     # pg.PlotDataItem curve's convex hull
-     ]
-)
+            hull = roc_curve_convex_hull((fpr, tpr, thresh))
+
+            t_avg = ROCAveragedThresh(
+                ROCPoints(fpr, tpr, thresh),
+                ROCPoints(*hull),
+                tpr_std,
+                fpr_std
+            )
+        else:
+            # return an invalid threshold averaged ROC
+            t_avg = ROCAveragedThresh(
+                ROCPoints(numpy.array([]), numpy.array([]), numpy.array([])),
+                ROCPoints(numpy.array([]), numpy.array([]), numpy.array([])),
+                numpy.array([]),
+                numpy.array([])
+            )
+        return ROCData(merged_curve, fold_curves, v_avg, t_avg)
+
+
+class PlotCurve(
+    NamedTuple(
+        "PlotCurve", [
+            ("curve", ROCCurve),  # ROCCurve source curve
+            ("curve_item", pg.PlotDataItem),  # pg.PlotDataItem main curve
+            ("hull_item", pg.PlotDataItem),   # pg.PlotDataItem curve's convex hull
+        ])):
+    """A curve item to be displayed in a plot."""
 
 
 def plot_curve(curve, pen=None, shadow_pen=None, symbol="+",
@@ -165,12 +188,16 @@ def plot_curve(curve, pen=None, shadow_pen=None, symbol="+",
     """
     Construct a `PlotCurve` for the given `ROCCurve`.
 
-    :param ROCCurve curve:
+    Parameters
+    ----------
+    curve: ROCCurve
         Source curve.
 
     The other parameters are passed to pg.PlotDataItem
 
-    :rtype: PlotCurve
+    Returns
+    -------
+    plotcurve: PlotCurve
     """
     def extend_to_origin(points):
         "Extend ROCPoints to include coordinate origin if not already present"
@@ -200,17 +227,19 @@ def plot_curve(curve, pen=None, shadow_pen=None, symbol="+",
     )
     return PlotCurve(curve, item, hull_item)
 
+
 PlotCurve.from_roc_curve = staticmethod(plot_curve)
 
-#: A curve displayed in a plot with error bars
-PlotAvgCurve = namedtuple(
-    "PlotAvgCurve",
-    ["curve",         # ROCCurve
-     "curve_item",    # pg.PlotDataItem
-     "hull_item",     # pg.PlotDataItem
-     "confint_item",  # pg.ErrorBarItem
-     ]
-)
+
+class PlotAvgCurve(
+    NamedTuple(
+        "PlotAvgCurve", [
+            ("curve", ROCCurve),         # ROCCurve
+            ("curve_item", pg.PlotDataItem),    # pg.PlotDataItem
+            ("hull_item", pg.PlotDataItem),     # pg.PlotDataItem
+            ("confint_item", pg.ErrorBarItem),  # pg.ErrorBarItem
+        ])):
+    """A curve displayed in a plot with error bars."""
 
 
 def plot_avg_curve(curve, pen=None, shadow_pen=None, symbol="+",
@@ -247,7 +276,9 @@ def plot_avg_curve(curve, pen=None, shadow_pen=None, symbol="+",
         )
     return PlotAvgCurve(curve, pc.curve_item, pc.hull_item, error_item)
 
+
 PlotAvgCurve.from_roc_curve = staticmethod(plot_avg_curve)
+
 
 Some = namedtuple("Some", ["val"])
 
@@ -267,13 +298,13 @@ def once(f):
     return wraped
 
 
-plot_curves = namedtuple(
-    "plot_curves",
-    ["merge",   # :: () -> PlotCurve
-     "folds",   # :: () -> [PlotCurve]
-     "avg_vertical",   # :: () -> PlotAvgCurve
-     "avg_threshold",  # :: () -> PlotAvgCurve
-     ]
+plot_curves = NamedTuple(
+    "plot_curves", [
+        ("merge", Callable[[], PlotCurve]),
+        ("folds", Callable[[], List[PlotCurve]]),
+        ("avg_vertical", Callable[[], PlotAvgCurve]),
+        ("avg_threshold", Callable[[], PlotAvgCurve]),
+    ]
 )
 
 
@@ -471,6 +502,7 @@ class OWROCAnalysis(widget.OWWidget):
         self.target_cb.addItems(class_var.values)
 
     def curve_data(self, target, clf_idx):
+        # type: (int, int) -> ROCData
         """Return `ROCData' for the given target and classifier."""
         if (target, clf_idx) not in self._curve_data:
             data = ROCData.from_results(self.results, clf_idx, target)
@@ -479,6 +511,7 @@ class OWROCAnalysis(widget.OWWidget):
         return self._curve_data[target, clf_idx]
 
     def plot_curves(self, target, clf_idx):
+        # type: (int, int) -> plot_curves
         """Return a set of functions `plot_curves` generating plot curves."""
         def generate_pens(basecolor):
             pen = QPen(basecolor, 1)

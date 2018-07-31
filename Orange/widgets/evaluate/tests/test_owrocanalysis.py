@@ -11,7 +11,7 @@ import Orange.evaluation
 import Orange.classification
 
 from Orange.widgets.evaluate import owrocanalysis
-from Orange.widgets.evaluate.owrocanalysis import OWROCAnalysis
+from Orange.widgets.evaluate.owrocanalysis import OWROCAnalysis, ROCData
 from Orange.widgets.evaluate.tests.base import EvaluateTest
 from Orange.widgets.tests.base import WidgetTest
 from Orange.widgets.tests.utils import mouseMove
@@ -29,7 +29,7 @@ class TestROC(unittest.TestCase):
 
         for i, _ in enumerate(learners):
             for c in range(len(data.domain.class_var.values)):
-                rocdata = owrocanalysis.ROCData_from_results(res, i, target=c)
+                rocdata = ROCData.from_results(res, i, target=c)
                 self.assertTrue(rocdata.merged.is_valid)
                 self.assertEqual(len(rocdata.folds), 10)
                 self.assertTrue(all(c.is_valid for c in rocdata.folds))
@@ -43,7 +43,7 @@ class TestROC(unittest.TestCase):
 
         for i, _ in enumerate(learners):
             for c in range(len(data.domain.class_var.values)):
-                rocdata = owrocanalysis.ROCData_from_results(res, i, target=c)
+                rocdata = ROCData.from_results(res, i, target=c)
                 self.assertTrue(rocdata.merged.is_valid)
                 self.assertEqual(len(rocdata.folds), 20)
                 # all individual fold curves and averaged curve data
@@ -58,7 +58,7 @@ class TestROC(unittest.TestCase):
 
         for i, _ in enumerate(learners):
             for c in range(len(data.domain.class_var.values)):
-                rocdata = owrocanalysis.ROCData_from_results(res, i, target=c)
+                rocdata = ROCData.from_results(res, i, target=c)
                 self.assertTrue(rocdata.merged.is_valid)
                 self.assertEqual(len(rocdata.folds), 20)
                 # all individual fold curves and averaged curve data
