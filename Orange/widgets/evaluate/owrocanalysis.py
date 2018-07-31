@@ -4,16 +4,21 @@ ROC Analysis Widget
 
 """
 import operator
+from xml.sax.saxutils import escape
 from functools import reduce, wraps
 from collections import namedtuple, deque, OrderedDict
-from typing import List, NamedTuple, Callable
+from typing import List, NamedTuple, Callable, Tuple
 
 import numpy
 import sklearn.metrics as skl_metrics
 
-from AnyQt.QtWidgets import QListView, QLabel, QGridLayout, QFrame, QAction, QToolTip
-from AnyQt.QtGui import QColor, QPen, QBrush, QPainter, QPalette, QFont, QCursor
-from AnyQt.QtCore import Qt
+from AnyQt.QtWidgets import (
+    QListView, QLabel, QGridLayout, QFrame, QAction, QToolTip,
+    QGraphicsView, QGraphicsItem
+
+)
+from AnyQt.QtGui import QColor, QPen, QBrush, QPainter, QPalette, QFont
+from AnyQt.QtCore import Qt, QRect, QPointF, QSizeF
 import pyqtgraph as pg
 
 import Orange
@@ -185,6 +190,7 @@ class PlotCurve(
 
 def plot_curve(curve, pen=None, shadow_pen=None, symbol="+",
                symbol_size=3, name=None):
+    # type: (ROCCurve, ...) -> PlotCurve
     """
     Construct a `PlotCurve` for the given `ROCCurve`.
 
@@ -452,6 +458,7 @@ class OWROCAnalysis(widget.OWWidget):
         self.plot.setRange(xRange=(0.0, 1.0), yRange=(0.0, 1.0), padding=0.05)
 
         self.plotview.setCentralItem(self.plot)
+        self.plotview.scene().sigMouseMoved.connect(self._on_mouse_moved)
         self.mainArea.layout().addWidget(self.plotview)
 
     @Inputs.evaluation_results
@@ -638,66 +645,67 @@ class OWROCAnalysis(widget.OWWidget):
         self.warning(warning)
 
     def _on_mouse_moved(self, pos):
+        if self.roc_averaging == OWROCAnalysis.Vertical or \
+                self.roc_averaging == OWROCAnalysis.NoAveraging:
+            return
+
         target = self.target_index
         selected = self.selected_classifiers
         curves = [(clf_idx, self.plot_curves(target, clf_idx))
                   for clf_idx in selected]  # type: List[Tuple[int, plot_curves]]
-        valid_thresh, valid_clf = [], []
-        pt, ave_mode = None, self.roc_averaging
+        hits = []
+
+        view = self.plotview  # type: QGraphicsView
+        viewport = view.viewport()
+        scene = view.scene()
+
+        def hitbox_size(obj):
+            # type: (QGraphicsItem) -> QSizeF
+            # map the hit box size via view and scene transforms to the object
+            r = QRect(0, 0, 5, 5)
+            r = view.mapToScene(r)
+            return obj.mapFromScene(r).boundingRect().size()
 
         for clf_idx, crv in curves:
             if self.roc_averaging == OWROCAnalysis.Merge:
                 curve = crv.merge()
-            elif self.roc_averaging == OWROCAnalysis.Vertical:
-                curve = crv.avg_vertical()
             elif self.roc_averaging == OWROCAnalysis.Threshold:
                 curve = crv.avg_threshold()
             else:
-                # currently not implemented for 'Show Individual Curves'
-                return
-
+                assert False
+            curve = curve  # type: PlotCurve
             sp = curve.curve_item.childItems()[0]  # type: pg.ScatterPlotItem
-            act_pos = sp.mapFromScene(pos)
-            pts = sp.pointsAt(act_pos)
+            assert sp.scene() is scene and sp.isVisible()
+            query_pt = sp.mapFromScene(pos)
+            # Find the closest threshold point on curve
+            s = hitbox_size(sp)
+            curvedata = curve.curve.points
+            distances = distance_to_point(curvedata, query_pt)
+            closest = numpy.argmin(distances)
 
-            if len(pts) > 0:
-                mouse_pt = pts[0].pos()
-                if self._tooltip_cache:
-                    cache_pt, cache_thresh, cache_clf, cache_ave = self._tooltip_cache
-                    curr_thresh, curr_clf = [], []
-                    if numpy.linalg.norm(mouse_pt - cache_pt) < 10e-6 \
-                            and cache_ave == self.roc_averaging:
-                        mask = numpy.equal(cache_clf, clf_idx)
-                        curr_thresh = numpy.compress(mask, cache_thresh).tolist()
-                        curr_clf = numpy.compress(mask, cache_clf).tolist()
-                    else:
-                        QToolTip.showText(QCursor.pos(), "")
-                        self._tooltip_cache = None
+            if distances[closest] < (s.width() * s.height()) ** 0.5:
+                thresh = curvedata.thresholds[closest]
+                hits.append((thresh, clf_idx))
 
-                    if curr_thresh:
-                        valid_thresh.append(*curr_thresh)
-                        valid_clf.append(*curr_clf)
-                        pt = cache_pt
-                        continue
-
-                curve_pts = curve.curve.points
-                roc_points = numpy.column_stack((curve_pts.fpr, curve_pts.tpr))
-                diff = numpy.subtract(roc_points, mouse_pt)
-                # Find closest point on curve and save the corresponding threshold
-                idx_closest = numpy.argmin(numpy.linalg.norm(diff, axis=1))
-
-                thresh = curve_pts.thresholds[idx_closest]
-                if not numpy.isnan(thresh):
-                    valid_thresh.append(thresh)
-                    valid_clf.append(clf_idx)
-                    pt = [curve_pts.fpr[idx_closest], curve_pts.tpr[idx_closest]]
-
-        if valid_thresh:
-            clf_names = self.classifier_names
-            msg = "Thresholds:\n" + "\n".join(["({:s}) {:.3f}".format(clf_names[i], thresh)
-                                               for i, thresh in zip(valid_clf, valid_thresh)])
-            QToolTip.showText(QCursor.pos(), msg)
-            self._tooltip_cache = (pt, valid_thresh, valid_clf, ave_mode)
+        widgetpos = self.plotview.mapFromScene(pos)
+        globalpos = self.plotview.mapToGlobal(widgetpos)
+        trect = QRect(0, 0, 5, 5)
+        trect.moveCenter(widgetpos)
+        header = ["<tr style=text-align=center'>"
+                  "<th>Classifier</th><th>threshold</th>"
+                  "</tr>"]
+        line_template = ("<tr>"
+                         "<td align='left'>{name} </td>"
+                         "<td align='right'>{thresh:.6g}</td>"
+                         "</tr>")
+        if len(hits) > 0:
+            lines = []
+            for thresh, cls_idx in hits:
+                name = self.classifiers_list_box.item(cls_idx).text()
+                line = line_template.format(name=escape(name), thresh=thresh)
+                lines.append(line)
+            text = ["<table>"] + header + lines + ["</table>"]
+            QToolTip.showText(globalpos, "".join(text), viewport, trect)
 
     def _on_target_changed(self):
         self.plot.clear()
@@ -758,6 +766,15 @@ class OWROCAnalysis(widget.OWWidget):
         self.report_items(items)
         self.report_plot()
         self.report_caption(caption)
+
+
+def distance_to_point(curve, point):
+    # type: (ROCData, QPointF) -> numpy.ndarray
+    arr = numpy.column_stack((curve.fpr, curve.tpr))
+    assert arr.shape == (curve.thresholds.size, 2), str(arr.shape)
+    query_pt = numpy.array([[point.x(), point.y()]])
+    arr -= query_pt
+    return numpy.linalg.norm(arr, axis=1)
 
 
 def interp(x, xp, fp, left=None, right=None):
