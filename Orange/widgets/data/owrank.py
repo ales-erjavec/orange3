@@ -321,9 +321,6 @@ class OWRank(OWWidget):
         self.ranksModel.clear()
         self.ranksModel.resetSorting(True)
 
-        self.get_method_scores.cache_clear()
-        self.get_scorer_scores.cache_clear()
-
         self.Error.clear()
         self.Information.clear()
         self.Information.missings_imputed(
@@ -372,49 +369,9 @@ class OWRank(OWWidget):
         if scorer is None:
             self.scorers.pop(id, None)
         else:
-            # Avoid caching a (possibly stale) previous instance of the same
-            # Scorer passed via the same signal
-            if id in self.scorers:
-                self.get_scorer_scores.cache_clear()
-
             self.scorers[id] = ScoreMeta(scorer.name, scorer.name, scorer,
                                          ProblemType.from_variable(scorer.class_type),
                                          False)
-
-    @memoize_method()
-    def get_method_scores(self, method):
-        estimator = method.scorer()
-        data = self.data
-        try:
-            scores = np.asarray(estimator(data))
-        except ValueError:
-            log.warning("Scorer %s wasn't able to compute all scores at once",
-                        method.name)
-            try:
-                scores = np.array([estimator(data, attr)
-                                   for attr in data.domain.attributes])
-            except ValueError:
-                log.error(
-                    "Scorer %s wasn't able to compute scores at all",
-                    method.name)
-                scores = np.full(len(data.domain.attributes), np.nan)
-        return scores
-
-    @memoize_method()
-    def get_scorer_scores(self, scorer):
-        try:
-            scores = scorer.scorer.score_data(self.data).T
-        except ValueError:
-            log.error(
-                "Scorer %s wasn't able to compute scores at all",
-                scorer.name)
-            scores = np.full((len(self.data.domain.attributes), 1), np.nan)
-
-        labels = ((scorer.shortname,)
-                  if scores.shape[1] == 1 else
-                  tuple(scorer.shortname + '_' + str(i)
-                        for i in range(1, 1 + scores.shape[1])))
-        return scores, labels
 
     def updateScores(self):
         self.cancel()
@@ -472,43 +429,6 @@ class OWRank(OWWidget):
         self.__task = TaskSet(futures, w)
         self.__task.indices = indices
 
-        # method_scores = tuple(self.get_method_scores(method)
-        #                       for method in methods)
-        #
-        # scorer_scores, scorer_labels = (), ()
-        # if scorers:
-        #     scorer_scores, scorer_labels = zip(*(self.get_scorer_scores(scorer)
-        #                                          for scorer in scorers))
-        #     scorer_labels = tuple(chain.from_iterable(scorer_labels))
-        #
-        # labels = tuple(method.shortname for method in methods) + scorer_labels
-        # model_array = np.column_stack(
-        #     ([len(a.values) if a.is_discrete else np.nan
-        #       for a in self.data.domain.attributes],) +
-        #     (method_scores if method_scores else ()) +
-        #     (scorer_scores if scorer_scores else ())
-        # )
-        # for column, values in enumerate(model_array.T):
-        #     self.ranksModel.setExtremesFrom(column, values)
-        #
-        # self.ranksModel.wrap(model_array.tolist())
-        # self.ranksModel.setHorizontalHeaderLabels(('#',) + labels)
-        # self.ranksView.setColumnWidth(0, 40)
-        #
-        # # Re-apply sort
-        # try:
-        #     sort_column, sort_order = self.sorting
-        #     if sort_column < len(labels):
-        #         # adds 1 for '#' (discrete count) column
-        #         self.ranksModel.sort(sort_column + 1, sort_order)
-        #         self.ranksView.horizontalHeader().setSortIndicator(
-        #             sort_column + 1, sort_order)
-        # except ValueError:
-        #     pass
-        #
-        # self.autoSelection()
-        # self.Outputs.scores.send(self.create_scores_table(labels))
-
     def _score_done(self, index, f):
         # type: (int, Future) -> None
         assert QThread.currentThread() is self.thread()
@@ -519,7 +439,7 @@ class OWRank(OWWidget):
         try:
             scores = f.result()
         except qconcurrent.CancelledError:
-            return
+            raise RuntimeError("Got cancelled result")
         except Exception:
             log = logging.getLogger(__name__)
             log.exception("")
@@ -530,19 +450,19 @@ class OWRank(OWWidget):
         model = self.ranksModel
         t = model._table
         if len(t) < len(scores):
-            t.extend([[0] * (index + 1) for _ in range(len(scores) - len(t))])
+            t.extend([[np.nan] * (index + 1) for _ in range(len(scores) - len(t))])
 
         for i, s in enumerate(scores):
             _r = t[i]
             if len(_r) <= index:
-                _r.extend([0] * (index - len(_r) + 1))
+                _r.extend([np.nan] * (index - len(_r) + 1))
             _r[index] = s
 
         model.wrap(t)
-        # model.dataChanged.emit(
-        #     model.index(0, index), model.index(len(scores) - 1, index),
-        #     [Qt.DisplayRole, Qt.EditRole]
-        # )
+        model.dataChanged.emit(
+            model.index(0, index), model.index(len(scores) - 1, index),
+            [Qt.DisplayRole, Qt.EditRole]
+        )
 
         # model.beginResetModel()
         # mask = [False] * len(self.measure_scores)
@@ -550,6 +470,7 @@ class OWRank(OWWidget):
         # self.updateRankModel(mask)
 
     def _progress(self, n, d):
+        assert QThread.currentThread() is self.thread()
         self.progressBarSet(100. * n / d)
 
     def _finish(self):
@@ -726,7 +647,7 @@ def main(argv=None):  # pragma: no cover
     ow.show()
     ow.raise_()
     a.exec_()
-    ow.setData(None)
+    ow.set_data(None)
     ow.set_learner(None, (3, 'Learner', None))
     ow.handleNewSignals()
     ow.saveSettings()
