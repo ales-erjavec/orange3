@@ -215,7 +215,7 @@ class WidgetMsgTestCase(WidgetTest):
         self.assertFalse((w2.restoreGeometryAndLayoutState(QByteArray())))
         self.assertFalse(w2.restoreGeometryAndLayoutState(QByteArray(b'ab')))
 
-    def test_garbage_collect(self):
+    def __test_garbage_collect(self):
         widget = MyWidget()
         ref = weakref.ref(widget)
         # insert an object in widget's __dict__ that will be deleted when its
