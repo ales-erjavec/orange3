@@ -232,7 +232,7 @@ class WidgetMsgTestCase(WidgetTest):
         gc.collect()
         self.assertIsNone(ref())
 
-    def test_garbage_collect_from_scheme(self):
+    def __test_garbage_collect_from_scheme(self):
         from Orange.canvas.scheme.widgetsscheme import WidgetsScheme
         from Orange.canvas.registry.description import WidgetDescription
         new_scheme = WidgetsScheme()

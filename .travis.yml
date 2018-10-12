@@ -5,18 +5,19 @@ dist: trusty
 
 matrix:
     include:
-        - env: RUN_PYLINT=true
-          python: '3.4'
-          cache: {}
-        - env: BUILD_DOCS=true
-          python: '3.5'
-          script: source $TRAVIS_BUILD_DIR/.travis/build_doc.sh
-
-        - python: '3.4'
-          env: PYQT4=true
-        - python: '3.5'
-          env: UPLOAD_COVERAGE=true
+#        - env: RUN_PYLINT=true
+#          python: '3.4'
+#          cache: {}
+#        - env: BUILD_DOCS=true
+#          python: '3.5'
+#          script: source $TRAVIS_BUILD_DIR/.travis/build_doc.sh
+#
+#        - python: '3.4'
+#          env: PYQT4=true
+#        - python: '3.5'
+#          env: UPLOAD_COVERAGE=true
         - python: '3.6'
+          env: PYTHONFAULTHANDLER=1
     fast_finish: true
 
 cache:
