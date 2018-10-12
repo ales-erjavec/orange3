@@ -215,7 +215,7 @@ class WidgetMsgTestCase(WidgetTest):
         self.assertFalse((w2.restoreGeometryAndLayoutState(QByteArray())))
         self.assertFalse(w2.restoreGeometryAndLayoutState(QByteArray(b'ab')))
 
-    def __test_garbage_collect(self):
+    def test_garbage_collect(self):
         widget = MyWidget()
         ref = weakref.ref(widget)
         # insert an object in widget's __dict__ that will be deleted when its
@@ -232,7 +232,7 @@ class WidgetMsgTestCase(WidgetTest):
         gc.collect()
         self.assertIsNone(ref())
 
-    def __test_garbage_collect_from_scheme(self):
+    def test_garbage_collect_from_scheme(self):
         from Orange.canvas.scheme.widgetsscheme import WidgetsScheme
         from Orange.canvas.registry.description import WidgetDescription
         new_scheme = WidgetsScheme()

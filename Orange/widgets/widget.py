@@ -13,7 +13,7 @@ from AnyQt.QtWidgets import (
 )
 from AnyQt.QtCore import (
     Qt, QRect, QMargins, QByteArray, QDataStream, QBuffer, QSettings,
-    QUrl, pyqtSignal as Signal
+    QUrl, pyqtSignal as Signal, pyqtSlot as Slot
 )
 from AnyQt.QtGui import QIcon, QKeySequence, QDesktopServices
 
@@ -439,7 +439,7 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
 
             self.processingStateChanged.connect(self.__processingStateChanged)
             self.blockingStateChanged.connect(self.__processingStateChanged)
-            self.progressBarValueChanged.connect(pb.setValue)
+            self.progressBarValueChanged.connect(lambda v: pb.setValue(int(v)))
 
             # Reserve the bottom margins for the status bar
             margins = self.layout().contentsMargins()
