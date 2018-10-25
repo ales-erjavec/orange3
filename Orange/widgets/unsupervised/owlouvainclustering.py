@@ -242,7 +242,7 @@ class OWLouvainClustering(widget.OWWidget):
             task = partial(
                 run_on_graph, graph, resolution=self.resolution, state=state
             )
-        state.run = task
+
         self.__set_state_busy()
         self.__start_task(task, state)
 
@@ -304,7 +304,6 @@ class OWLouvainClustering(widget.OWWidget):
         state.progress_changed.connect(self.progressBarSet)
         state.partial_result_ready.connect(self.__set_partial_results)
         state.watcher.done.connect(self.__on_done)
-        state.run = task
         state.start(self.__executor, task)
         self.__task = state
 
