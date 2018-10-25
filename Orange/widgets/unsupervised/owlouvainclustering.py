@@ -305,6 +305,7 @@ class OWLouvainClustering(widget.OWWidget):
         state.partial_result_ready.connect(self.__set_partial_results)
         state.watcher.done.connect(self.__on_done)
         state.start(self.__executor, task)
+        state.setParent(self)
         self.__task = state
 
     def __cancel_task(self, wait=True):
@@ -316,10 +317,10 @@ class OWLouvainClustering(widget.OWWidget):
             state.status_changed.disconnect(self.setStatusMessage)
             state.progress_changed.disconnect(self.progressBarSet)
             state.watcher.done.disconnect(self.__on_done)
-            if wait and state.future is not None:
+            if wait:
                 futures.wait([state.future])
                 state.deleteLater()
-            elif state.future is not None:
+            else:
                 w = FutureWatcher(state.future, parent=state)
                 w.done.connect(state.deleteLater)
 
