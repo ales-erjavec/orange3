@@ -41,6 +41,7 @@ def stress(X, distD):
 
 import scipy.linalg.blas as blas
 
+
 def check_symetric_packed(ar, name):
     m, = ar.shape
     N = int(np.floor(np.sqrt(m * 2)))
@@ -93,6 +94,7 @@ def spmv(ap, x, alpha=None, beta=None, y=None, lower=False):
         overwrite_y = False
     out = spmv(N, alpha, ap, x, beta=beta, y=y,
                lower=int(lower_f), overwrite_y=overwrite_y)
+    assert (not overwrite_y) or out.ctypes.data == y.ctypes.data
     return out
 
 
@@ -104,7 +106,7 @@ def stress_packed(d1, d2):
     if N * (N + 1) != m * 2:
         raise ValueError("Input is not a matrix in packed form")
     ss = scipy.spatial.distance.cdist(
-        d1.reshape((1, -1)), d2.reshape(1, -1),
+        d1.reshape((1, m)), d2.reshape(1, m),
         metric="sqeuclidean"
     )
     return ss / (N ** 2)
@@ -159,7 +161,7 @@ def condensed_to_sym_p(a):
     # type: (np.ndarray) -> np.ndarray
     """
     Extend a hollow condensed symmetric matrix (scipy.distance format) to
-    packed format (blas).
+    symetric packed format (blas).
 
     Parameters
     ----------
@@ -171,18 +173,25 @@ def condensed_to_sym_p(a):
     """
     a, N_ = check_symetric_packed(a, name="a")
     N = N_ + 1
-    out = np.zeros((N + 1) * N // 2, dtype=a.dtype)
-    mask = np.ones(out.shape, dtype=bool)
-    mask[0] = False
-    indices = np.arange(N, 1, -1)
-    np.cumsum(indices, out=indices)
-    mask[indices] = False
+    mask = condensed_to_sym_p_mask(N)
+    out = np.zeros_like(mask, dtype=a.dtype)
     out[mask] = a
     return out
 
 
+def condensed_to_sym_p_mask(N):
+    # type: (int) -> np.ndarray
+    assert N > 0
+    mask = np.ones(((N + 1) * N) // 2, dtype=bool)
+    mask[0] = False
+    indices = np.arange(N, 1, -1)
+    np.cumsum(indices, out=indices)
+    mask[indices] = False
+    return mask
+
+
 def smacof_step(X, dissimilarity, delta=None, overwrite_delta=False):
-    # type: (np.ndarary, np.ndarray, Optional[np.ndarray], bool) -> np.ndarray
+    # type: (np.ndarray, np.ndarray, Optional[np.ndarray], bool) -> np.ndarray
     """
     Run a single SMACOF update step.
 
@@ -217,7 +226,7 @@ def smacof_step(X, dissimilarity, delta=None, overwrite_delta=False):
         # from hollow condensed -> symmetric packed format
         delta = condensed_to_sym_p(delta)
         B_p_out = delta
-    elif overwrite_delta:
+    elif overwrite_delta and delta is not None:
         B_p_out = delta
     else:
         B_p_out = None
@@ -233,18 +242,20 @@ def smacof_step(X, dissimilarity, delta=None, overwrite_delta=False):
 
 def smacof_iter(diss, embedding, max_iter=300, rtol=1e-5):
     """
-    Return an iterator over successive improved MDS point embeddings.
+    Return an iterator over successive SMACOF improved point embeddings.
     """
     done = False
     iterations_done = 0
     stress = np.finfo(np.float).max
-    delta = None
+    N, dim = embedding.shape
+    sym_p_mask = condensed_to_sym_p_mask(N)
+    delta = condensed_to_sym_p(scipy.spatial.distance.pdist(embedding))
     while not done:
         embedding_new = smacof_step(
             embedding, diss, delta, overwrite_delta=delta is not None)
         iterations_done += 1
-        delta = scipy.spatial.distance.pdist(embedding_new)
-        delta = condensed_to_sym_p(delta)
+        delta_c = scipy.spatial.distance.pdist(embedding_new)
+        delta[sym_p_mask] = delta_c
         stress_new = stress_packed(diss, delta)
 
         if iterations_done >= max_iter:
