@@ -7,9 +7,9 @@ import numpy as np
 from scipy.linalg import svd as lapack_svd
 from scipy.sparse.linalg import svds as arpack_svd
 
-from AnyQt.QtWidgets import QListView, QApplication
+from AnyQt.QtWidgets import QListView, QFormLayout, QApplication
 from AnyQt.QtGui import QBrush, QColor, QPainter
-from AnyQt.QtCore import QEvent, QItemSelectionModel, QItemSelection
+from AnyQt.QtCore import Qt, QEvent, QItemSelectionModel, QItemSelection
 
 import pyqtgraph as pg
 import Orange.data
@@ -80,27 +80,35 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         self.component_y = 1
         self.ca = None  # type: CA
 
-        box = gui.vBox(self.controlArea, "Variables")
-        self.varlist = itemmodels.VariableListModel()
+        self.controlArea.layout().setSpacing(-1)  # reset spacing
+        box = gui.vBox(self.controlArea, "Variables", addSpace=False)
+        self.varlist = itemmodels.VariableListModel(parent=self)
         self.varview = view = QListView(
             selectionMode=QListView.MultiSelection,
-            uniformItemSizes=True
+            uniformItemSizes=True,
         )
         view.setModel(self.varlist)
         view.selectionModel().selectionChanged.connect(self._var_changed)
 
         box.layout().addWidget(view)
 
-        axes_box = gui.vBox(self.controlArea, "Axes")
-        box = gui.vBox(axes_box, "Axis X", margin=0)
-        box.setFlat(True)
-        self.axis_x_cb = gui.comboBox(
-            box, self, "component_x", callback=self._component_changed)
+        form = QFormLayout(
+            fieldGrowthPolicy=QFormLayout.AllNonFixedFieldsGrow,
+            labelAlignment=Qt.AlignLeft
+        )
+        axes_box = gui.vBox(self.controlArea, "Axes", addSpace=False)
+        axes_box.layout().addLayout(form)
 
-        box = gui.vBox(axes_box, "Axis Y", margin=0)
-        box.setFlat(True)
+        self.axis_x_cb = gui.comboBox(
+            None, self, "component_x", callback=self._component_changed,
+            addToLayout=False
+        )
         self.axis_y_cb = gui.comboBox(
-            box, self, "component_y", callback=self._component_changed)
+            None, self, "component_y", callback=self._component_changed,
+            addToLayout=False
+        )
+        form.addRow(self.tr("Axis X:"), self.axis_x_cb)
+        form.addRow(self.tr("Axis Y:"), self.axis_y_cb)
 
         self.infotext = gui.widgetLabel(
             gui.vBox(self.controlArea, "Contribution to Inertia"), "\n"
@@ -108,7 +116,7 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
 
         gui.rubber(self.controlArea)
 
-        self.plot = pg.PlotWidget(background="w")
+        self.plot = pg.PlotWidget()
         self.plot.setMenuEnabled(False)
         self.plot.getPlotItem().hideButtons()
         self.plot.setAspectLocked(True)
