@@ -249,12 +249,14 @@ def smacof_iter(diss, embedding, max_iter=300, rtol=1e-5):
     stress = np.finfo(np.float).max
     N, dim = embedding.shape
     sym_p_mask = condensed_to_sym_p_mask(N)
-    delta = condensed_to_sym_p(scipy.spatial.distance.pdist(embedding))
+    delta_c = scipy.spatial.distance.pdist(embedding)
+    delta = condensed_to_sym_p(delta_c)
     while not done:
         embedding_new = smacof_step(
             embedding, diss, delta, overwrite_delta=delta is not None)
         iterations_done += 1
-        delta_c = scipy.spatial.distance.pdist(embedding_new)
+        # need scipy 1.0.0 for out
+        delta_c = scipy.spatial.distance.pdist(embedding_new, out=delta_c)
         delta[sym_p_mask] = delta_c
         stress_new = stress_packed(diss, delta)
 
