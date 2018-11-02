@@ -29,6 +29,8 @@ from Orange.widgets.utils.annotated_data import (
     get_unique_names
 )
 
+ndarray = np.ndarray
+
 
 def stress(X, distD):
     assert X.shape[0] == distD.shape[0] == distD.shape[1]
@@ -42,7 +44,27 @@ def stress(X, distD):
 import scipy.linalg.blas as blas
 
 
-def check_symetric_packed(ar, name):
+def check_symmetric_packed(ar, name):
+    # type: (np.ndarray, str) -> Tuple[np.ndarray, int]
+    """
+    Check that the array `ar` is a symmetric packed matrix.
+
+    Raise an error if not.
+
+    Parameters
+    ----------
+    ar : np.ndarray
+        Array to check
+    name : str
+        Parameter name to use in the error message.
+
+    Returns
+    -------
+
+    Raises
+    ------
+    ValueError
+    """
     m, = ar.shape
     N = int(np.floor(np.sqrt(m * 2)))
     if N * (N + 1) != 2 * m:
@@ -57,14 +79,33 @@ def check_symetric_packed(ar, name):
 
 def sym_matrix_sum_packed(ap, lower=False):
     # type: (np.ndarray, bool) -> np.ndarray
-    ap, N = check_symetric_packed(ap, name="ap")
+    """
+    Return the sum of elements of the symmetric matrix in packed format over a
+    single dimension (sum over rows/columns).
+
+    Parameters
+    ----------
+    ap : np.ndarray
+
+    lower : bool
+        Is the `ap` the lower or upper.
+
+    Returns
+    -------
+
+    """
+    ap, N = check_symmetric_packed(ap, name="ap")
     ones = np.ones(N, dtype=ap.dtype)
     return spmv(ap, ones, lower=lower)
 
 
-def spmv(ap, x, alpha=None, beta=None, y=None, lower=False):
-    # type: (np.ndarray, np.ndarray, ...) -> np.ndarray
+def spmv(ap, x, alpha=1.0, beta=0.0, y=None, lower=False):
+    # type: (ndarray, ndarray, float, float, Optional[ndarray], bool) -> ndarray
     """
+    Symmetric packed matrix vector multiplication.
+
+    y = alpha * ap @ x + beta * y
+
     Example
     -------
     >>> a = np.array([1, 0, 0, 2, 0, 1], dtype=float)
@@ -72,7 +113,7 @@ def spmv(ap, x, alpha=None, beta=None, y=None, lower=False):
     array([ 1.,  4.,  3.])
     """
     # Exposed in scipy 1.0.0
-    ap, N = check_symetric_packed(ap, name="ap")
+    ap, N = check_symmetric_packed(ap, name="ap")
     if ap.dtype.char == "d":
         spmv = blas.dspmv
     elif ap.dtype.char == "f":
@@ -87,7 +128,7 @@ def spmv(ap, x, alpha=None, beta=None, y=None, lower=False):
     lower_f = not lower
 
     if y is None:
-        assert beta is None or beta == 0.0
+        assert beta == 0.0
         y = np.empty(N, ap.dtype)
         overwrite_y = True
     else:
@@ -100,11 +141,25 @@ def spmv(ap, x, alpha=None, beta=None, y=None, lower=False):
 
 def stress_packed(d1, d2):
     # type: (np.ndarray, np.ndarray) -> float
+    """
+    Return the stress between two distance matrices `d1` and `d2` in symmetric
+    packed format.
+
+    Parameters
+    ----------
+    d1 : ((N + 1) * N // 2) np.ndarray
+    d2 : ((N + 1) * N // 2) np.ndarray
+
+    Returns
+    -------
+    stress : float
+
+    """
     assert d1.shape == d2.shape
     m, = d1.shape
     N = int(np.floor(np.sqrt(m * 2)))
     if N * (N + 1) != m * 2:
-        raise ValueError("Input is not a matrix in packed form")
+        raise ValueError("Input is not a matrix in symmetric packed form")
     ss = scipy.spatial.distance.cdist(
         d1.reshape((1, m)), d2.reshape(1, m),
         metric="sqeuclidean"
@@ -127,11 +182,10 @@ def graph_laplacian_packed(WP, overwrite_wp=False):
 
     Returns
     -------
-
+    Lwp : ndarray
+        A graph laplacian of WP in symmetric packed storage.
     """
-    m, = WP.shape
-    N = int(np.floor(np.sqrt(m * 2)))
-    assert N * (N + 1) == 2 * m, "{N} * ({N} + 1) != 2 * {m}".format(N=N, m=m)
+    WP, N = check_symmetric_packed(WP, name="WP")
     if overwrite_wp:
         Lw = np.negative(WP, out=WP)
     else:
@@ -161,7 +215,7 @@ def condensed_to_sym_p(a):
     # type: (np.ndarray) -> np.ndarray
     """
     Extend a hollow condensed symmetric matrix (scipy.distance format) to
-    symetric packed format (blas).
+    symmetric packed format (blas).
 
     Parameters
     ----------
@@ -171,7 +225,7 @@ def condensed_to_sym_p(a):
     -------
     a : ((N + 1) * N // 2) array
     """
-    a, N_ = check_symetric_packed(a, name="a")
+    a, N_ = check_symmetric_packed(a, name="a")
     N = N_ + 1
     mask = condensed_to_sym_p_mask(N)
     out = np.zeros_like(mask, dtype=a.dtype)
