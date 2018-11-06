@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+import math
+
+from AnyQt.QtSvg import QSvgGenerator
 from collections import namedtuple, OrderedDict
 from itertools import chain
 from contextlib import contextmanager
@@ -10,13 +14,16 @@ import numpy as np
 from AnyQt.QtWidgets import (
     QGraphicsWidget, QGraphicsObject, QGraphicsLinearLayout, QGraphicsPathItem,
     QGraphicsScene, QGraphicsView, QGridLayout, QFormLayout, QSizePolicy,
-    QGraphicsSimpleTextItem, QGraphicsLayoutItem, QAction, QComboBox
+    QGraphicsSimpleTextItem, QGraphicsLayoutItem, QAction, QComboBox,
+    QFileDialog, QApplication
 )
 from AnyQt.QtGui import (
     QTransform, QPainterPath, QPainterPathStroker, QColor, QBrush, QPen,
-    QFont, QFontMetrics, QPolygonF, QKeySequence
-)
-from AnyQt.QtCore import Qt, QSize, QSizeF, QPointF, QRectF, QLineF, QEvent
+    QFont, QFontMetrics, QPolygonF, QKeySequence,
+    QPicture, QPainter, QScreen, QPdfWriter, QPageLayout, QPageSize, QImage,
+    QPalette)
+from AnyQt.QtCore import Qt, QSize, QSizeF, QPointF, QRectF, QLineF, QEvent, \
+    QSettings, QMarginsF, QRect, QBuffer
 from AnyQt.QtCore import pyqtSignal as Signal
 
 import pyqtgraph as pg
@@ -787,6 +794,10 @@ if typing.TYPE_CHECKING:
     #: a (N, 3) linkage matrix for validation (the 4-th column from scipy
     #: is omitted).
     SelectionState = Tuple[List[Tuple[int]], List[Tuple[int, int, float]]]
+
+
+# spacing in exported image
+ExportSpacing = 3
 
 
 class OWHierarchicalClustering(widget.OWWidget):
@@ -1613,7 +1624,246 @@ class OWHierarchicalClustering(widget.OWWidget):
                  self.cluster_name,
                  self.cluster_roles[self.cluster_role].lower()))
         ))
-        self.report_plot()
+        if self.root is not None:
+            img = self._export_to_image()
+            self.report_raw(
+                "Dendrogram", img
+
+            )
+            self.report_plot()
+
+    def _export_to_image(self):
+        picture = ...  # type: QPicture
+        size = picture.boundingRect()
+        size = QSize(math.ceil(size.width()), math.ceil(size.height()))
+        img = QImage(size)
+        painter = QPainter(img)
+        painter.drawPicture(picture)
+        painter.end()
+
+        def qimage_save_to_bytes(image, format):
+            from AnyQt.QtCore import QBuffer
+            buffer = QBuffer()
+            buffer.open(QBuffer.ReadWrite)
+            image.save(buffer, format)
+            buffer.close()
+            return bytes(buffer.data())
+
+        contents = qimage_save_to_bytes(img, b'png')
+
+
+
+    def save_graph(self):
+        """reimplemented
+        """
+        dlg = QFileDialog(
+            self, windowTitle="Save Graph",
+            acceptMode=QFileDialog.AcceptSave,
+            fileMode=QFileDialog.AnyFile,
+            windowModality=Qt.WindowModal,
+        )
+        dlg.setAttribute(Qt.WA_DeleteOnClose)
+        mtypes = [
+            "image/png",
+            "image/jpeg",
+            "image/svg+xml",
+            "application/pdf",
+        ]
+        dlg.setMimeTypeFilters(mtypes)
+        settings = QSettings()
+        settings.beginGroup("save-plot-dialog")
+        dirpath = settings.value("directory", "", type=str)
+        if dirpath:
+            dlg.setDirectory(dirpath)
+        filter_ = settings.value("filter", "", type=str)
+        if filter_:
+            dlg.selectNameFilter(filter_)
+
+        @dlg.accepted.connect
+        def save_dialog_state():
+            settings.setValue("directory", dlg.directory().absolutePath())
+            settings.setValue("filter", dlg.selectedNameFilter())
+
+        @dlg.accepted.connect
+        def accepted():
+            f = dlg.selectedFiles()
+            assert len(f) == 1
+            filters = dlg.nameFilters()
+            index = filters.index(dlg.selectedNameFilter())
+            mtype = mtypes[index]
+            self._export_to_file(f[0], mtype)
+
+        dlg.open()
+
+    def _export_to_file(self, path, mtype="image/png"):
+        vspacing = ExportSpacing
+        items = [self.top_axis_view.scene(),
+                 self.scene,
+                 self.bottom_axis_view.scene()]
+        backgroundbrush = self.palette().brush(QPalette.Base)
+        size = self._export_source_size()
+        # find exported image size in mm to match the size on screen
+        px_size_mm = screen_pixel_size_mm(self.window().windowHandle().screen())
+        size_mm = QSizeF(size.width() * px_size_mm.width(),
+                         size.height() * px_size_mm.height())
+        # setup the export paint device
+        if mtype == "application/pdf":
+            device = QPdfWriter(path)
+            page_margin_mm = 3
+            page_size_mm = size_mm + QSizeF(page_margin_mm * 2, page_margin_mm * 2)
+            layout = QPageLayout(
+                QPageSize(page_size_mm, QPageSize.Millimeter, "",
+                          QPageSize.ExactMatch),
+                QPageLayout.Portrait,
+                QMarginsF(page_margin_mm, page_margin_mm,
+                          page_margin_mm, page_margin_mm)
+            )
+            device.setPageLayout(layout)
+        elif mtype == "image/svg+xml":
+            device = QSvgGenerator()
+            device.setFileName(path)
+            device.setViewBox(QRectF(0, 0, size.width(), size.height()))
+            device.setSize(size.toSize())
+        elif mtype in ("image/jpeg", "image/png"):
+            dpr = self.devicePixelRatioF()
+            device = QImage((size * dpr).toSize(), QImage.Format_ARGB32_Premultiplied)
+            device.setDotsPerMeterX(device.dotsPerMeterX() * dpr)
+            device.setDotsPerMeterY(device.dotsPerMeterY() * dpr)
+            device.fill(Qt.transparent)
+        else:
+            assert False
+
+        painter = QPainter(device)
+
+        pos = QPointF(0, 0)
+        pic = QPicture()
+        pic.setBoundingRect(
+            QRect(0, 0, math.ceil(size.width()), math.ceil(size.height()))
+        )
+        p = QPainter(pic)
+        if backgroundbrush.style() != Qt.NoBrush:
+            p.fillRect(0, 0, size.width(), size.height(), backgroundbrush)
+
+        for scene in items:
+            source = scene.sceneRect()
+            target = QRectF(pos, source.size())
+            scene.render(p, source, source)
+            p.translate(0, target.height() + vspacing)
+
+        p.end()
+        if device.widthMM() > 0 and device.heightMM() > 0:
+            xratio = device.widthMM() / pic.widthMM()
+            yratio = device.heightMM() / pic.heightMM()
+        else:
+            xratio = yratio = 1
+
+        transform = QTransform().scale(xratio, yratio)
+        painter.setWorldTransform(transform)
+        painter.drawPicture(0, 0, pic)
+        painter.end()
+
+        if isinstance(device, QImage):
+            device.save(path)
+
+    def _export_source_size(self):
+        # type: () -> QSizeF
+        """
+        Return the size of the scene and two scale items in logical object
+        coordinates.
+        """
+        items = [self.top_axis_view.scene(),
+                 self.scene,
+                 self.bottom_axis_view.scene()]
+        size = QSizeF(
+            math.ceil(max([sc.sceneRect().width() for sc in items])),
+            math.ceil(sum([sc.sceneRect().height() for sc in items]))
+        )
+        size.setHeight(size.height() + ExportSpacing * (len(items) - 1))
+        return size
+
+    def render_dendrogram(self, painter, target=QRectF()):
+        # type: (QPainter, QRectF) -> None
+        """
+        Render the dendrogram view with axis scale onto the painter.
+
+        Parameters
+        ----------
+        painter : QPainter
+        target : QRectF
+            The target rect in painter's device coordinates. If null then the
+            dimensions of the painter's paint device are used.
+        """
+        size = self._export_source_size()
+        backgroundbrush = self.palette().brush(QPalette.Base)
+        if target.isNull():
+            device = painter.device()
+            target = QRectF(
+                0, 0, max(device.width(), 0), max(device.height(), 0)
+            )
+        if target.isValid():
+            transform = ...
+        painter.save()
+        painter.setWorldTransform(transform)
+        painter.drawPicture(0, 0, pic)
+
+    def render_dendrogram(self, painter):
+        vspacing = ExportSpacing
+        central_item = self.scene
+        header_item = self.top_axis_view.scene()
+        footer_item = self.bottom_axis_view.scene()
+        items = [header_item, central_item, footer_item]
+
+        backgroundbrush = central_item.backgroundBrush()
+        if backgroundbrush.style() == Qt.NoBrush:
+            backgroundbrush = QBrush(Qt.white)
+
+        # calculate the size in object local coordinates
+        size = QSizeF(
+            math.ceil(max([sc.sceneRect().width() for sc in items])),
+            math.ceil(sum([sc.sceneRect().height() for sc in items]))
+        )
+        size.setHeight(size.height() + vspacing * (len(items) - 1))
+        if backgroundbrush.style() != Qt.NoBrush:
+            painter.fillRect(0, 0, size.width(), size.height(), backgroundbrush)
+
+        painter.save()
+        for scene in items:
+            source = scene.sceneRect()
+            scene.render(painter, source, source)
+            painter.translate(0, source.height() + vspacing)
+        painter.end()
+
+
+def screen_pixel_size_mm(screen=None):
+    # type: (Optional[QScreen]) -> QSizeF
+    """
+    Return the approximate 'logical pixel' size on screen.
+
+    Parameters
+    ----------
+    screen : Optional[QScreen]
+        If None `QApplication.primaryScreen()` will be used
+
+    Returns
+    -------
+    size : QSizeF
+        Logical pixel size on screen in milimeters
+
+    """
+    if screen is not None:
+        screen = QApplication.primaryScreen()
+    if screen is not None:
+        screen_size_mm = screen.physicalSize()
+        screen_size_px = screen.geometry().size()
+        px_size_mm_x = screen_size_mm.width() / screen_size_px.width()
+        px_size_mm_y = screen_size_mm.height() / screen_size_px.height()
+    else:
+        if QApplication.testAttribute(Qt.AA_Use96Dpi):
+            dpi = 96
+        else:
+            dpi = 72
+        px_size_mm_x = px_size_mm_y = dpi / 2.54
+    return QSizeF(px_size_mm_x, px_size_mm_y)
 
 
 def qfont_scaled(font, factor):
