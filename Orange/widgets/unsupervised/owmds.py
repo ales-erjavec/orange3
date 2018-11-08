@@ -125,6 +125,7 @@ def spmv(ap, x, alpha=1.0, beta=0.0, y=None, lower=False):
 
     if alpha is None:
         alpha = 1.0
+    # lower in fortran (row major) is upper in C and vice versa
     lower_f = not lower
 
     if y is None:
@@ -167,8 +168,8 @@ def stress_packed(d1, d2):
     return ss / (N ** 2)
 
 
-def graph_laplacian_packed(WP, overwrite_wp=False):
-    # type: (np.ndarray, bool) -> np.ndarray
+def graph_laplacian_packed(WP, lower=False, overwrite_wp=False):
+    # type: (np.ndarray, bool, bool) -> np.ndarray
     """
     Return a graph laplacian of the adjacency matrix `WP` in symmetric
     packed storage.
@@ -177,6 +178,8 @@ def graph_laplacian_packed(WP, overwrite_wp=False):
     ----------
     WP : ((N + 1) * N // 2, ) np.ndarray
         An symmetric adjacency matrix in packed storage (blas sp format)
+    lower: bool
+        Is `wp` in lower or upper packed format.
     overwrite_wp:
         If `True` then WP will be overwritten.
 
@@ -192,9 +195,12 @@ def graph_laplacian_packed(WP, overwrite_wp=False):
         Lw = -WP
     indices = np.empty(N, dtype=np.intp)
     indices[0] = 0
-    np.cumsum(np.arange(N, 1, -1), out=indices[1:])
+    if lower:
+        np.cumsum(np.arange(2, N + 1, 1), out=indices[1:])
+    else:
+        np.cumsum(np.arange(N, 1, -1), out=indices[1:])
     Lw[indices] = 0
-    Lw[indices] = -sym_matrix_sum_packed(Lw, lower=False)
+    Lw[indices] = -sym_matrix_sum_packed(Lw, lower=lower)
     return Lw
 
 
