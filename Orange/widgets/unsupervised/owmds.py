@@ -204,15 +204,30 @@ def graph_laplacian_packed(WP, lower=False, overwrite_wp=False):
     return Lw
 
 
+def replace_non_finite(arr, replace, buffersize=0):
+    buffersize = buffersize or np.BUFSIZE * 100  # 100 chosen by experimentation
+    mask_buffer = np.empty(buffersize, dtype=bool)
+    it = np.nditer(arr,
+                   flags=['external_loop', 'buffered'],
+                   op_flags=['readwrite'], buffersize=mask_buffer.size)
+    for buff in it:
+        mask = np.isfinite(buff, out=mask_buffer[:buff.size])
+        np.logical_not(mask, out=mask)
+        buff[mask] = replace
+
+    return it.operands[0]
+
+
 def smacof_update_matrix_packed(dist, delta, weights=None, out=None):
     with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
         B = np.divide(delta, dist, out=out)
         if weights is not None:
             B = np.multiply(B, weights, out=B)
-    finitemask = np.isfinite(B)
-    np.logical_not(finitemask, out=finitemask)
-    B[finitemask] = 0
-    del finitemask
+    B = replace_non_finite(B, 0)
+    # finitemask = np.isfinite(B)
+    # np.logical_not(finitemask, out=finitemask)
+    # B[finitemask] = 0
+    # del finitemask
     B = graph_laplacian_packed(B, overwrite_wp=True)
     return B
 
