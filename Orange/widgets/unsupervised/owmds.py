@@ -168,6 +168,33 @@ def stress_packed(d1, d2):
     return ss / (N ** 2)
 
 
+def stress_packed_(d1, d2, buffersize=0):
+    assert d1.shape == d2.shape
+    d1, N = check_symmetric_packed(d1, "d1")
+    return diff_norm(d1, d2, buffersize=buffersize) / (N ** 2)
+
+
+def diff_norm(a, b, buffersize=0):
+    buffersize = buffersize or np.BUFSIZE * 20
+    accum = 0.0
+    buffer = np.empty(buffersize)
+    subtract = np.subtract
+    square = np.square
+    sum_reduce = np.add.reduce
+    _dtype = buffer.dtype
+    it = np.nditer(
+        [a, b],
+        flags=["external_loop", "buffered"],
+        op_flags=[["readonly"], ["readonly"]],
+        buffersize=buffersize
+    )
+    for a, b in it:
+        diff = subtract(a, b, buffer[:a.size])
+        square(diff, diff)
+        accum += sum_reduce(diff)
+    return accum
+
+
 def graph_laplacian_packed(WP, lower=False, overwrite_wp=False):
     # type: (np.ndarray, bool, bool) -> np.ndarray
     """
@@ -211,19 +238,43 @@ def replace_non_finite(arr, replace, buffersize=0):
                    flags=['external_loop', 'buffered'],
                    op_flags=['readwrite'], buffersize=mask_buffer.size)
     for buff in it:
-        mask = np.isfinite(buff, out=mask_buffer[:buff.size])
-        np.logical_not(mask, out=mask)
+        mask = np.isfinite(buff, mask_buffer[:buff.size])
+        np.logical_not(mask, mask)
         buff[mask] = replace
 
     return it.operands[0]
 
 
+def divide_replace_non_finite(a, b, replace=0, out=None, buffersize=0):
+    buffersize = buffersize or np.BUFSIZE * 100
+    mask_buffer = np.empty(buffersize, dtype=bool)
+
+    isfinite = np.isfinite
+    logical_not = np.logical_not
+
+    it = np.nditer([a, b, out],
+                   flags=['external_loop', 'buffered'],
+                   op_flags=[['readonly'],
+                             ['readonly'],
+                             ['writeonly', 'allocate', 'no_broadcast']],
+                   buffersize=mask_buffer.size)
+    for a, b, out in it:
+        np.divide(a, b, out)
+        mask = isfinite(out, mask_buffer[:out.size])
+        logical_not(mask, mask)
+        out[mask] = replace
+    return it.operands[2]
+
+
 def smacof_update_matrix_packed(dist, delta, weights=None, out=None):
     with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
-        B = np.divide(delta, dist, out=out)
+        B = divide_replace_non_finite(delta, dist, out=out)
+        # B = np.divide(delta, dist, out=out)
+        assert out is None or B.ctypes.data == out.ctypes.data
         if weights is not None:
             B = np.multiply(B, weights, out=B)
-    B = replace_non_finite(B, 0)
+
+    # B = replace_non_finite(B, 0)
     # finitemask = np.isfinite(B)
     # np.logical_not(finitemask, out=finitemask)
     # B[finitemask] = 0
