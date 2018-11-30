@@ -27,7 +27,8 @@ class TextItem(pg.TextItem):
 
 
 class AnchorItem(pg.GraphicsObject):
-    def __init__(self, parent=None, line=QLineF(), text="", **kwargs):
+    def __init__(self, parent=None, line=QLineF(), text="", pen=None, font=None,
+                 toolTip="", **kwargs):
         super().__init__(parent, **kwargs)
         self._text = text
         self.setFlag(pg.GraphicsObject.ItemHasNoContents)
@@ -43,6 +44,13 @@ class AnchorItem(pg.GraphicsObject):
         self._label = TextItem(text=text, color=(10, 10, 10))
         self._label.setParentItem(self)
         self._label.setPos(*self.get_xy())
+
+        if pen is not None:
+            self.setPen(pen)
+        if toolTip:
+            self.setToolTip(toolTip)
+        if font is not None:
+            self.setFont(font)
 
         if parent is not None:
             self.setParentItem(parent)
@@ -71,6 +79,18 @@ class AnchorItem(pg.GraphicsObject):
 
     def setPen(self, pen):
         self._spine.setPen(pen)
+        self._arrow.setBrush(pen.brush())
+
+    def pen(self):
+        return self._spine.pen()
+
+    def setFont(self, font):
+        self._label.setFont(font)
+
+    def setToolTip(self, toolTip):
+        super().setToolTip(toolTip)
+        self._arrow.setToolTip(toolTip)
+        self._label.setToolTip(toolTip)
 
     def setArrowVisible(self, visible):
         self._arrow.setVisible(visible)
