@@ -123,8 +123,8 @@ class _LinOp(LinearOperator):
     L.T @ X
     X.T @ L
     -------
-     X.T  @ diag(w) @  M  @ diag(v) - X.T  @  wr  @  vs.T
-    (kxm)   mxm       mxn    nxn      kxm    mx1    1xn
+    X.T  @ diag(w) @  M  @ diag(v) - X.T  @  wr  @  vs.T
+    kxm     mxm      mxn    nxn      kxm    mx1    1xn
     """
     def __init__(self, M, r, s, w, v):
         assert M
@@ -186,6 +186,8 @@ def ca_sparse(table, k=-1):
     M = table
     w = np.reciprocal(row_mass)
     v = np.reciprocal(col_mass)
+    np.sqrt(w, out=w)
+    np.sqrt(v, out=v)
     r = row_mass
     s = col_mass
     wr = w * r
@@ -206,7 +208,7 @@ def ca_sparse(table, k=-1):
         assert Y2.shape == (k, 1)
         Y2 = col_vec(wr) * Y2
         assert Y2.shape == Y1.shape == (m, k)
-        return Y2
+        return Y1 - Y2
 
     def rmatvec(X):
         """
@@ -226,21 +228,19 @@ def ca_sparse(table, k=-1):
         assert Y2.shape == (k, 1)
         Y2 = Y2.dot(row_vec(vs))
         assert Y2.shape == (k, n)
-        return Y2
+        return Y1 - Y2
     if k == -1:
         k = min(table.shape)
 
     op = LinearOperator(table.shape, matmat, matmat=matmat, rmatvec=rmatvec)
-    U, D, V = arpack_svd(op, k=min(k, min(table.shape)))
+    if k == -1:
+        k = min(table.shape)
+    U, D, V = arpack_svd(op, k=min(k, min(table.shape) -1))
     return U, D, V
 
 
-class
 class CA:
     svd = ...  # type:
     sv = ...   # type:
     def __init__(self, ):
         ...
-
-
-
