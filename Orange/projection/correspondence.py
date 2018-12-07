@@ -110,24 +110,44 @@ def wsvd(A, wu=None, wv=None, k=-1, svd_solver="auto", overwrite_a=False):
     return U, s, Vh
 
 
-class _LinOp(LinearOperator):
+def col_vec(x):
+    return x.reshape((-1, 1))
+
+
+def row_vec(x):
+    return x.reshape((1, -1))
+
+
+class _CALinearOperator(LinearOperator):
     """
-    diag(w) @ (M - r@s.T) @ diag(v)
+    Linear operator expressing the weighted matrix in CA that is the input
+    to the svd decomposition. I.e:
+
+        diag(w) @ (M - r@s.T) @ diag(v)
+
+    Parameters
+    ----------
+    M : (M, N) matrix
+    r : (M) np.ndarray
+    s : (N) np.ndarray
+    w : (M) np.ndarray
+    v : (N) np.ndarray
 
      (diag(w) @ M - diag(w) @ r @ s.T) @ diag(v)
     = diag(w) @ M @ diag(v) - wr @ vs.T
 
     L @ X
-    = diag(w) @ M @ diag(v) @ X - wr @ vs.T @ X
+    -----
+    = diag(w) @  M  @ diag(v) @ X -  wr  @ vs.T @  X
+       mxm      mxn    nxn     mxk  mx1    1xn    mxk
 
     L.T @ X
     X.T @ L
     -------
-    X.T  @ diag(w) @  M  @ diag(v) - X.T  @  wr  @  vs.T
-    kxm     mxm      mxn    nxn      kxm    mx1    1xn
+    = X.T  @ diag(w) @  M  @ diag(v) - X.T  @  wr  @  vs.T
+      kxm    mxm       mxn    nxn      kxm    mx1    1xn
     """
     def __init__(self, M, r, s, w, v):
-        assert M
         super().__init__(M.dtype, M.shape)
         self.M = M
         self.r = r
@@ -138,29 +158,49 @@ class _LinOp(LinearOperator):
         self.vs = v * s
 
     def _matmat(self, X):
-        #: >>>
         if X.ndim == 1:
-            X = X.reshape(-1, 1)
-        n, m = self.shape
-        X = X.reshape(m, -1)
+            X = col_vec(X)
+        m, n = self.shape
+        n_, k = X.shape
+        assert n_ == n
+        Y1 = X * col_vec(self.v)
+        Y1 = self.M.dot(Y1)
+        assert Y1.shape == (m, k)
+        Y1 *= col_vec(self.w)
+        #: Y1 = diag(w) @ M @ diag(v)
+        Y2 = X.T @ col_vec(self.vs)
+        assert Y2.shape == (k, 1)
+        Y2 = col_vec(self.wr) * Y2
+        assert Y2.shape == Y1.shape == (m, k)
+        return Y1 + Y2
 
-    def _rmatmul(self, X):
-        """
-        X @ _LinOp
-        >>>
-        """
-        """
-        >>> X.T @ diag(w) @ M
-        """
+    def _rmatmat(self, X):
+        if X.ndim == 1:
+            X = col_vec(X)
+        m, n = self.shape
+        m_, k = X.shape
+        assert m_ == m
+        Y1 = (X.T * row_vec(self.w))
+        # : Y1 @ M -> (M.T @ Y1.T).T
+        Y1 = self.M.T.dot(Y1.T).T
+        assert Y1.shape == (k, n)
+        Y1 *= row_vec(self.v)
+
+        Y2 = X.T.dot(col_vec(self.wr))
+        assert Y2.shape == (k, 1)
+        Y2 = Y2.dot(row_vec(self.vs))
+        assert Y2.shape == (k, n)
+        return Y1 - Y2
+
     def _rmatvec(self, x):
-        return self.rmatmat(x.reshape((-1, 1)))
+        return self._rmatmat(x.reshape((-1, 1)))
 
     def _adjoint(self):
-        #
         return LinearOperator(
             shape=self.shape[::-1],
-            matmat=self.rmatvec,
-            rmatvec=self.matvec,
+            dtype=self.dtype,
+            matmat=self.rmatmat,
+            rmatvec=self.matmat,
         )
 
 
@@ -169,19 +209,12 @@ def ca_sparse(table, k=-1):
     """
     Solve the simple correspondence analysis problem on a sparse table
     """
-    dtype = table.dtype
     total = table.sum()
     m, n = table.shape
     table = table / total  # type: sp.spmatrix
 
     row_mass = np.asarray(table.sum(axis=1)).ravel()
     col_mass = np.asarray(table.sum(axis=0)).ravel()
-
-    def col_vec(x):
-        return x.reshape((-1, 1))
-
-    def row_vec(x):
-        return x.reshape((1, -1))
 
     M = table
     w = np.reciprocal(row_mass)
@@ -190,52 +223,16 @@ def ca_sparse(table, k=-1):
     np.sqrt(v, out=v)
     r = row_mass
     s = col_mass
-    wr = w * r
-    vs = v * s
+
     assert w.shape == r.shape == (m,)
     assert v.shape == s.shape == (n,)
 
-    def matmat(X):
-        if X.ndim == 1:
-            X = col_vec(X)
-        _n, k = X.shape
-        assert _n == n
-        Y1 = X * col_vec(v)
-        Y1 = M.dot(Y1); assert Y1.shape == (m, k)
-        Y1 *= col_vec(w)
-        #: Y1 = diag(w) @ M @ diag(v)
-        Y2 = X.T @ col_vec(vs)
-        assert Y2.shape == (k, 1)
-        Y2 = col_vec(wr) * Y2
-        assert Y2.shape == Y1.shape == (m, k)
-        return Y1 - Y2
-
-    def rmatvec(X):
-        """
-        >>>
-        """
-        if X.ndim == 1:
-            X = col_vec(X)
-        m_, k = X.shape
-        assert m_ == m
-        Y1 = (X.T * row_vec(w))
-        # : Y1 @ M -> (M.T @ Y1.T).T
-        Y1 = M.T.dot(Y1.T).T
-        assert Y1.shape == (k, n)
-        Y1 *= row_vec(v)
-
-        Y2 = X.T.dot(col_vec(wr))
-        assert Y2.shape == (k, 1)
-        Y2 = Y2.dot(row_vec(vs))
-        assert Y2.shape == (k, n)
-        return Y1 - Y2
     if k == -1:
         k = min(table.shape)
-
-    op = LinearOperator(table.shape, matmat, matmat=matmat, rmatvec=rmatvec)
+    op = _CALinearOperator(table, r, s, w, v)
     if k == -1:
-        k = min(table.shape)
-    U, D, V = arpack_svd(op, k=min(k, min(table.shape) -1))
+        k = min(table.shape) - 1
+    U, D, V = arpack_svd(op, k=min(k, min(table.shape) - 1))
     return U, D, V
 
 
