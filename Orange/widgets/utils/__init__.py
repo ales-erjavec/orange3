@@ -4,6 +4,7 @@ from collections import deque
 from typing import TypeVar, Deque, Callable, Any, Iterable
 
 from AnyQt.QtCore import QObject
+from AnyQt.QtGui import QColor, QFont
 
 from Orange.data.variable import TimeVariable
 from Orange.util import deepgetattr
@@ -90,3 +91,31 @@ def apply_all(seq, op):
     """Apply `op` on all elements of `seq`."""
     # from itertools recipes `consume`
     deque(map(op, seq), maxlen=0)
+
+
+def qfont_adjust_size(font, dsize):
+    # type: (QFont, int) -> QFont
+    """
+    Return a font with adjusted size.
+
+    `dsize` is added to the font's size units (i.e. pixel size or points size
+    depending on which one is specified).
+    """
+    font = QFont(font)
+    psize = font.pointSize()
+    pxsize = font.pixelSize()
+    if psize != -1:
+        font.setPointSize(psize + dsize)
+    elif pxsize != -1:
+        font.setPixelSize(pxsize + dsize)
+    return font
+
+
+def qcolor_alpha(color, alpha):
+    # type: (QColor, int) -> QColor
+    """
+    Return a copy of `color` with alpha channel set to `alpha`
+    """
+    color = QColor(color)
+    color.setAlpha(alpha)
+    return color
