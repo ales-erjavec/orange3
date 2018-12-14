@@ -7,7 +7,7 @@ from functools import reduce, partial, lru_cache, wraps
 from itertools import chain
 from warnings import warn
 from xml.sax.saxutils import escape
-from typing import Mapping, Any
+from typing import Mapping, Any, Optional, Iterator
 
 from AnyQt.QtCore import (
     Qt, QObject, QAbstractListModel, QModelIndex, QAbstractItemModel,
@@ -1090,3 +1090,17 @@ def create_list_model(items):
             sitem.setData(value, role)
         model.appendRow([sitem])
     return model
+
+
+def iter_model(
+        model: QAbstractItemModel, column=0, parent=QModelIndex(), start=0,
+        end: Optional[int] = None) -> Iterator[QModelIndex]:
+    """
+    Return a generator yielding `QModelIndex` items in the model starting
+    at `model.index(row, column, parent)` and advancing row-wise until `end` is
+    reached.
+    If end is not supplied the iteration proceeds to the end of the model.
+    """
+    rows = model.rowCount(parent)
+    for i in range(start, rows if end is None else min(end, rows)):
+        yield model.index(i, column, parent)
