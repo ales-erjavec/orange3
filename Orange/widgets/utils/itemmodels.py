@@ -1,19 +1,20 @@
+import operator
 from numbers import Number, Integral
 from math import isnan, isinf
-
-import operator
 from collections import namedtuple, Sequence, defaultdict
 from contextlib import contextmanager
 from functools import reduce, partial, lru_cache, wraps
 from itertools import chain
 from warnings import warn
 from xml.sax.saxutils import escape
+from typing import Mapping, Any
 
 from AnyQt.QtCore import (
-    Qt, QObject, QAbstractListModel, QModelIndex,
-    QItemSelectionModel, QItemSelection)
+    Qt, QObject, QAbstractListModel, QModelIndex, QAbstractItemModel,
+    QItemSelectionModel, QItemSelection
+)
 from AnyQt.QtCore import pyqtSignal as Signal
-from AnyQt.QtGui import QColor
+from AnyQt.QtGui import QColor, QStandardItemModel, QStandardItem
 from AnyQt.QtWidgets import (
     QWidget, QBoxLayout, QToolButton, QAbstractButton, QAction
 )
@@ -1066,3 +1067,26 @@ class TableModel(AbstractSortTableModel):
             )
 
         return self.__stats[coldesc.var]
+
+
+def create_list_model(items):
+    # type: (Sequence[Mapping[Qt.ItemDataRole, Any]]) -> QAbstractItemModel
+    """
+    Create and populate a list QAbstractItemModel with item data from `items`
+
+    Parameters
+    ----------
+    items : Sequence[Mapping[Qt.ItemDataRole, Any]])
+        A sequence of item data for every row in the list model.
+
+    Returns
+    -------
+    model: QAbstractItemModel
+    """
+    model = QStandardItemModel()
+    for item in items:
+        sitem = QStandardItem()
+        for role, value in item.items():
+            sitem.setData(value, role)
+        model.appendRow([sitem])
+    return model
