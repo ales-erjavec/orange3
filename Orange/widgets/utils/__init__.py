@@ -1,6 +1,8 @@
 import inspect
 import sys
 from collections import deque
+
+import typing
 from typing import TypeVar, Deque, Callable, Any, Iterable
 
 from AnyQt.QtCore import QObject
@@ -8,6 +10,9 @@ from AnyQt.QtGui import QColor, QFont
 
 from Orange.data.variable import TimeVariable
 from Orange.util import deepgetattr
+
+if typing.TYPE_CHECKING:
+    H = typing.TypeVar("H", bound=typing.Hashable)
 
 
 def vartype(var):
@@ -119,3 +124,30 @@ def qcolor_alpha(color, alpha):
     color = QColor(color)
     color.setAlpha(alpha)
     return color
+
+
+def unique(iterable):
+    # type: (Iterable[H]) -> Iterable[H]
+    """
+    Return an iterator of unique elements in `iterable` while preserving the
+    order they are encountered in.
+
+    The elements of `iterable` must be hashable.
+
+    Parameters
+    ----------
+    iterable : Iterable[Hashable]
+
+    Returns
+    -------
+    unique : Iterable[Hashable]
+       Unique elements from `iterable`.
+    """
+    seen = set([])
+
+    def first_seen(e):
+        isfirst = e not in seen
+        if isfirst:
+            seen.add(e)
+        return isfirst
+    return (e for e in iterable if first_seen(e))
