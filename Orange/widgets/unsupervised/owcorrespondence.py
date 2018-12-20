@@ -1,3 +1,5 @@
+from xml.sax.saxutils import escape
+
 import sys
 import enum
 
@@ -8,7 +10,7 @@ from collections import namedtuple, OrderedDict
 
 import typing
 from typing import (
-    List, Tuple, Sequence, Optional, Iterable, Any, Dict, Union, Callable,
+    List, Tuple, Sequence, Optional, Iterable, Dict, Union, Callable,
 )
 
 import numpy as np
@@ -16,16 +18,13 @@ import numpy as np
 from AnyQt.QtWidgets import (
     QListView, QApplication, QComboBox, QGraphicsSceneHelpEvent,
     QToolTip, QGridLayout, QLabel, QCheckBox, QSizePolicy, QStackedWidget,
-    QStyledItemDelegate, QTreeView, QStyleOptionViewItem, QWidget,
-    QGraphicsObject, QMenu, QAction, QActionGroup,
+    QTreeView, QGraphicsObject, QAction, QGraphicsScene, QGraphicsView
 )
 from AnyQt.QtGui import (
-    QBrush, QColor, QKeyEvent, QPen, QPalette, QContextMenuEvent, QFont,
-    QKeySequence,
+    QBrush, QColor, QPen, QPalette, QFont, QKeySequence,
 )
 from AnyQt.QtCore import (
-    Qt, QRectF, QSize, QPoint, QLineF, QTimer, QAbstractItemModel,
-    QIdentityProxyModel, QModelIndex, QPersistentModelIndex, QPointF
+    Qt, QRectF, QLineF, QTimer, QPointF
 )
 import pyqtgraph as pg
 
@@ -52,9 +51,14 @@ from Orange.widgets.visualize.utils.plotutils import (
 from Orange.widgets.visualize.owscatterplotgraph import (
     ScatterPlotItem, LegendItem as _LegendItem
 )
+from Orange.widgets.unsupervised.utils import (
+    MappedColumnProxyModel, AnalysisRoleView, EnumItemDelegate
+)
+
 from Orange.widgets.evaluate.owrocanalysis import once
 from Orange.widgets.widget import Input, Output
 from Orange.widgets.settings import Setting
+
 
 
 ColorSchemes = colorbrewer.colorSchemes["qualitative"]
@@ -98,62 +102,6 @@ class CAVariableListModel(itemmodels.VariableListModel):
             return super().flags(index)
 
 
-class EnumItemDelegate(QStyledItemDelegate):
-    """
-    An item delegate for displaying and selecting values of an `enum.Enum`.
-    """
-    def displayText(self, value, locale):
-        """Reimplemented."""
-        if isinstance(value, enum.Enum):
-            return value.name
-        else:
-            return super().displayText(value, locale)
-
-    def createEditor(self, parent, option, index):
-        # type: (QWidget, QStyleOptionViewItem, QModelIndex) -> QWidget
-        """Reimplemented."""
-        data = index.data(Qt.EditRole)
-        if not isinstance(data, enum.Enum):
-            return super().createEditor(parent, option, index)
-        else:
-            model = create_list_model([
-                {Qt.DisplayRole: str(e.value), Qt.UserRole: e}
-                for e in type(data)
-            ])
-
-        editor = QComboBox(parent, autoFillBackground=True, frame=False)
-        editor.setModel(model)
-        editor.setCurrentIndex(editor.findData(data, Qt.UserRole))
-        model.setParent(editor)
-        return editor
-
-    def setEditorData(self, editor, index):
-        # type: (QWidget, QModelIndex) -> None
-        """Reimplemented."""
-        data = index.data(Qt.EditRole)
-        if isinstance(editor, QComboBox):
-            editor.setCurrentIndex(editor.findData(data, Qt.UserRole))
-        else:
-            super().setEditorData(editor, index)
-
-    def setModelData(self, editor, model, index):
-        # type: (QWidget, QAbstractItemModel, QModelIndex) -> None
-        """Reimplemented."""
-        if isinstance(editor, QComboBox):
-            data = editor.itemData(editor.currentIndex(), Qt.UserRole)
-            model.setData(index, data, Qt.EditRole)
-        else:
-            super().setModelData(editor, model, index)
-
-    def initStyleOption(self, option, index):
-        # type: (QStyleOptionViewItem, QModelIndex) -> None
-        """Reimplemented."""
-        super().initStyleOption(option, index)
-        option.displayAlignment = Qt.AlignRight | Qt.AlignVCenter
-        option.textElideMode = Qt.ElideMiddle
-        option.text = option.text + "\N{vertical ellipsis}"
-
-
 class VariableRoleDelegate(EnumItemDelegate):
     def displayText(self, value, locale):
         """Reimplemented."""
@@ -162,376 +110,6 @@ class VariableRoleDelegate(EnumItemDelegate):
             return "" if value == VariableRole.None_ else value.value
         else:
             return super().displayText(value, locale)
-
-
-# TODO: Could use a more generic name.
-class AnalysisRoleView(QTreeView):
-    """
-    A two column view for assigning exclusive roles to items in a model.
-
-    Allows the user to select multiple items and assign a state using a context
-    menu popup, or using left/right arrow keys to switch to next/previous
-    state.
-    """
-    def __init__(self, *args, editRole=Qt.EditRole, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.__editColumn = 1
-        self.__editRole = editRole
-        self.__statesModel = None  # type: Optional[QAbstractItemModel]
-        self.setHeaderHidden(True)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        header = self.header()
-        header.setStretchLastSection(True)
-
-    def setStateModel(self, model):
-        # type: (QAbstractItemModel) -> None
-        """
-        Set the (list) model used for selection of possible states.
-
-        Qt.UserRole is used as the source for values written back to the
-        view's model.
-
-        NOTE
-        ----
-        Ownership of the model stays with the caller.
-        """
-        self.__statesModel = model
-
-    def stateModel(self):
-        # type: () -> Optional[QAbstractItemModel]
-        """Return the state model"""
-        return self.__statesModel
-
-    def editRole(self):
-        # type: () -> Qt.ItemDataRole
-        """
-        The edit role in the model (self.model()) from which the states are
-        read and written to.
-        """
-        return self.__editRole
-
-    def setEditRole(self, role):
-        # type: (Qt.ItemDataRole) -> None
-        """
-        Set the edit role
-        """
-        self.__editRole = role
-
-    def editColumn(self):
-        # type: () -> int
-        """
-        The column in the model (self.model()) from which the states are
-        read and written to.
-        """
-        return self.__editColumn
-
-    def setEditColumn(self, column):
-        # type: (int) -> None
-        """
-        Set the edit column.
-        """
-        self.__editColumn = column
-
-    def keyPressEvent(self, event):
-        # type: (QKeyEvent) -> None
-        """Reimplemented."""
-        if self.__editKeyEvent(event):
-            event.setAccepted(True)
-            return
-        super().keyPressEvent(event)
-
-    def contextMenuEvent(self, event):
-        # type: (QContextMenuEvent) -> None
-        """Reimplemented."""
-        self.__popup(event.globalPos())
-
-    def __popup(self, pos):
-        # type: (QPoint) -> None
-        # Popup a menu for setting the state of the current selection at `pos`.
-        # `pos` is in global screen coordinates.
-        states = self.__statesModel
-        if states is None:
-            return
-        # find the current common state for the selection
-        selection = self.selectionModel().selectedRows(self.editColumn())
-        role = self.editRole()
-        current = set(filter(None, (idx.data(role) for idx in selection)))
-        if len(current) == 1:  # have a common current state
-            current = current.pop()
-        else:
-            current = None
-        pselection = [QPersistentModelIndex(idx) for idx in selection]
-        menu = QMenu(self)
-        menu.setAttribute(Qt.WA_DeleteOnClose)
-        group = QActionGroup(menu, exclusive=True)
-        for index in iter_model(self.__statesModel):
-            text = index.data(Qt.DisplayRole)
-            a = QAction(str(text), group, checkable=True)
-            a.setData(index.data(Qt.UserRole))
-            tip = index.data(Qt.ToolTipRole)
-            if isinstance(tip, str):
-                a.setToolTip(tip)
-            whatsthis = index.data(Qt.WhatsThisRole)
-            if isinstance(whatsthis, str):
-                a.setWhatsThis(whatsthis)
-            state = index.data(Qt.UserRole)
-            a.setChecked(state == current)
-            menu.addAction(a)
-
-        def setstate(action):  # type: (QAction) -> None
-            # write back the state to the model
-            data = action.data()
-            for pidx in pselection:
-                if not pidx.isValid():
-                    continue
-                idx = pidx.sibling(pidx.row(), pidx.column())  # to QModelIndex
-                if idx.isValid():
-                    model = idx.model()
-                    model.setData(idx, data, role)
-
-        menu.triggered[QAction].connect(setstate)
-        menu.popup(pos, group.checkedAction())
-        menu.setFocus(Qt.PopupFocusReason)
-
-    def __editKeyEvent(self, event):
-        # type: (QKeyEvent) -> bool
-        # Handle key event, return True if the event was handled.
-        selection = self.selectionModel().selectedRows(self.editColumn())
-        model = self.model()
-        if not selection:
-            return False
-        if (event.key() == Qt.Key_Down and event.modifiers() & Qt.AltModifier) \
-                or event.key() == Qt.Key_Menu:
-            # on Alt + Key_Down open a popup menu
-            # ensure current index is visible and map its pos to screen coord.
-            current = self.selectionModel().currentIndex()
-            self.scrollTo(current, QTreeView.EnsureVisible)
-            pos = self.visualRect(current).center()
-            pos = self.mapToGlobal(pos)
-            self.__popup(pos)
-            return True
-        if event.key() == Qt.Key_Left:
-            direction = 1
-        elif event.key() == Qt.Key_Right:
-            direction = -1
-        else:
-            return False
-
-        editrole = self.editRole()
-        for i in selection:
-            value = model.data(i, editrole)
-            model.setData(i, self.nextState(value, direction))
-        return True
-
-    def nextState(self, value, direction):
-        # type: (Any, int) -> Any
-        """
-        Return the next state (item) in the `statesModel()`.
-
-        Parameters
-        ----------
-        value : Any
-            An value from Qt.UserRole in the `statesModel()`
-        direction : int
-            -1 or 1 specifies the search direction
-
-        Returns
-        -------
-        next : Any
-            The next Qt.UserRole value in the `statesModel()`.
-        """
-        model = self.__statesModel
-        if model is None:
-            return None
-
-        matches = model.match(
-            model.index(0, 0), Qt.UserRole, value, 1, Qt.MatchExactly
-        )
-        if not matches:
-            return None
-        match = matches[0]
-        index = match.sibling(
-            (match.row() + direction) % model.rowCount(), match.column()
-        )
-        return index.data(Qt.UserRole)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        column = self.editColumn()
-        header = self.header()
-        if header.count() != 2 or \
-                header.visualIndex(column) != header.count() - 1:
-            return
-        # The last section is fixed but also forced stretch (stretchLastSection)
-        # so it always gets extra space. Spill the extra width to to first
-        # section instead
-        sizes = [header.sectionSize(i) for i in range(header.count())]
-        size = self.sizeHintForColumn(column)
-        spill = sizes[column] - size
-        header.resizeSection(0, sizes[0] + spill)
-        header.resizeSection(1, sizes[1] - spill)
-
-    def sizeHintForColumn(self, column):
-        if column == self.editColumn():
-            delegagte = self.itemDelegateForColumn(column)
-            if delegagte is None:
-                delegagte = self.itemDelegate()
-            states = self.__statesModel
-            if states is None:
-                return super().sizeHintForColumn(column)
-            # infer size hint for the column for all states
-            m = create_list_model([{}])
-            index = m.index(0, 0)
-            option = self.viewOptions()
-            sh = QSize()
-            for i in range(states.rowCount()):
-                item = states.index(i, 0).data(Qt.UserRole)
-                m.setData(index, item, self.editRole())
-                sh = sh.expandedTo(delegagte.sizeHint(option, index))
-            return sh.width()
-        else:
-            return super().sizeHintForColumn(column)
-
-
-class MappedColumnProxyModel(QIdentityProxyModel):
-    """
-    A proxy model extending a list model with a second column mapping
-    select roles back into the original model. Can be used to edit auxiliary
-    edit roles in a two column view.
-    """
-    __mappedRoles = ...  # type: Dict[Qt.ItemDataRole, Qt.ItemDataRole]
-
-    def __init__(self, parent=None, **kwargs):
-        mappedRoles = kwargs.pop("mappedRoles", {})
-        super().__init__(parent, **kwargs)
-        self.__mappedRoles = mappedRoles.copy()
-
-    def setMappedRoles(self, mappedRoles):
-        # type: (Dict[Qt.ItemDataRole, Qt.ItemDataRole]) -> None
-        """
-        Set the mapped roles between column 1 and the source model's roles
-        """
-        self.__mappedRoles = mappedRoles.copy()
-        if self.sourceModel() is not None and self.rowCount():
-            self.dataChanged.emit(
-                self.index(0, 1), self.index(self.rowCount() - 1)
-            )
-
-    def mappedRoles(self):
-        # type: () -> Dict[Qt.ItemDataRole, Qt.ItemDataRole]
-        """
-        Return the mapped roles.
-        """
-        return self.__mappedRoles.copy()
-
-    def setSourceModel(self, sourceModel):
-        # type: (QAbstractItemModel) -> None
-        """Reimplemented."""
-        model = self.sourceModel()
-        if model is not None:
-            model.dataChanged.disconnect(self.__onDataChanged)
-        super().setSourceModel(sourceModel)
-        if sourceModel is not None:
-            sourceModel.dataChanged.connect(self.__onDataChanged)
-
-    def rowCount(self, parent=QModelIndex()):
-        """Reimplemented."""
-        if parent.isValid() or self.sourceModel() is None:
-            return 0
-        return self.sourceModel().rowCount()
-
-    def columnCount(self, parent=QModelIndex()):
-        """Reimplemented."""
-        return 0 if parent.isValid() else 2
-
-    def mapToSource(self, proxyIndex):
-        # type: (QModelIndex) -> QModelIndex
-        """Reimplemented."""
-        row, col = proxyIndex.row(), proxyIndex.column()
-        if col == 1:  # map the extra column back
-            col = 0
-        return self.sourceModel().index(row, col)
-
-    def data(self, index, role=Qt.DisplayRole):
-        # type: (QModelIndex, Qt.ItemDataRole) -> Any
-        """Reimplemented."""
-        if not index.isValid():
-            return None
-        row, col = index.row(), index.column()
-        source = self.sourceModel()
-        index = self.mapToSource(index)
-        if col == 0:
-            return source.data(index, role)
-        elif col == 1 and role in self.__mappedRoles:
-            return source.data(index, self.__mappedRoles[role])
-        else:
-            return None
-
-    def index(self, row, column, parent=QModelIndex()):
-        # type: (int, int, QModelIndex) -> QModelIndex
-        """Reimplemented."""
-        # MUST not create indexes that are out of bounds or parented
-        if self.hasIndex(row, column, parent):
-            return self.createIndex(row, column)
-        else:
-            return QModelIndex()
-
-    def parent(self, child):
-        """Reimplemented."""
-        return QModelIndex()
-
-    def flags(self, index):
-        # type: (QModelIndex) -> Qt.ItemFlags
-        """Reimplemented."""
-        if not index.isValid():
-            return Qt.NoItemFlags
-        source = self.sourceModel()
-        if index.column() == 1:
-            # ?? query source; ItemIsEditable if the source is enabled ??
-            return Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable
-        sourceindex = self.mapToSource(index)
-        return source.flags(sourceindex)
-
-    def setData(self, index, value, role=Qt.EditRole):
-        # type: (QModelIndex, Any, Qt.ItemDataRole) -> bool
-        """Reimplemented."""
-        if not index.isValid():
-            return False
-        row, col = index.row(), index.column()
-        source = self.sourceModel()
-        index = self.mapToSource(index)
-        if col == 0:
-            return source.setData(index, value, role)
-        elif col == 1 and role in self.__mappedRoles:
-            return source.setData(index, value, self.__mappedRoles[role])
-        else:
-            return False
-
-    def buddy(self, index):
-        # type: (QModelIndex) -> QModelIndex
-        """Reimplemented."""
-        if index.column() == 0:
-            return index.sibling(index.row(), 1)
-        else:
-            return index
-
-    def sibling(self, row, column, idx):
-        # type: (int, int, QModelIndex) -> QModelIndex
-        """Reimplemented."""
-        return self.index(row, column, idx.parent())
-
-    def __onDataChanged(self, tl, br, roles=[]):
-        tl = self.mapFromSource(tl)
-        br = self.mapFromSource(br)
-        # change the range to column 1. The base class will emit changes for
-        # the original column.
-        tl = tl.sibling(tl.row(), 1)
-        br = br.sibling(br.row(), 1)
-        if tl.isValid() and br.isValid():
-            self.dataChanged.emit(tl, br)
-
-
-RolesModel = MappedColumnProxyModel
 
 
 class CATypes(enum.Enum):
@@ -608,6 +186,46 @@ PointSizeItems = [
         Qt.UserRole: "inertia-relative"
     }
 ]
+
+
+# The Madness and the Damage Done
+class GraphicsScene(pg.GraphicsScene):
+    # Restore the base QGraphicsScene itemAt, items, ...
+    # (https://github.com/pyqtgraph/pyqtgraph/pull/801)
+
+    def itemAt(self, *args, **kwargs):
+        return QGraphicsScene.itemAt(self, *args, **kwargs)
+
+    def items(self, *args, **kwargs):
+        return QGraphicsScene.items(self, *args, **kwargs)
+
+    def selectedItems(self):
+        return QGraphicsScene.selectedItems(self)
+
+    def collidingItems(self, *args, **kwargs):
+        return QGraphicsScene.collidingItems(self, *args, **kwargs)
+
+    def focusItem(self):
+        return QGraphicsScene.focusItem(self)
+
+    def mouseGrabberItem(self):
+        return QGraphicsScene.mouseGrabberItem(self)
+
+
+class GraphicsView(pg.GraphicsView):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # replace the scene and all its contents
+        self.setCentralItem(None)
+        scene = self.scene()
+        self.sceneObj = GraphicsScene(parent=self)
+        self.setScene(self.sceneObj)
+        self.setCentralItem(pg.PlotItem())
+        scene.clear()
+        scene.setParent(None)
+
+    def wheelEvent(self, event):
+        QGraphicsView.wheelEvent(self, event)
 
 
 class OWCorrespondenceAnalysis(widget.OWWidget):
@@ -807,11 +425,13 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         sizesmodel = create_list_model(PointSizeItems)
         sizesmodel.setParent(self)
         self.row_point_size_cb = EnumComboBox(
-            sizeAdjustPolicy=QComboBox.AdjustToContents,
+            sizeAdjustPolicy=QComboBox.AdjustToMinimumContentsLength,
+            minimumContentsLength=5,
         )
 
         self.col_point_size_cb = EnumComboBox(
-            sizeAdjustPolicy=QComboBox.AdjustToContents,
+            sizeAdjustPolicy=QComboBox.AdjustToMinimumContentsLength,
+            minimumContentsLength=5,
         )
         self.row_point_size_cb.setModel(sizesmodel)
         self.row_point_size_cb.setCurrentValue(self.row_point_size)
@@ -858,7 +478,7 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
 
         # Setup the plot view
         self.plot = CAPlotItem()
-        self.plotview = pg.GraphicsView()
+        self.plotview = GraphicsView()
         self.plotview.setAntialiasing(True)
         self.plotview.setCentralItem(self.plot)
         self.plot.setMenuEnabled(False)
@@ -1400,7 +1020,6 @@ class CAPlotItem(pg.PlotItem):
         self.__helpDelegate = HelpEventDelegate(self.helpEvent, self)
         self.vb.setAspectLocked(True)
         self.cadata = None  # type: Optional[CAData]
-        self.__items = []
         self._legend = LegendItem()
         self._legend.setParentItem(self.vb)
         self._legend.anchor((1, 0), (1, 0), offset=(-5, 5))
@@ -1418,10 +1037,9 @@ class CAPlotItem(pg.PlotItem):
             shortcut=QKeySequence.ZoomOut
         )
         zoomin = QAction(
-            "Zoom in", self, objectName="action-zoom-in",
+            "Zoom in tool", self, objectName="action-zoom-in",
             shortcut=QKeySequence.ZoomIn
         )
-
         zoomfit.triggered.connect(self.zoomToFit)
         zoomout.triggered.connect(self.zoomOut)
         zoomin.triggered.connect(self.zoomIn)
@@ -1451,13 +1069,10 @@ class CAPlotItem(pg.PlotItem):
         return self.__colitem
 
     def clear(self):
-        for item in self.__items[::-1]:
-            self.removeItem(item)
         self._legend.clear()
         self._legend.hide()
         self.__rowitem = None
         self.__colitem = None
-        self.__items = []
         super().clear()
 
     def zoomIn(self):
@@ -1496,8 +1111,7 @@ class CAPlotItem(pg.PlotItem):
                  ("Columns", self.__colitem)]
         items = [(which, item) for which, item in items if
                  item is not None and
-                 item.scpitem is not None and
-                 item.scpitem.isVisible()]
+                 item.scpitem is not None]
         hititems = []
         for which, item in items:
             px, py = item.scpitem.getData()
@@ -1521,12 +1135,12 @@ class CAPlotItem(pg.PlotItem):
         header = [["<th>{}</th>".format(header) for header in header]]
         for which, item, indices in hititems:
             # mass, inertia
-            rows = [[item.names[i], 0, # item.mass[i],
+            rows = [[escape(item.names[i]), 0,  # item.mass[i],
                      100 * item.inertia_e[i]]
                     for i in indices]
             formats = ["<th align='right'>{}</th>",
                        "<td align='right'>{:.3g}</td>",
-                       "<td align='right'>{:.5g}%</td>"]
+                       "<td align='right'>{:.2f}%</td>"]
             rows = [[fmt.format(value) for fmt, value in zip(formats, row)]
                     for row in rows]
             tip = ("<table>\n" +
@@ -1534,16 +1148,16 @@ class CAPlotItem(pg.PlotItem):
                              for row in header + rows) +
                    "</table>")
             parts.append((which, tip))
-
         if len(parts) > 1:
-            tootip = "".join(["<p>{}<br/>{}</p>".format(header, contents)
-                             for header, contents in parts])
+            tooltip = "".join("<h4>{}</h4><span>{}</span>".format(header, contents)
+                              for header, contents in parts)
         elif len(parts) == 1:
-            tootip = parts[0][1]
+            tooltip = parts[0][1]
         else:
-            tootip = ""
-        if tootip:
-            QToolTip.showText(event.screenPos(), tootip, event.widget())
+            tooltip = ""
+        if tooltip:
+            style = "<style>table { float: right; }; </style>"
+            QToolTip.showText(event.screenPos(), style + tooltip, event.widget())
             return True
         else:
             return False
@@ -1680,9 +1294,6 @@ class CAPlotItem(pg.PlotItem):
         rowitem.set_size_property(None)
         colitem.set_size_property(None)
 
-        colitem.set_inertia_threshold(0.01)
-        rowitem.set_inertia_threshold(0.01)
-
         # format legend
         if not symbol_groups and len(row_groups) == len(col_groups) == 1:
             # both row/column are single group/variable
@@ -1795,8 +1406,6 @@ class CAPlotItem(pg.PlotItem):
             rowscpitem, cadata.rownames, rowlabels, None, inertia_e,
             depict_coords=size_props
         )
-        self.__rowitem.set_inertia_threshold(0.01)
-
         legenditems = []
         if len(groups) < len(colors):
             for (var, _), color in zip(groups, colors):
@@ -1831,7 +1440,7 @@ class DepictItem:
     labelsitem = ...  # type: LabelGroup
     arrowsitem = ...  # type: ArrowGroup
     inertia_e = ...   # type: np.ndarray
-    inertia_e_theshold = 0.01
+    inertia_e_theshold = 0.00
 
     def __init__(self, scpitem, names, labelsitem, arrowitem, inertia_e,
                  inertia_e_threshold=0.1,
@@ -1849,18 +1458,23 @@ class DepictItem:
         self.size_property_name = None
 
     def set_inertia_threshold(self, limit):
-        items = []
-        if self.labelsitem is not None:
-            items.append(self.labelsitem.items)
-        if self.arrowsitem is not None:
-            items.append(self.arrowsitem.items)
-
-        self.inertia_e_theshold = limit
-        if not items:
+        if self.inertia_e_theshold == limit:
             return
-        for items, ine in zip(zip(*items), self.inertia_e):
-            for item in items:
-                item.setVisible(ine > limit)
+        self.inertia_e_theshold = limit
+        if self.labelsitem is not None:
+            labelitems = self.labelsitem.items
+        else:
+            labelitems = []
+        if self.arrowsitem is not None:
+            arrowitems = self.arrowsitem.items
+        else:
+            arrowitems = []
+        if arrowitems:
+            for item, inertia in zip(arrowitems, self.inertia_e):
+                item.setLabelVisible(inertia > limit)
+        if labelitems:
+            for item, inertia in zip(labelitems, self.inertia_e):
+                item.setVisible(inertia > limit)
 
     def set_base_point_size(self, basesize):
         if basesize != self.base_point_size:
@@ -1883,6 +1497,10 @@ class DepictItem:
         else:
             sizes = self.base_point_size
         self.scpitem.setSize(sizes)
+        if self.arrowsitem is not None:
+            for item, size in zip(self.arrowsitem.items, sizes + 5):
+                item._arrow.setStyle(headLen=size)
+                item.setPen(item.pen())
 
     def size_data_for_property(self, property):
         thunk = self._depict_coords.get(property, lambda: None)
@@ -1956,7 +1574,6 @@ def plot_arrows(x, y, labels, font=None, pen=None, ):
     arrows = [
         AnchorItem(
             line=QLineF(0, 0, x, y), pen=pen, font=font, text=label,
-            toolTip=label
         )
         for x, y, label in zip(x, y, labels)
     ]
@@ -1967,11 +1584,20 @@ class ArrowGroup(GraphicsGroup):
     """
     A `pg.GraphicsObject` grouping a list of AnchorItems.
     """
+    # disable label rotation past this many AnchorItems
+    MaximumRotatedLabels = 300
+
     def __init__(self, parent=None, items=[], **kwargs):
         super().__init__(None, *kwargs)
         self.items = list(items)  # type: List[AnchorItem]
+        if len(items) > self.MaximumRotatedLabels:
+            pass
+
+        autorotate = len(items) <= self.MaximumRotatedLabels
         for item in self.items:
+            item.setAutoRotateLabel(autorotate)
             item.setParentItem(self)
+
         if parent is not None:
             self.setParentItem(parent)
 
@@ -2294,8 +1920,6 @@ def multiple_correspondence(B, counts):
     Js = np.asarray(counts)
     assert Js.ndim == 1
     Q = Js.size  # number of groups
-    # Q = len(splits) + 1
-    # Js = np.diff(np.r_[0, splits, N])
     assert np.all(Js > 0)
     J = np.sum(Js)
     assert J == N
