@@ -3,7 +3,7 @@ import numpy as np
 from AnyQt.QtCore import (
     QRectF, QLineF, QObject, QEvent, Qt, pyqtSignal as Signal
 )
-from AnyQt.QtGui import QTransform, QFontMetrics
+from AnyQt.QtGui import QFontMetrics
 from AnyQt.QtWidgets import (
     QGraphicsLineItem, QGraphicsSceneMouseEvent, QPinchGesture,
     QGraphicsItemGroup, QWidget)
@@ -29,9 +29,10 @@ class TextItem(pg.TextItem):
 
 class AnchorItem(pg.GraphicsObject):
     def __init__(self, parent=None, line=QLineF(), text="", pen=None, font=None,
-                 toolTip="", **kwargs):
-        super().__init__(parent, **kwargs)
+                 toolTip="", autoRotateLabel=True, **kwargs):
+        super().__init__(None, **kwargs)
         self._text = text
+        self._autorotate = autoRotateLabel
         self.setFlag(pg.GraphicsObject.ItemHasNoContents)
 
         self._spine = QGraphicsLineItem(line, self)
@@ -98,6 +99,14 @@ class AnchorItem(pg.GraphicsObject):
     def setArrowVisible(self, visible):
         self._arrow.setVisible(visible)
 
+    def setAutoRotateLabel(self, autorotate):
+        if self._autorotate != autorotate:
+            self._autorotate = autorotate
+            self.__updateLayout()
+
+    def autoRotate(self):
+        return self._autorotate
+
     def paint(self, painter, option, widget):
         pass
 
@@ -109,18 +118,16 @@ class AnchorItem(pg.GraphicsObject):
 
     def __updateLayout(self):
         T = self.sceneTransform()
-        if T is None:
-            T = QTransform()
-
         # map the axis spine to scene coord. system.
-        viewbox_line = T.map(self._spine.line())
+        line = self._spine.line()
+        viewbox_line = T.map(line)
         angle = viewbox_line.angle()
         assert not np.isnan(angle)
         # note in Qt the y axis is inverted (90 degree angle 'points' down)
         left_quad = 270 < angle <= 360 or -0.0 <= angle < 90
 
-        # position the text label along the viewbox_line
-        label_pos = self._spine.line().pointAt(0.90)
+        # position the text label along the line
+        label_pos = line.pointAt(0.90)
 
         if left_quad:
             # Anchor the text under the axis spine
@@ -128,12 +135,13 @@ class AnchorItem(pg.GraphicsObject):
         else:
             # Anchor the text over the axis spine
             anchor = (0.5, 1.1)
-
         self._label.setPos(label_pos)
         self._label.setAnchor(*anchor)
-        self._label.setRotation(-angle if left_quad else 180 - angle)
-
-        self._arrow.setPos(self._spine.line().p2())
+        if not self._autorotate:
+            self._label.setRotation(0)
+        else:
+            self._label.setRotation(-angle if left_quad else 180 - angle)
+        self._arrow.setPos(line.p2())
         self._arrow.setRotation(180 - angle)
 
 
