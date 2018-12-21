@@ -29,10 +29,11 @@ class TextItem(pg.TextItem):
 
 class AnchorItem(pg.GraphicsObject):
     def __init__(self, parent=None, line=QLineF(), text="", pen=None, font=None,
-                 toolTip="", autoRotateLabel=True, **kwargs):
+                 toolTip="", autoRotateLabel=True, labelVisible=True, **kwargs):
         super().__init__(None, **kwargs)
         self._text = text
         self._autorotate = autoRotateLabel
+        self._labelvisible = labelVisible
         self.setFlag(pg.GraphicsObject.ItemHasNoContents)
 
         self._spine = QGraphicsLineItem(line, self)
@@ -48,6 +49,7 @@ class AnchorItem(pg.GraphicsObject):
         self._label.setFlag(StaticTextItem.ItemIgnoresTransformations)
         self._label.setParentItem(self)
         self._label.setPos(*self.get_xy())
+        self._label.setVisible(self._labelvisible)
 
         if pen is not None:
             self.setPen(pen)
@@ -67,7 +69,7 @@ class AnchorItem(pg.GraphicsObject):
         if text != self._text:
             self._text = text
             self._label.setText(text)
-            self._label.setVisible(bool(text))
+            self._label.setVisible(bool(text) and self._labelvisible)
 
     def text(self):
         return self._text
@@ -95,9 +97,18 @@ class AnchorItem(pg.GraphicsObject):
         super().setToolTip(toolTip)
         self._arrow.setToolTip(toolTip)
         self._label.setToolTip(toolTip)
+        self._spine.setToolTip(toolTip)
 
     def setArrowVisible(self, visible):
         self._arrow.setVisible(visible)
+
+    def setLabelVisible(self, visible):
+        if self._labelvisible != visible:
+            self._labelvisible = visible
+            self._label.setVisible(visible)
+
+    def isLabelVisible(self):
+        return self._labelvisible
 
     def setAutoRotateLabel(self, autorotate):
         if self._autorotate != autorotate:
