@@ -9,6 +9,7 @@ from AnyQt.QtWidgets import (
     QGraphicsItemGroup, QWidget)
 
 import pyqtgraph as pg
+from Orange.widgets.utils.graphicsitems import StaticTextItem
 
 from Orange.widgets.utils.plot import SELECT, PANNING, ZOOMING
 
@@ -42,6 +43,8 @@ class AnchorItem(pg.GraphicsObject):
         self._arrow.setStyle(headLen=10)
 
         self._label = TextItem(text=text, color=(10, 10, 10))
+        self._label = StaticTextItem(text=text)
+        self._label.setFlag(StaticTextItem.ItemIgnoresTransformations)
         self._label.setParentItem(self)
         self._label.setPos(*self.get_xy())
 
@@ -127,7 +130,7 @@ class AnchorItem(pg.GraphicsObject):
             anchor = (0.5, 1.1)
 
         self._label.setPos(label_pos)
-        self._label.setAnchor(pg.Point(*anchor))
+        self._label.setAnchor(*anchor)
         self._label.setRotation(-angle if left_quad else 180 - angle)
 
         self._arrow.setPos(self._spine.line().p2())
