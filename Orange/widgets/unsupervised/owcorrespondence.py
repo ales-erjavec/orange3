@@ -3,10 +3,10 @@ from xml.sax.saxutils import escape
 import sys
 import enum
 
-from itertools import groupby, chain
+from itertools import groupby, chain, repeat
 from operator import itemgetter
 from types import SimpleNamespace
-from collections import namedtuple, OrderedDict
+from collections import OrderedDict
 
 import typing
 from typing import (
@@ -18,11 +18,11 @@ import numpy as np
 from AnyQt.QtWidgets import (
     QListView, QApplication, QComboBox, QGraphicsSceneHelpEvent,
     QToolTip, QGridLayout, QLabel, QCheckBox, QSizePolicy, QStackedWidget,
-    QTreeView, QGraphicsObject, QAction, QGraphicsScene, QGraphicsView
-)
+    QTreeView, QGraphicsObject, QAction, QGraphicsScene, QGraphicsView,
+    QSlider)
 from AnyQt.QtGui import (
     QBrush, QColor, QPen, QPalette, QFont, QKeySequence,
-)
+    QPainter)
 from AnyQt.QtCore import (
     Qt, QRectF, QLineF, QTimer, QPointF
 )
@@ -32,9 +32,9 @@ import Orange.data
 from Orange.data import (
     Table, Domain, ContinuousVariable, StringVariable, DiscreteVariable
 )
-from Orange.data.util import SharedComputeValue
-from Orange.statistics import contingency
-
+from Orange.projection.correspondence import (
+    cross_tabulate, burt_table, correspondence, CA, MCA, CATransform
+)
 from Orange.widgets import widget, gui, settings
 
 from Orange.widgets.utils import (
@@ -178,12 +178,12 @@ PointSizeItems = [
         Qt.DisplayRole: "Inertia",
         Qt.ToolTipRole: "The point size corresponds the percentage of "
                         "inertia explained in the shown dimensions",
-        Qt.UserRole: "inertia"
+        Qt.UserRole: "contrib-abs"
     }, {
         Qt.DisplayRole: "Rel. Inertia",
         Qt.ToolTipRole: "The point size corresponds the percentage of "
                         "inertia explained over <b>all</b> dimensions",
-        Qt.UserRole: "inertia-relative"
+        Qt.UserRole: "contrib-rel"
     }
 ]
 
@@ -255,12 +255,20 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
     inertia_limit_col = settings.Setting(1.0)  # type: float
     row_point_size = settings.Setting("same")  # type: str
     col_point_size = settings.Setting("same")  # type: str
+    opacity = settings.Setting(255)            # type: int
+    base_point_size = settings.Setting(12)     # type: int
 
     graph_name = "plot"
 
     class Error(widget.OWWidget.Error):
+        #: ..
         empty_data = widget.Msg("Empty dataset")
+        #: The 'data' input has no categorical columns
         no_disc_vars = widget.Msg("No categorical data")
+        #: The rank 0 solution (constant or rank 1 contingency table)
+        null_solution = widget.Msg("Zero dimensional solution.")
+        #: Lin alg error (SVD convergence,)
+        svd_convergence = widget.Msg("SVD Convergence error:\n")
 
     class Warning(widget.OWWidget.Warning):
         xor_inputs = widget.Msg(
@@ -428,7 +436,6 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
             sizeAdjustPolicy=QComboBox.AdjustToMinimumContentsLength,
             minimumContentsLength=5,
         )
-
         self.col_point_size_cb = EnumComboBox(
             sizeAdjustPolicy=QComboBox.AdjustToMinimumContentsLength,
             minimumContentsLength=5,
@@ -448,6 +455,14 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         grid.addWidget(self.col_point_size_cb, PSizeRow, 2)
         grid.addWidget(small_label("Rows"), PSizeRow - 1, 1)
         grid.addWidget(small_label("Columns"), PSizeRow - 1, 2)
+        self.base_point_size_slider = QSlider(
+            orientation=Qt.Horizontal, minimum=3, maximum=16,
+            value=self.base_point_size
+        )
+        self.base_point_size_slider.valueChanged.connect(
+            self.set_base_point_size)
+        grid.addWidget(self.base_point_size_slider, PSizeRow + 1, 1, 1, 2)
+
 
         LabelLimitRow = PSizeRow + 2
         self.inertia_limit_row_sb = DoubleSpinBoxWithSlider(
@@ -479,6 +494,7 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         # Setup the plot view
         self.plot = CAPlotItem()
         self.plotview = GraphicsView()
+        self.plotview.setRenderHint(QPainter.Antialiasing)
         self.plotview.setAntialiasing(True)
         self.plotview.setCentralItem(self.plot)
         self.plot.setMenuEnabled(False)
@@ -783,6 +799,13 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         if item is not None:
             item.set_size_property(which)
 
+    def set_base_point_size(self, size):
+        if size != self.base_point_size:
+            self.base_point_size = size
+            for item in [self.plot.colitem(), self.plot.rowitem()]:
+                if item is not None:
+                    item.set_base_point_size(size)
+
     def _update_CA(self):
         # Recompute the CA solution based on current settings and set it for
         # display
@@ -826,7 +849,8 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
                 ca = correspondence(ctable, )
             else:
                 counts = [len(v.values) for v in rowvars]
-                ca = multiple_correspondence(ctable, counts)
+                # ca = multiple_correspondence(ctable, counts)
+                ca = correspondence.mca(ctable, counts)
         else:
             ca = None
         self._set_ca_solution(ca, rowitems=rowitems, colitems=colitems,
@@ -837,6 +861,11 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
                          rownames=None, colnames=None):
         self.axis_x_cb.clear()
         self.axis_y_cb.clear()
+
+        if ca is not None and ca.k == 0:
+            self.Error.null_solution()
+        else:
+            self.Error.null_solution.clear()
         if ca is None:
             self.cadata = None
             self.plot.clear()
@@ -877,7 +906,7 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         self.plot.clear()
         cadata = self.cadata
 
-        if cadata is None:
+        if cadata is None or not cadata.ca.k:
             return
         ca = cadata.ca
         map_type = self.map_type
@@ -906,11 +935,12 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
                 [self.row_point_size, self.col_point_size]):
             if item is not None:
                 item.set_inertia_threshold(limit)
+                item.set_base_point_size(self.base_point_size)
                 item.set_size_property(size)
 
     def _update_info(self):
         # update the info text labels in the GUI control area
-        if self.cadata is None:
+        if self.cadata is None or self.cadata.ca.k == 0:
             self.infotext_x.setText("N/A")
             self.infotext_y.setText("N/A")
             self.infotext_sum.setText("N/A")
@@ -956,7 +986,7 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
             return
         cadata, data = self.cadata, self.data
 
-        if cadata is not None:
+        if cadata is not None and cadata.ca.k > 0:
             ca = cadata.ca
             rowvars = [g for g, _ in group_items(cadata.rowitems)]
             colvars = [g for g, _ in group_items(cadata.colitems)]
@@ -1181,6 +1211,9 @@ class CAPlotItem(pg.PlotItem):
         small_font = qfont_adjust_size(self.font(), -2)
         colors = [QColor(*c) for c in colorscheme[max(colorscheme.keys())]]
         ca = cadata.ca
+        if len(dim) == 2 and dim[0] == dim[1]:
+            dim = (dim[0],)
+
         if maptype == Symmetric:
             rowcoords = ca.row_factors
             colcoords = ca.col_factors
@@ -1195,25 +1228,37 @@ class CAPlotItem(pg.PlotItem):
 
         row_groups = group_items(cadata.rowitems,)
         col_groups = group_items(cadata.colitems,)
-
+        # row/column point inertias per each dimension
+        column_inertia_ = ca.col_inertia_contributions
+        row_inertia_ = ca.row_inertia_contributions
         # row/column point inertia in the depicted dimensions
-        row_inertia = ca.row_inertia()[:, dim].sum(axis=1)
-        col_inertia = ca.column_inertia()[:, dim].sum(axis=1)
+        row_inertia = row_inertia_[:, dim].sum(axis=1)
+        col_inertia = column_inertia_[:, dim].sum(axis=1)
         # ratio of inertia explained in the displayed principal dimensions
         row_inertia_e = row_inertia / row_inertia.sum()
         col_inertia_e = col_inertia / col_inertia.sum()
 
+        def contrib_rel(inertias):
+            return inertias[:, dim].sum(axis=1) / inertias.sum(axis=1)
+
+        def contrib_abs(inertias, ):
+            return inertias[:, dim].sum(axis=1) / (ca.D[list(dim)] ** 2).sum()
+
         row_size_depict_data = {
             "same": once(lambda: np.full_like(row_inertia_e, 1.0)),
-            "mass": once(lambda: ca.row_mass.ravel()),
+            "mass": once(lambda: ca.rowmass),
+            "contrib-rel": once(lambda: contrib_rel(row_inertia_)),
+            "contrib-abs": once(lambda: contrib_abs(row_inertia_)),
             "inertia": lambda: row_inertia_e,
-            "inertia-relative": once(lambda: ca.row_inertia_),
+            "inertia-relative": once(lambda: ca.row_inertia),
         }
         col_size_depict_data = {
             "same": once(lambda: np.full_like(col_inertia_e, 1.0)),
-            "mass": once(lambda: ca.col_mass.ravel()),
+            "mass": once(lambda: ca.colmass),
+            "contrib-rel": once(lambda: contrib_rel(column_inertia_)),
+            "contrib-abs": once(lambda: contrib_abs(column_inertia_)),
             "inertia": lambda: col_inertia_e,
-            "inertia-relative": once(lambda: ca.col_inertia_),
+            "inertia-relative": once(lambda: ca.col_inertia),
         }
 
         symbol_groups = False
@@ -1354,10 +1399,12 @@ class CAPlotItem(pg.PlotItem):
 
     def plotMCA(self, cadata, dim=(0, 1), maptype=Symmetric):
         # type: (CAData, Tuple[int, int], ...) -> None
+        if len(dim) == 2 and dim[0] == dim[1]:
+            dim = (dim[0],)
+
         colorscheme = self._color_scheme()
         colors = [QColor(*c) for c in colorscheme[max(colorscheme.keys())]]
 
-        textcolor = self.palette().color(QPalette.Text)
         ca = cadata.ca
         groups = group_items(cadata.rowitems)
 
@@ -1371,7 +1418,8 @@ class CAPlotItem(pg.PlotItem):
         else:
             assert False
 
-        inertia = ca.row_inertia()[:, dim].sum(axis=1)
+        inertia_ = ca.row_inertia_contributions
+        inertia = inertia_[:, dim].sum(axis=1)
         inertia_e = inertia / inertia.sum()
         sizes = size_ratio_scale(inertia_e)
 
@@ -1393,14 +1441,15 @@ class CAPlotItem(pg.PlotItem):
         rowscpitem.setProperty("-items", cadata.rowitems)
         rowlabels = plot_labels(
             rowcoords_x, rowcoords_y, cadata.rownames, font=small_font,
-            color=textcolor
         )
         rowlabels.setParentItem(rowscpitem)
         size_props = {
             "same": once(lambda: np.full_like(inertia, 1.0)),
+            "mass": once(lambda: ca.rowmass),
+            "contrib-abs": once(lambda: inertia_[:, dim].sum(axis=1) / (ca.inertia_of_axis[list(dim)].sum())),
+            "contrib-rel": once(lambda: inertia_[:, dim].sum(axis=1) / inertia_.sum(axis=1)),
             "inertia": lambda: inertia_e,
-            "inertia-relative": once(lambda: inertia / ca.row_inertia_),
-            "mass": once(lambda: ca.row_mass.ravel())
+            "inertia-relative": once(lambda: inertia / ca.row_inertia),
         }
         self.__rowitem = DepictItem(
             rowscpitem, cadata.rownames, rowlabels, None, inertia_e,
@@ -1465,16 +1514,23 @@ class DepictItem:
             labelitems = self.labelsitem.items
         else:
             labelitems = []
+        mask = self.inertia_e > limit
+        count = np.count_nonzero(mask)
+        enable_rotate = count < 300
+
         if self.arrowsitem is not None:
             arrowitems = self.arrowsitem.items
         else:
             arrowitems = []
         if arrowitems:
-            for item, inertia in zip(arrowitems, self.inertia_e):
-                item.setLabelVisible(inertia > limit)
+            assert len(arrowitems) == mask.size
+            for item, visible in zip(arrowitems, mask):
+                item.setLabelVisible(visible)
+                item.setAutoRotateLabel(enable_rotate)
         if labelitems:
-            for item, inertia in zip(labelitems, self.inertia_e):
-                item.setVisible(inertia > limit)
+            assert len(labelitems) == mask.size
+            for item, visible in zip(labelitems, mask):
+                item.setVisible(visible)
 
     def set_base_point_size(self, basesize):
         if basesize != self.base_point_size:
@@ -1494,11 +1550,14 @@ class DepictItem:
         data = self.size_data_for_property(self.size_property_name)
         if data is not None:
             sizes = size_ratio_scale(data, base=self.base_point_size)
+            self.scpitem.setSize(sizes)
+            sizes = sizes + 5
         else:
-            sizes = self.base_point_size
-        self.scpitem.setSize(sizes)
+            self.scpitem.setSize(self.base_point_size)
+            sizes = repeat(self.base_point_size + 5)
+
         if self.arrowsitem is not None:
-            for item, size in zip(self.arrowsitem.items, sizes + 5):
+            for item, size in zip(self.arrowsitem.items, sizes):
                 item._arrow.setStyle(headLen=size)
                 item.setPen(item.pen())
 
@@ -1664,320 +1723,6 @@ class LabelGroup(GraphicsGroup):
         if parent is not None:
             self.setParentItem(parent)
 
-
-class CATransform(SharedComputeValue):
-    def __init__(self, variables, factors, _indicator_domain=None):
-        super().__init__(compute_shared=self._compute_shared)
-        self.variables = tuple(variables)
-        self.input_domain = Orange.data.Domain(variables)
-        if _indicator_domain is None:
-            c = Orange.preprocess.continuize.DomainContinuizer(
-                multinomial_treatment=Orange.preprocess.Continuize.Indicators
-            )
-            _indicator_domain = c(self.input_domain)
-        self._indicator_domain = _indicator_domain
-
-        self.factors = factors
-        if not len(self._indicator_domain) == self.factors.size:
-            raise ValueError("Wrong factors size for the domain")
-
-    def _compute_shared(self, data):
-        inst = isinstance(data, Orange.data.Instance)
-        if inst:
-            data = Orange.data.Table([data])
-        return data.transform(self._indicator_domain)
-
-    def compute(self, data, shared_data):
-        inst = isinstance(data, Orange.data.Instance)
-        assert shared_data.domain.variables == self._indicator_domain.variables
-        q = len(self.input_domain.variables)
-        TX = np.dot(shared_data.X, self.factors / q)
-        return TX[0] if inst else TX
-
-    @classmethod
-    def create_transformed(cls, namefmt, sourcevars, factors):
-        # input domain
-        domain = Orange.data.Domain(sourcevars)
-        c = Orange.preprocess.continuize.DomainContinuizer(
-            multinomial_treatment=Orange.preprocess.Continuize.Indicators
-        )
-        indicator_domain = c(domain)
-        return [
-            Orange.data.ContinuousVariable(
-                namefmt.format(i + 1),
-                compute_value=CATransform(sourcevars, factors[:, i],
-                                          _indicator_domain=indicator_domain)
-            )
-            for i in range(factors.shape[1])
-        ]
-
-
-def cross_tabulate(
-        data,     # type: Orange.data.Table
-        rowvars,  # type: List[DiscreteVariable]
-        colvars   # type: List[DiscreteVariable]
-):  # type: (...) -> np.ndarray
-    """
-    Cross tabulate a set of variables against each other.
-    """
-    nrow = sum(len(v.values) for v in rowvars)
-    ncol = sum(len(v.values) for v in colvars)
-    out = np.zeros((nrow, ncol), dtype=float)
-    if out.size == 0:
-        return out
-    istart = iend = 0
-    domain = data.domain
-    colvar_indices = list(map(domain.index, colvars))
-    for rowvar in rowvars:
-        rowvar_ind = domain.index(rowvar)
-        iend += len(rowvar.values)
-        contingencies = compute_contingencies(data, colvar_indices, rowvar_ind)
-        out[istart:iend] = np.hstack([np.asarray(c) for c in contingencies])
-        istart = iend
-    assert iend == nrow
-    return out
-
-
-def compute_contingencies(table, col_vars, row_var):
-    # type: (Orange.data.Storage, List[int], int) -> list
-
-    domain = table.domain
-    cont, unk_rows = table._compute_contingency(col_vars, row_var)
-    contingencies = [
-        contingency.get_contingency(
-            arr, domain[colvar], domain[row_var], unk_col, unk_rows
-        )
-        for colvar, (arr, unk_col) in zip(col_vars, cont)
-    ]
-    return contingencies
-
-
-def burt_table(
-        data,       # type: Orange.data.Table
-        variables,  # type: List[DiscreteVariable]
-):  # type: (...) -> Tuple[List[Tuple[DiscreteVariable, str]], np.ndarray]
-    """
-    Construct a 'Burt table' (all values cross-tabulation) for variables.
-
-    Return and ordered list of (variable, value) pairs and a
-    numpy.ndarray contingency
-
-    Parameters
-    ----------
-    data : Orange.data.Table
-    variables : List[DiscreteVariable]
-
-    Returns
-    -------
-    values : List[Tuple[DiscreteVariable, str]]
-        A list
-    table : (K, K) np.array
-        Cross tabulation for all variable,value pairs
-    """
-    values = [(var, value) for var in variables for value in var.values]
-
-    table = np.zeros((len(values), len(values)))
-    counts = [len(attr.values) for attr in variables]
-    offsets = np.r_[0, np.cumsum(counts)]
-
-    for i in range(len(variables)):
-        cxt = cross_tabulate(data, [variables[i]], variables[i:])
-        assert cxt.shape == (counts[i], table.shape[1] - offsets[i])
-        start1, end1 = offsets[i], offsets[i] + counts[i]
-        table[start1:end1, start1:] = cxt
-        table[start1:, start1:end1] = cxt.T
-    assert np.all(table == table.T)
-    return values, table
-
-
-if typing.TYPE_CHECKING:
-    ArrayLike = Union[np.ndarray, typing.Iterable]
-
-
-def correspondence(A):
-    """
-    Parameters
-    ----------
-    A : np.ndarray
-
-    Returns
-    -------
-    ca : CA
-    """
-    A = np.asarray(A)
-    assert np.all(np.isfinite(A))
-    assert np.all(A >= 0)
-
-    total = np.sum(A)
-    if total > 0:
-        corr_mat = A / total
-    else:
-        # ???
-        corr_mat = A
-
-    col_sum = np.sum(corr_mat, axis=0, keepdims=True)
-    row_sum = np.sum(corr_mat, axis=1, keepdims=True)
-    E = row_sum * col_sum
-
-    with np.errstate(divide="ignore"):
-        D_r, D_c = row_sum.ravel() ** -1, col_sum.ravel() ** -1
-    D_r, D_c = np.nan_to_num(D_r), np.nan_to_num(D_c)
-
-    def gsvd(M, wu, wv):
-        assert len(M.shape) == 2
-        assert len(wu.shape) == 1 and len(wv.shape) == 1
-        Wu_sqrt = np.sqrt(wu)
-        Wv_sqrt = np.sqrt(wv)
-        B = np.c_[Wu_sqrt] * M * np.r_[Wv_sqrt]
-        Ub, D, Vb = np.linalg.svd(B, full_matrices=False)
-        U = np.c_[Wu_sqrt ** -1] * Ub
-        V = (np.c_[Wv_sqrt ** -1] * Vb.T).T
-        return U, D, V
-
-    U, D, V = gsvd(corr_mat - E, D_r, D_c)
-    flush_mask = np.isclose(D, 0, atol=5 * np.finfo(D.dtype).eps)
-    if np.any(flush_mask):
-        assert U.shape[1] == flush_mask.size
-        U[:, flush_mask] = 0
-        assert V.shape[0] == flush_mask.size
-        V[flush_mask, :] = 0
-        D[flush_mask] = 0
-    rowcoord = np.c_[D_r] * U
-    colcoord = np.c_[D_c] * V.T
-
-    return CA(U, D, V, rowcoord, colcoord, row_sum, col_sum)
-
-
-CA_ = namedtuple("CA", ["U", "D", "V",
-                        "row_standard_coordinates", "col_standard_coordinates",
-                        "row_mass", "col_mass"])
-
-
-class CA(CA_):
-    @property
-    def row_factors(self):
-        return self.row_standard_coordinates * self.D
-
-    @property
-    def row_principal_coordinates(self):
-        return self.row_factors
-
-    @property
-    def col_factors(self):
-        return self.col_standard_coordinates * self.D
-
-    @property
-    def col_principal_coordinates(self):
-        return self.col_factors
-
-    @property
-    def row_inertia_(self):
-        return self.row_inertia().sum(axis=1)
-
-    @property
-    def col_inertia_(self):
-        return self.column_inertia().sum(axis=1)
-
-    def row_inertia(self):
-        return self.row_mass * (self.row_factors ** 2)
-
-    def column_inertia(self):
-        return self.col_mass.T * (self.col_factors ** 2)
-
-    @property
-    def inertia_of_axis(self):
-        return np.sum(self.row_inertia(), axis=0)
-
-    @property
-    def inertia(self):
-        return np.sum(self.inertia_of_axis)
-
-    @property
-    def inertia_e_dim(self):
-        return self.inertia_of_axis / self.inertia
-
-
-def multiple_correspondence(B, counts):
-    # type: (ArrayLike, Sequence[int]) -> MCA
-    """
-
-    Parameters
-    ----------
-    B : Matrix
-        Burt table.
-    counts : Sequence[int]
-        Counts of
-
-    Returns
-    -------
-
-    """
-    B = np.asarray(B)
-    N, N_ = B.shape
-    assert N == N_
-    ca = correspondence(B)
-    # compute the adjusted inertias
-    Js = np.asarray(counts)
-    assert Js.ndim == 1
-    Q = Js.size  # number of groups
-    assert np.all(Js > 0)
-    J = np.sum(Js)
-    assert J == N
-    # Is this check sensible. Just return unmodified solution?
-    if Q <= 1:
-        return MCA(*ca)
-
-    print(Q, J)
-    total = ca.inertia
-    sv = ca.D
-
-    adjusted_total = Q / (Q - 1) * (total - (J - Q) / (Q ** 2))
-
-    mask = sv > 1. / Q
-
-    svadj = np.where(
-        mask,
-        (Q / (Q - 1)) * (sv - 1/Q),
-        0.0
-    )
-    print("sv      ", sv.round(4)[:5])
-    print("adjusted", svadj.round(4)[:5])
-    print("ev      ", (svadj**2).round(4)[:5])
-    print("percenr ", (svadj**2) / adjusted_total)
-
-    mca = MCA(
-        ca.U, svadj, ca.V,
-        ca.row_standard_coordinates, ca.col_standard_coordinates,
-        ca.row_mass, ca.col_mass,
-        adjusted_total_inertia=adjusted_total
-    )
-    print(ca.inertia_e_dim)
-    return mca
-
-
-class MCA(CA):
-    _adjusted_total_inertia = -1
-
-    def __new__(cls, *args, **kwargs):
-        adjusted_total_inertia = kwargs.pop("adjusted_total_inertia", -1)
-        self = super().__new__(cls, *args, **kwargs)
-        self._adjusted_total_inertia = adjusted_total_inertia
-        return self
-
-    @property
-    def adjusted_total_inertia(self):
-        return self._adjusted_total_inertia
-
-    @property
-    def inertia_of_axis(self):
-        return self.D ** 2
-
-    @property
-    def inertia(self):
-        if self._adjusted_total_inertia > 0:
-            return self._adjusted_total_inertia
-        else:
-            return super().inertia
 
 
 def main(argv=None):  # pragma: no cover

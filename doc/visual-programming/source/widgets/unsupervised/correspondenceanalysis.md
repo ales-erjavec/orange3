@@ -45,7 +45,7 @@ Correspondence Analysis with stacked Tables
 
 ```
    =========== ==== ==== ==== ====
-   \             hair       tail
+   \              hair     tail
    ----------- --------- ---------
    type          0    1    0    1
    =========== ==== ==== ==== ====
@@ -59,7 +59,7 @@ Correspondence Analysis with stacked Tables
 
 2. Select the principal dimensions to plot. The contributions to the total
    inertia are displayed to the left including the total percentage of
-   the inertia ([2]_) explained by the selected dimensions.
+   the inertia ([2]_) explained by the two selected dimensions.
 
 3. Select the plot type:
 
@@ -72,15 +72,10 @@ Correspondence Analysis with stacked Tables
    * Column principal - The column points are plotted in the principal
      coordinates; row points in principal coordinates.
 
-   The symmetric plot is the default.
-
    The asymmetric plots are bi-plots. The standard coordinates are the
-   'axes' that span the row/column principal coordinates (the row principal
-   coordinates are a convex linear combinations of column standard
+   'axes' that span the row/column principal coordinates (i.e the row
+   principal coordinates are a convex linear combinations of column standard
    coordinates and vice-versa).
-
-   Note also that the standard coordinates are just rescaled principal
-   coordinates.
 
    The 'Display standard coords. as arrows' switches the display of standard
    coordinates between point or arrow display.
@@ -91,41 +86,40 @@ Correspondence Analysis with stacked Tables
    * Mass - Points are sized relative to their mass (row/column sum in
      the contingency matrix).
    * Inertia - Points are sized relative to their contribution to the explained
-     inertia in the *plotted* dimensions. Note that explained inertia is
-     proportional to the distance from the center.
+     inertia in the *displayed* dimensions.
    * Inertia relative  - Points are sized relative to their contribution to
-     the explained inertia in *all* the dimensions. This can identify points
-     that do not fit well into the current plot (other principal dimensions
-     should be inspected to reveal the structure)
+     the explained inertia over *all* the dimensions.
 
 5. Produce a report.
 
 
 If the widget has 'Contingency' input then the view switches to the
-*Simple Corresponcence Anaysis* and the conteingency is fixed (the variable
+*Simple Correspondence Analysis* and the contingency is fixed (the variable
 selection view on the left is disabled).
 
-Example
--------
 
-Below, is a simple comparison between the **Correspondence Analysis** and
-[Scatter Plot](../visualize/scatterplot.md) widgets on the *Titanic* dataset.
-While the [Scatter Plot](../visualize/scatterplot.md) shows fairly well which
-class and sex had a good survival rate and which one didn't, 
-**Correspondence Analysis** can plot several variables in a 2-D graph,
-thus making it easy to see the relations between variable values. It is
-clear from the graph that "no", "male" and "crew" are related to each other.
-The same goes for "yes", "female" and "first".
+Example 1
+---------
 
+![](images/CorrespondenceAnalysis-Smokers.png)
 
-![](images/CorrespondenceAnalysis-Example.png)
+Below, is a simple use of **Correspondence Analysis** on the *smokers_ct*
+dataset. The smoking dataset is a synthetic dataset with two categorical
+variables recording the smoking habits (none, low, medium, high) of staff
+groups (junior/senior managers/employees and secretaries).
 
 
 Example 2
 ---------
 
+.. figure:: imagers/CorrespondenceAnalysis-WG93.png
 
-![](images/CorrespondenceAnalysis-Example.png)
+We use ISSS - 1993 survey of ... to science where responents were asked a
+number if questions regarding their attitude toward science (column A-G with
+5 levels each ranked from strongly disagree,... strongly agree). Along side
+the the demographic variables sex (0=male, 1=female), age (0-6)
+education level(0-6)
+
 
 .. [GreenacreBPP9] `Michael Greenacre - Biplots in Practice`_ - Chapter 9
 
