@@ -1,3 +1,4 @@
+from Orange.widgets.unsupervised.utils.plottools import PlotToolBox
 from xml.sax.saxutils import escape
 
 import sys
@@ -19,7 +20,7 @@ from AnyQt.QtWidgets import (
     QListView, QApplication, QComboBox, QGraphicsSceneHelpEvent,
     QToolTip, QGridLayout, QLabel, QCheckBox, QSizePolicy, QStackedWidget,
     QTreeView, QGraphicsObject, QAction, QGraphicsScene, QGraphicsView,
-    QSlider)
+    QSlider, QActionGroup)
 from AnyQt.QtGui import (
     QBrush, QColor, QPen, QPalette, QFont, QKeySequence,
     QPainter)
@@ -842,7 +843,7 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
                     rowitems = expand_var_pairs(rowvars)
                     colitems = expand_var_pairs(colvars)
             else:
-                ctable = None
+                assert False
 
         if ctable is not None and ctable.size:
             if catype == CATypes.CA:
@@ -1073,8 +1074,50 @@ class CAPlotItem(pg.PlotItem):
         zoomfit.triggered.connect(self.zoomToFit)
         zoomout.triggered.connect(self.zoomOut)
         zoomin.triggered.connect(self.zoomIn)
+        grp = QActionGroup(
+            self, objectName="actiongroup-view-tool", exclusive=True,
+        )
+        zoom_to_rect = QAction(
+            "Zoom to", self, objectName="action-zoom-to-rect", checkable=True,
+            shortcut=QKeySequence(Qt.ControlModifier | Qt.Key_1),
+        )
+        pan = QAction(
+            "Pan view", self, objectName="action-pan-view", checkable=True,
+            shortcut=QKeySequence(Qt.ControlModifier | Qt.Key_2)
+        )
 
-        self.addActions([zoomfit, zoomout, zoomin])
+        grp.addAction(zoom_to_rect)
+        grp.addAction(pan)
+        pan.setChecked(True)
+
+        view_forward = QAction(
+            "Forward", self,
+        )
+        view_back = QAction(
+            "Back", self,
+        )
+        toolbox = PlotToolBox(self)
+        toolbox.setViewBox(self.getViewBox())
+        # hlayout.addWidget(toolbox.button(PlotToolBox.SelectTool))
+        # hlayout.addWidget(toolbox.button(PlotToolBox.ZoomTool))
+        # hlayout.addWidget(toolbox.button(PlotToolBox.PanTool))
+        # hlayout.addSpacing(4)
+        # hlayout.addWidget(toolbox.button(PlotToolBox.ZoomReset))
+        # hlayout.addStretch()
+        zoomfit = toolbox.standardAction(PlotToolBox.ZoomReset)
+        zoomfit.triggered.connect(self.zoomToFit)
+        # toolbox.standardAction(PlotToolBox.ZoomIn).triggered.connect(
+        #     lambda: self.plot.getViewBox().scaleBy((1.25, 1.25))
+        # )
+        # toolbox.standardAction(PlotToolBox.ZoomIn).triggered.connect(
+        #     lambda: self.plot.getViewBox().scaleBy((1 / 1.25, 1 / 1.25))
+        # )
+        selecttool = toolbox.plotTool(PlotToolBox.SelectTool)
+        # selecttool.selectionFinished.connect(self.__select_area)
+        selecttool_action = toolbox.standardAction(PlotToolBox.SelectTool)
+        self.addActions(toolbox.actions())
+
+        self.addActions([zoomfit, zoomout, zoomin, selecttool_action])
 
         if parent is not None:
             self.setParentItem(parent)
@@ -1157,7 +1200,7 @@ class CAPlotItem(pg.PlotItem):
         # render  as
         # Row(s)
         # ------
-        # ...      Mass  Ienertia
+        # ...      Mass   Inertia
         # name     0.2       .. %
 
         parts = []
@@ -1722,7 +1765,6 @@ class LabelGroup(GraphicsGroup):
 
         if parent is not None:
             self.setParentItem(parent)
-
 
 
 def main(argv=None):  # pragma: no cover
