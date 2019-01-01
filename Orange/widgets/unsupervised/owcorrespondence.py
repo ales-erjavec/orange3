@@ -1,4 +1,4 @@
-from Orange.widgets.unsupervised.utils.plottools import PlotToolBox
+from Orange.widgets.unsupervised.utils.plottools import PlotToolBox, PlotPinchZoomTool
 from xml.sax.saxutils import escape
 
 import sys
@@ -1050,6 +1050,7 @@ class CAPlotItem(pg.PlotItem):
         # route help events to this item
         self.__helpDelegate = HelpEventDelegate(self.helpEvent, self)
         self.vb.setAspectLocked(True)
+        self.vb.grabGesture(Qt.PinchGesture, )
         self.cadata = None  # type: Optional[CAData]
         self._legend = LegendItem()
         self._legend.setParentItem(self.vb)
@@ -1118,7 +1119,8 @@ class CAPlotItem(pg.PlotItem):
         self.addActions(toolbox.actions())
 
         self.addActions([zoomfit, zoomout, zoomin, selecttool_action])
-
+        gs = PlotPinchZoomTool(self)
+        gs.setViewBox(self.vb)
         if parent is not None:
             self.setParentItem(parent)
 
