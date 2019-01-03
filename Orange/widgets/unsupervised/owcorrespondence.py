@@ -958,6 +958,7 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
                 item.set_inertia_threshold(limit)
                 item.set_base_point_size(self.base_point_size)
                 item.set_size_property(size)
+                item.set_label_property("names-short")
 
     def _update_info(self):
         # update the info text labels in the GUI control area
@@ -1292,6 +1293,9 @@ class CAPlotItem(pg.PlotItem):
         def contrib_abs(inertias, ):
             return inertias[:, dim].sum(axis=1) / (ca.D[list(dim)] ** 2).sum()
 
+        def short_names(items):
+            return [v for _, v in items]
+
         row_size_depict_data = {
             "same": once(lambda: np.full_like(row_inertia_e, 1.0)),
             "mass": once(lambda: ca.rowmass),
@@ -1299,6 +1303,8 @@ class CAPlotItem(pg.PlotItem):
             "contrib-abs": once(lambda: contrib_abs(row_inertia_)),
             "inertia": lambda: row_inertia_e,
             "inertia-relative": once(lambda: ca.row_inertia),
+            "names": lambda: cadata.rownames,
+            "names-short": once(lambda: [v for _, v in cadata.rowitems])
         }
         col_size_depict_data = {
             "same": once(lambda: np.full_like(col_inertia_e, 1.0)),
@@ -1307,6 +1313,9 @@ class CAPlotItem(pg.PlotItem):
             "contrib-abs": once(lambda: contrib_abs(column_inertia_)),
             "inertia": lambda: col_inertia_e,
             "inertia-relative": once(lambda: ca.col_inertia),
+            "names": lambda: cadata.colnames,
+            "names-short": once(lambda: [v for _, v in cadata.colitems])
+
         }
 
         symbol_groups = False
@@ -1553,6 +1562,7 @@ class DepictItem:
         self._depict_coords = depict_coords.copy()
         self.base_point_size = 12
         self.size_property_name = None
+        self.label_property_name = None
 
     def set_inertia_threshold(self, limit):
         if self.inertia_e_theshold == limit:
@@ -1618,6 +1628,25 @@ class DepictItem:
         data = thunk()
         if data.dtype.kind == 'i':
             pass
+
+    def set_label_property(self, name):
+        if self.label_property_name != name:
+            self.label_property_name = name
+            self._update_labels()
+
+    def label_data_for_property(self, name):
+        thunk = self._depict_coords.get(name, lambda: None)
+        return thunk()
+
+    def _update_labels(self):
+        if self.labelsitem is None:
+            return
+        data = self.label_data_for_property(self.label_property_name)
+        if data is None:
+            data = [""] * len(self.labelsitem.items)
+        assert len(data) == len(self.labelsitem.items)
+        for item, data in zip(self.labelsitem.items, data):
+            item.setText(str(data))
 
 
 def extract_coords2D(data, dim):
