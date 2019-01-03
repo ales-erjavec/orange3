@@ -19,11 +19,12 @@ import numpy as np
 from AnyQt.QtWidgets import (
     QListView, QApplication, QComboBox, QGraphicsSceneHelpEvent,
     QToolTip, QGridLayout, QLabel, QCheckBox, QSizePolicy, QStackedWidget,
-    QTreeView, QGraphicsObject, QAction, QGraphicsScene, QGraphicsView,
-    QSlider, QActionGroup, QGroupBox, QHBoxLayout)
+    QTreeView, QGraphicsObject, QGraphicsScene, QGraphicsView, QSlider,
+    QGroupBox, QHBoxLayout
+)
 from AnyQt.QtGui import (
-    QBrush, QColor, QPen, QPalette, QFont, QKeySequence,
-    QPainter)
+    QBrush, QColor, QPen, QPalette, QFont, QPainter
+)
 from AnyQt.QtCore import (
     Qt, QRectF, QLineF, QTimer, QPointF
 )
@@ -369,9 +370,17 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         view.selectionModel().selectionChanged.connect(self._mca_var_changed)
         box.layout().addWidget(view)
 
-        grid = QGridLayout(objectName="pr-axis-grid")
-        gui.widgetBox(self.controlArea, "Principal Components",
-                      orientation=grid, addSpace=False)
+        grid = QGridLayout(objectName="pr-axis-grid", spacing=5)
+
+        frame = QGroupBox("Principal Components")
+        # frame.setContentsMargins(0, 0, 0, 0)
+        frame.setLayout(grid)
+        self.controlArea.layout().addWidget(frame)
+        frame.ensurePolished()
+        print(frame.getContentsMargins())
+        # gui.widgetBox(self.controlArea, "Principal Components",
+        #               orientation=grid, addSpace=False)
+
         self.axis_x_cb = gui.comboBox(
             None, self, "component_x", callback=self._component_changed,
             contentsLength=5, maximumContentsLength=5,
@@ -407,9 +416,12 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         grid.addWidget(self.infotext_sum, 3, 2)
         grid.addWidget(self.infotext_total, 3, 0, 1, 2, Qt.AlignLeft)
 
-        grid = QGridLayout()
-        box = gui.widgetBox(self.controlArea, "Plot", addSpace=False,
-                            orientation=grid)
+        grid = QGridLayout(spacing=5)
+        frame = QGroupBox("Plot")
+        frame.setLayout(grid)
+        self.controlArea.layout().addWidget(frame)
+        # box = gui.widgetBox(self.controlArea, "Plot", addSpace=False,
+        #                     orientation=grid)
         # map type selection combo box
         self.map_type_cb = catype_cb = EnumComboBox()
         catype_model = create_list_model(MapTypesItems)
@@ -1483,9 +1495,13 @@ class CAPlotItem(pg.PlotItem):
         if len(groups) < max(colorscheme.keys()):
             indices = tiled_seq_indices((len(items) for _, items in groups))
             color_table = [QColor(*c) for c in colorscheme[len(groups)]]
-            basecolors = [color_table[i] for i in indices]
-            brush = [QBrush(c) for c in basecolors]
-            pen = [QPen(b.color().darker(120)) for b in brush]
+            brush_table = [QBrush(c) for c in color_table]
+            pen_table = [QPen(b.color().darker(120)) for b in brush_table]
+            # basecolors = [color_table[i] for i in indices]
+            brush = [brush_table[i] for i in indices]
+            pen = [pen_table[i] for i in indices]
+            # brush = [QBrush(c) for c in basecolors]
+            # pen = [QPen(b.color().darker(120)) for b in brush]
         else:
             brush = pg.mkBrush(colors[0])
             pen = pg.mkPen(colors[0])
@@ -1507,6 +1523,8 @@ class CAPlotItem(pg.PlotItem):
             "contrib-rel": once(lambda: inertia_[:, dim].sum(axis=1) / inertia_.sum(axis=1)),
             "inertia": lambda: inertia_e,
             "inertia-relative": once(lambda: inertia / ca.row_inertia),
+            "names": lambda: cadata.rownames,
+            "names-short": lambda: [v for _, v in cadata.rowitems],
         }
         self.__rowitem = DepictItem(
             rowscpitem, cadata.rownames, rowlabels, None, inertia_e,
