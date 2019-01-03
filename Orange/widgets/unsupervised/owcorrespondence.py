@@ -20,7 +20,7 @@ from AnyQt.QtWidgets import (
     QListView, QApplication, QComboBox, QGraphicsSceneHelpEvent,
     QToolTip, QGridLayout, QLabel, QCheckBox, QSizePolicy, QStackedWidget,
     QTreeView, QGraphicsObject, QAction, QGraphicsScene, QGraphicsView,
-    QSlider, QActionGroup)
+    QSlider, QActionGroup, QGroupBox, QHBoxLayout)
 from AnyQt.QtGui import (
     QBrush, QColor, QPen, QPalette, QFont, QKeySequence,
     QPainter)
@@ -508,7 +508,27 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         axis.setGrid(50)
 
         self.plot.setRange(QRectF(-1, 1, 2, 2))
+        self.mainArea.layout().setContentsMargins(0, 0, 0, 0)
         self.mainArea.layout().addWidget(self.plotview)
+
+        bl = QHBoxLayout()
+        bl.setContentsMargins(4, 4, 4, 4)
+        toolbox = QGroupBox("Zoom/Select", )
+        toolbox.setLayout(bl)
+        tb = self.plot.findChild(PlotToolBox)  # type: PlotToolBox
+        bl.addWidget(tb.button(PlotToolBox.ZoomIn))
+        bl.addWidget(tb.button(PlotToolBox.ZoomOut))
+        bl.addWidget(tb.button(PlotToolBox.ZoomReset))
+        bl.addSpacing(5)
+        bl.addWidget(tb.button(PlotToolBox.SelectTool))
+        bl.addWidget(tb.button(PlotToolBox.ZoomTool))
+        bl.addWidget(tb.button(PlotToolBox.PanTool))
+        bl.addStretch(10)
+        toolbox.setLayout(bl)
+        self.controlArea.layout().addWidget(toolbox)
+
+        gui.rubber(self.controlArea)
+
         self.__update_timer = QTimer(self, interval=0, singleShot=True)
         self.__update_timer.timeout.connect(self._update_CA)
 
@@ -1059,66 +1079,49 @@ class CAPlotItem(pg.PlotItem):
         self.__rowitem = None  # type: Optional[DepictItem]
         self.__colitem = None  # type: Optional[DepictItem]
 
-        zoomfit = QAction(
-            "Fit in view", self, objectName="action-zoom-fit",
-            shortcut=QKeySequence(Qt.ControlModifier | Qt.Key_0),
+        # zoomfit = QAction(
+        #     "Fit in view", self, objectName="action-zoom-fit",
+        #     shortcut=QKeySequence(Qt.ControlModifier | Qt.Key_0),
+        #
+        # )
+        # zoomout = QAction(
+        #     "Zoom out", self, objectName="action-zoom-out",
+        #     shortcut=QKeySequence.ZoomOut
+        # )
+        # zoomin = QAction(
+        #     "Zoom in tool", self, objectName="action-zoom-in",
+        #     shortcut=QKeySequence.ZoomIn
+        # )
+        # zoomfit.triggered.connect(self.zoomToFit)
+        # zoomout.triggered.connect(self.zoomOut)
+        # zoomin.triggered.connect(self.zoomIn)
+        # grp = QActionGroup(
+        #     self, objectName="actiongroup-view-tool", exclusive=True,
+        # )
+        # zoom_to_rect = QAction(
+        #     "Zoom to", self, objectName="action-zoom-to-rect", checkable=True,
+        #     shortcut=QKeySequence(Qt.ControlModifier | Qt.Key_1),
+        # )
+        # pan = QAction(
+        #     "Pan view", self, objectName="action-pan-view", checkable=True,
+        #     shortcut=QKeySequence(Qt.ControlModifier | Qt.Key_2)
+        # )
+        #
+        # grp.addAction(zoom_to_rect)
+        # grp.addAction(pan)
+        # pan.setChecked(True)
 
-        )
-        zoomout = QAction(
-            "Zoom out", self, objectName="action-zoom-out",
-            shortcut=QKeySequence.ZoomOut
-        )
-        zoomin = QAction(
-            "Zoom in tool", self, objectName="action-zoom-in",
-            shortcut=QKeySequence.ZoomIn
-        )
-        zoomfit.triggered.connect(self.zoomToFit)
+        toolbox = PlotToolBox(self)
+        toolbox.setViewBox(self.vb)
+        zoomout = toolbox.standardAction(PlotToolBox.ZoomOut)
+        zoomin = toolbox.standardAction(PlotToolBox.ZoomIn)
+        zoomfit = toolbox.standardAction(PlotToolBox.ZoomReset)
+        pantool = toolbox.standardAction(PlotToolBox.PanTool)
         zoomout.triggered.connect(self.zoomOut)
         zoomin.triggered.connect(self.zoomIn)
-        grp = QActionGroup(
-            self, objectName="actiongroup-view-tool", exclusive=True,
-        )
-        zoom_to_rect = QAction(
-            "Zoom to", self, objectName="action-zoom-to-rect", checkable=True,
-            shortcut=QKeySequence(Qt.ControlModifier | Qt.Key_1),
-        )
-        pan = QAction(
-            "Pan view", self, objectName="action-pan-view", checkable=True,
-            shortcut=QKeySequence(Qt.ControlModifier | Qt.Key_2)
-        )
-
-        grp.addAction(zoom_to_rect)
-        grp.addAction(pan)
-        pan.setChecked(True)
-
-        view_forward = QAction(
-            "Forward", self,
-        )
-        view_back = QAction(
-            "Back", self,
-        )
-        toolbox = PlotToolBox(self)
-        toolbox.setViewBox(self.getViewBox())
-        # hlayout.addWidget(toolbox.button(PlotToolBox.SelectTool))
-        # hlayout.addWidget(toolbox.button(PlotToolBox.ZoomTool))
-        # hlayout.addWidget(toolbox.button(PlotToolBox.PanTool))
-        # hlayout.addSpacing(4)
-        # hlayout.addWidget(toolbox.button(PlotToolBox.ZoomReset))
-        # hlayout.addStretch()
-        zoomfit = toolbox.standardAction(PlotToolBox.ZoomReset)
         zoomfit.triggered.connect(self.zoomToFit)
-        # toolbox.standardAction(PlotToolBox.ZoomIn).triggered.connect(
-        #     lambda: self.plot.getViewBox().scaleBy((1.25, 1.25))
-        # )
-        # toolbox.standardAction(PlotToolBox.ZoomIn).triggered.connect(
-        #     lambda: self.plot.getViewBox().scaleBy((1 / 1.25, 1 / 1.25))
-        # )
-        selecttool = toolbox.plotTool(PlotToolBox.SelectTool)
-        # selecttool.selectionFinished.connect(self.__select_area)
-        selecttool_action = toolbox.standardAction(PlotToolBox.SelectTool)
-        self.addActions(toolbox.actions())
-
-        self.addActions([zoomfit, zoomout, zoomin, selecttool_action])
+        # selecttool = toolbox.standardAction(PlotToolBox.SelectTool)
+        self.addActions([zoomfit, zoomout, zoomin, pantool])
         gs = PlotPinchZoomTool(self)
         gs.setViewBox(self.vb)
         if parent is not None:
