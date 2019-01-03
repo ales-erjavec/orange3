@@ -13,7 +13,7 @@ from AnyQt.QtWidgets import (
     QGraphicsPathItem, QGraphicsRectItem, QPinchGesture, QAction, QActionGroup,
     QToolButton, QGraphicsSceneMouseEvent, QGestureEvent,
     QWidget, QAbstractButton,
-    QMenu)
+    QMenu, QApplication)
 
 import pyqtgraph as pg
 
@@ -199,9 +199,15 @@ class PlotTool(QObject):
         return super().eventFilter(obj, event)
 
     @staticmethod
-    def pushViewRect(viewbox, rect):
-        # type: (pg.ViewBox, QRectF) -> None
-        viewbox.showAxRect(rect)
+    def pushViewRect(viewbox, rect=None):
+        # type: (pg.ViewBox, Optional[QRectF]) -> None
+        if rect is not None:
+            # TODO: showAxRect will add default padding, should use
+            #       setRange(..., padding=0)
+            viewbox.showAxRect(rect)
+        else:
+            # just record the current view rect
+            rect = viewbox.viewRect()
         viewbox.axHistoryPointer += 1
         viewbox.axHistory[viewbox.axHistoryPointer:] = [rect]
 
@@ -297,7 +303,7 @@ class PlotSelectionTool(PlotTool):
             event.accept()
             return True
         else:
-            return False
+            return super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
         if event.buttons() & Qt.LeftButton:
@@ -312,7 +318,7 @@ class PlotSelectionTool(PlotTool):
             event.accept()
             return True
         else:
-            return False
+            return super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -328,7 +334,7 @@ class PlotSelectionTool(PlotTool):
             event.accept()
             return True
         else:
-            return False
+            return super().mouseReleaseEvent(event)
 
     def __updategraphics(self):
         viewbox = self.viewBox()
@@ -356,7 +362,36 @@ class PlotSelectionTool(PlotTool):
             self.__item.setPath(self.selectionShape())
 
 
-class PlotZoomTool(PlotTool):
+class PlotNavigationTool(PlotTool):
+    __didMove = False
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.RightButton:
+            event.accept()
+            self.__didMove = False
+            return True
+        else:
+            return super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() & Qt.RightButton and \
+                (event.screenPos() -
+                 event.buttonDownScreenPos(Qt.RightButton)).manhattanLength() \
+                >= QApplication.startDragDistance():
+            self.__didMove = True
+            return True
+        else:
+            return super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.RightButton:
+            if not self.__didMove:
+                PlotTool.popViewRect(self.viewBox())
+            self.__didMove = False
+            return True
+
+
+class PlotZoomTool(PlotNavigationTool):
     """
     A zoom tool.
 
@@ -397,7 +432,7 @@ class PlotZoomTool(PlotTool):
             event.accept()
             return True
         else:
-            return False
+            return super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
         if event.buttons() & Qt.LeftButton:
@@ -411,7 +446,7 @@ class PlotZoomTool(PlotTool):
             event.accept()
             return True
         else:
-            return False
+            return super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -431,7 +466,7 @@ class PlotZoomTool(PlotTool):
             event.accept()
             return True
         else:
-            return False
+            return super().mouseReleaseEvent(event)
 
     def __updategraphics(self):
         viewbox = self.viewBox()
@@ -458,7 +493,7 @@ class PlotZoomTool(PlotTool):
             self.__zoomitem.setRect(self.zoomRect())
 
 
-class PlotPanTool(PlotTool):
+class PlotPanTool(PlotNavigationTool):
     """
     Pan/translate tool.
     """
@@ -469,15 +504,15 @@ class PlotPanTool(PlotTool):
     def __init__(self, parent=None, autoPan=True, **kwargs):
         super().__init__(parent, **kwargs)
         self.__autopan = autoPan
+        self.__panDidStart = False
         self.__lastPos = None
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self.panStarted.emit()
             event.accept()
             return True
         else:
-            return False
+            return super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
         if event.buttons() & Qt.LeftButton:
@@ -486,53 +521,74 @@ class PlotPanTool(PlotTool):
                 # pg.GraphicsScene will duplicate mouseMoveEvents -> cannot
                 # use event.lastPos() directly need to store it
                 self.__lastPos = event.lastPos()
+            startPos = event.buttonDownScreenPos(Qt.LeftButton)
+            if (startPos - event.screenPos()).manhattanLength() \
+                    >= QApplication.startDragDistance() \
+                    and not self.__panDidStart:
+                self.__panDidStart = True
+                self.panStarted.emit()
+
             delta = (viewbox.mapToView(event.pos()) -
                      viewbox.mapToView(self.__lastPos))
-            if self.__autopan:
-                viewbox.translateBy(-delta)
-            self.translated.emit(-delta)
+            if self.__panDidStart:
+                if self.__autopan:
+                    viewbox.translateBy(-delta)
+                self.translated.emit(-delta)
             self.__lastPos = event.pos()
             event.accept()
             return True
         else:
-            return False
+            return super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
+        # type: (QGraphicsSceneMouseEvent) -> bool
         if event.button() == Qt.LeftButton:
-            self.panFinished.emit()
+            if self.__panDidStart:
+                if self.__autopan:
+                    PlotTool.pushViewRect(self.viewBox())
+                self.panFinished.emit()
             self.__lastPos = None
             event.accept()
             return True
         else:
-            return False
+            return super().mouseReleaseEvent(event)
 
 
 class PlotPinchZoomTool(PlotTool):
     """
     A tool implementing a "Pinch to zoom".
     """
+    __scaleDidChange = False
+
     def gestureEvent(self, event):
         gesture = event.gesture(Qt.PinchGesture)
         if gesture is None:
             return False
         if gesture.state() == Qt.GestureStarted:
+            self.__scaleDidChange = False
             event.accept(gesture)
             return True
         elif gesture.changeFlags() & QPinchGesture.ScaleFactorChanged:
             viewbox = self.viewBox()
             center = viewbox.mapSceneToView(gesture.centerPoint())
             scale = gesture.scaleFactor()
+            if scale != 1.0:
+                self.__scaleDidChange = True
             if scale > 0:
                 viewbox.scaleBy((1 / scale, 1 / scale), center)
-            event.accept()
+            event.accept(gesture)
             return True
         elif gesture.state() == Qt.GestureFinished:
             viewbox = self.viewBox()
-            PlotTool.pushViewRect(viewbox, viewbox.viewRect())
-            event.accept()
+            if self.__scaleDidChange:
+                # pinch gesture starts and ends with no intermediate scale
+                # changes (rotation only, or just miss-recognized?)
+                PlotTool.pushViewRect(viewbox)
+            event.accept(gesture)
+            self.__scaleDidChange = False
             return True
         else:
-            return False
+            return super().gestureEvent(event)
 
 
 class PlotToolBox(QObject):
