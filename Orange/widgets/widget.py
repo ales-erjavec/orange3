@@ -14,13 +14,14 @@ from AnyQt.QtWidgets import (
     QWidget, QDialog, QVBoxLayout, QSizePolicy, QApplication, QStyle,
     QSplitter, QSplitterHandle, QPushButton, QStatusBar,
     QProgressBar, QAction, QFrame, QStyleOption, QMenuBar, QMenu,
-    QWIDGETSIZE_MAX
+    QWIDGETSIZE_MAX,
 )
 from AnyQt.QtCore import (
     Qt, QObject, QEvent, QRect, QMargins, QByteArray, QDataStream, QBuffer,
-    QSettings, QUrl, QThread, pyqtSignal as Signal
+    QSettings, QUrl, QThread, QTimer, QPoint, pyqtSignal as Signal,
 )
-from AnyQt.QtGui import QIcon, QKeySequence, QDesktopServices, QPainter
+from AnyQt.QtGui import QIcon, QKeySequence, QDesktopServices, QPainter, \
+    QKeyEvent
 
 from Orange.data import FileFormat
 from Orange.widgets import settings, gui
@@ -43,6 +44,7 @@ from Orange.widgets.utils.signals import WidgetSignalsMixin
 from Orange.widgets.utils.signals import Input, Output, AttributeList
 from Orange.widgets.utils.overlay import MessageOverlayWidget, OverlayWidget
 from Orange.widgets.utils.buttons import SimpleButton
+from Orange.widgets.utils.combobox import dropdown_popup_geometry
 
 # Msg is imported and renamed, so widgets can import it from this module rather
 # than the one with the mixin (Orange.widgets.utils.messages). Assignment is
@@ -224,6 +226,8 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
         self.__msgchoice = 0
         self.__statusbar = None  # type: Optional[QStatusBar]
         self.__statusbar_action = None  # type: Optional[QAction]
+        self.__menubar_action = None
+        self.__menubar_visible_timer = None
 
         self.__help_action = QAction(
             "Help", self, objectName="action-help", toolTip="Show help",
@@ -272,7 +276,45 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
         )
         self.__close_action.triggered.connect(self.hide)
 
+        settings = QSettings()
+        settings.beginGroup(__name__ + ".OWWidget/menubar")
         self.__menubar = mb = QMenuBar(self)
+        # do we have a native menubar
+        nativemb = mb.isNativeMenuBar()
+        if nativemb:
+            # force non native mb via. settings override
+            nativemb = settings.value(
+                "use-native", defaultValue=nativemb, type=bool
+            )
+        mb.setNativeMenuBar(nativemb)
+        if not nativemb:
+            # without native menu bar configure visibility
+            mbvisible = settings.value(
+                "visible", defaultValue=False, type=bool
+            )
+            mb.setVisible(mbvisible)
+            self.__menubar_action = QAction(
+                "Show Menu Bar",  self, objectName="action-show-menu-bar",
+                checkable=True,
+                shortcut=QKeySequence(
+                    Qt.ControlModifier | Qt.ShiftModifier | Qt.Key_M
+                )
+            )
+            self.__menubar_action.setChecked(mbvisible)
+            self.__menubar_action.triggered[bool].connect(
+                self.__setMenuBarVisible
+            )
+            self.__menubar_visible_timer = QTimer(
+                self, objectName="menu-bar-visible-timer", singleShot=True,
+                interval=settings.value(
+                    "alt-key-timeout", defaultValue=750, type=int,
+                )
+            )
+            self.__menubar_visible_timer.timeout.connect(
+                self.__menuBarVisibleTimeout
+            )
+            self.addAction(self.__menubar_action)
+
         fileaction = mb.addMenu(_Menu("&File", mb, objectName="menu-file"))
         fileaction.setVisible(False)
         fileaction.menu().addSeparator()
@@ -327,10 +369,29 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
             action.triggered[bool].connect(self.__setControlAreaVisible)
             self.__splitter.handleClicked.connect(self.__toggleControlArea)
             viewaction.menu().addAction(action)
+
+        if self.__menubar_action is not None:
+            viewaction.menu().addAction(self.__menubar_action)
         return self
 
     def menuBar(self):
         return self.__menubar
+
+    def __menuBarVisibleTimeout(self):
+        mb = self.__menubar
+        if mb is not None and mb.isHidden() \
+                and QApplication.mouseButtons() == Qt.NoButton:
+            mb.setVisible(True)
+            mb.setProperty("__visible_from_alt_key_press", True)
+
+    def __setMenuBarVisible(self, visible):
+        mb = self.__menubar
+        if mb is not None:
+            mb.setVisible(visible)
+            mb.setProperty("__visible_from_alt_key_press", False)
+            settings = QSettings()
+            settings.beginGroup(__name__ + ".OWWidget/menubar")
+            settings.setValue("visible", visible)
 
     # pylint: disable=super-init-not-called
     def __init__(self, *args, **kwargs):
@@ -468,6 +529,18 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
 
         if self.want_message_bar:
             sb = self.statusBar()
+            if self.__menubar is not None \
+                    and not self.__menubar.isNativeMenuBar():
+                # damn millennials
+                icon = QIcon(gui.resource_filename("icons/hamburger.svg"))
+                b = SimpleButton(
+                    icon=icon,
+                    toolTip="Menu",
+                    objectName="status-bar-menu-button"
+                )
+                sb.addWidget(b)
+                b.clicked.connect(self.__statusBarMenu)
+
             help = self.__help_action
             icon = QIcon(gui.resource_filename("icons/help.svg"))
             icon.addFile(gui.resource_filename("icons/help-hover.svg"), mode=QIcon.Active)
@@ -913,6 +986,34 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
         """
         event.accept()
 
+    def __statusBarMenu(self):
+        # type: () -> None
+        sb = self.__statusbar
+        mb = self.__menubar
+        if sb is None or mb is None:
+            return
+        b = sb.findChild(SimpleButton, "status-bar-menu-button")
+        if b is None:
+            return
+
+        actions = []
+        for action in mb.actions():
+            if action.isVisible() and action.isEnabled() and action.menu():
+                actions.append(action)
+        if not actions:
+            return
+        menu = QMenu(self)
+        menu.setAttribute(Qt.WA_DeleteOnClose)
+        menu.addActions(actions)
+        popup_rect = QRect(
+            b.mapToGlobal(QPoint(0, 0)), b.size()
+        )
+        menu.ensurePolished()
+        menu_rect = QRect(QPoint(0, 0), menu.sizeHint())
+        screen_rect = QApplication.desktop().availableGeometry(b)
+        menu_rect = dropdown_popup_geometry(menu_rect, popup_rect, screen_rect)
+        menu.popup(menu_rect.topLeft())
+
     def setCaption(self, caption):
         # save caption title in case progressbar will change it
         self.captionTitle = str(caption)
@@ -1030,14 +1131,29 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
         return self.__statusMessage
 
     def keyPressEvent(self, e):
-        """Handle default key actions or pass the event to the inherited method
-        """
-        if (int(e.modifiers()), e.key()) in OWWidget.defaultKeyActions:
-            OWWidget.defaultKeyActions[int(e.modifiers()), e.key()](self)
-        else:
-            QDialog.keyPressEvent(self, e)
+        # type: (QKeyEvent) -> None
+        mb = self.__menubar
+        if not mb.isNativeMenuBar() \
+                and e.modifiers() == Qt.AltModifier \
+                and e.key() in [Qt.Key_Alt, Qt.Key_AltGr] \
+                and QApplication.mouseButtons() == Qt.NoButton \
+                and mb.isHidden():
+            self.__menubar_visible_timer.start()
+        elif self.__menubar_visible_timer is not None:
+            # stop the timer on any other key press
+            self.__menubar_visible_timer.stop()
+        super().keyPressEvent(e)
 
-    defaultKeyActions = {}
+    def keyReleaseEvent(self, event):
+        # type: (QKeyEvent) -> None
+        mb = self.__menubar
+        if not mb.isNativeMenuBar() \
+                and event.key() in [Qt.Key_Alt, Qt.Key_AltGr]:
+            self.__menubar_visible_timer.stop()
+            if mb.property("__visible_from_alt_key_press") is True:
+                mb.setVisible(False)
+                mb.setProperty("__visible_from_alt_key_press", False)
+        super().keyReleaseEvent(event)
 
     def setBlocking(self, state=True):
         """
