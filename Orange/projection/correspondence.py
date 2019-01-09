@@ -16,10 +16,10 @@ from scipy.linalg import svd as lapack_svd
 from scipy.sparse.linalg import svds as arpack_svd
 from scipy.sparse.linalg import LinearOperator
 
-from Orange.data import DiscreteVariable, Variable, Table
+from Orange.data import DiscreteVariable, Variable, Table, Domain
 from Orange.data.util import SharedComputeValue
 import Orange.preprocess
-from Orange.projection import Projector
+from Orange.projection import Projector, Projection
 from Orange.statistics import contingency
 from Orange.util import Reprable_repr_pretty
 
@@ -715,3 +715,86 @@ class CATransform(SharedComputeValue):
             for i in range(factors.shape[1])
         ]
 
+
+class MCA_(Projector):
+    name = 'MCA'
+    fit = None
+
+    def __init__(self, n_components=2, solver=Auto):
+        self.n_components = n_components
+        self.solver = solver
+
+    def __call__(self, data):
+        # type: (Table) -> CAProjectionModel
+        domain = data.domain
+        catvars = [var for var in domain.attributes if var.is_discrete]
+        if not catvars:
+            raise ValueError("no categorical vars")
+            return MCAProjectionModel(
+                MCA(...), [], Domain([], domain.class_vars, domain.metas)
+            )
+        counts = [len(v.values) for v in catvars]
+        if not sum(counts):
+            raise ValueError("no categories")
+            return MCAProjectionModel(
+                MCA(...), [], Domain([], domain.class_vars, domain.metas)
+            )
+
+        B = burt_table(data, catvars)
+        mca = multiple_correspondence(
+            B, counts, solver=self.solver, maxk=self.n_components
+        )
+        cavars = CATransform.create_transformed("MCA{}", catvars, mca.cpc)
+        tdomain = Domain(cavars, [], [])
+        return CAProjectionModel(mca, catvars, tdomain)
+
+
+class MCAProjectionModel(Projection):
+    def __init__(self, mca, variables):
+        # type: (MCA, List[DiscreteVariable]) -> None
+        self.mca = mca
+        #: The input variables
+        self.variables = variables
+        #: The transformed output domain
+        self.domain = Domain(
+            CATransform.create_transformed("MCA{}", variables, mca.rpc)
+        )
+
+    def __call__(self, data):
+        return data.transform(self.domain)
+
+
+class CA_(Projector):
+    name = "CA"
+    fit = None
+
+    def __init__(self, n_components=2, solver=Auto):
+        self.n_components = n_components
+        self.solver = solver
+
+    def __call__(self, data, rowvars=None, colvars=None):
+        domain = data.domain
+        if rowvars is None:
+            rowvars = [v for v in domain.attributes if v.is_discrete]
+        if colvars is None:
+            colvars = [v for v in domain.class_vars if v.is_discrete]
+        T = cross_tabulate(data, rowvars, colvars)
+        ca = correspondence(T, self.n_components, solver=self.solver)
+        return CAProjectionModel(ca, rowvars, colvars)
+
+
+class CAProjectionModel(Projection):
+    def __init__(self, ca, rowvars, colvars):
+        # type: (CA, List[DiscreteVariable], List[DiscreteVariable]) -> None
+        self.ca = ca
+        #: The row variables
+        self.rowvars = rowvars
+        #: The transformed output domain
+        self.colvars = colvars
+        self.domain = Domain(
+            CATransform.create_transformed("CA Row {}", rowvars, ca.rpc),
+            CATransform.create_transformed("CA Col {}", colvars, ca.cpc),
+        )
+
+    def __call__(self, data):
+        return data.transform(self.domain)
