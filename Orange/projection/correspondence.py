@@ -41,98 +41,6 @@ def row_vec(x):  # type: (ndarray) -> ndarray
     return x.reshape((1, -1))
 
 
-class _CALinearOperator(LinearOperator):
-    """
-    Linear operator expressing the weighted matrix of deviations from
-    expected profiles in CA that is the input to the svd decomposition. I.e:
-
-        diag(w) @ (M - r@s.T) @ diag(v)
-
-    where `r` and `s` are column vectors and w,v are the entries of a diagonal
-    weighing matrices
-
-    Parameters
-    ----------
-    M : (M, N) matrix
-    r : (M) np.ndarray
-    s : (N) np.ndarray
-    w : (M) np.ndarray
-    v : (N) np.ndarray
-
-     (diag(w) @ M - diag(w) @ r @ s.T) @ diag(v)
-    = diag(w) @ M @ diag(v) - wr @ vs.T
-
-    L @ X
-    -----
-    = diag(w) @  M  @ diag(v) @ X -  wr  @ vs.T @  X
-       mxm      mxn    nxn     mxk  mx1    1xn    nxk
-
-    L.T @ X
-    X.T @ L
-    -------
-    = X.T  @ diag(w) @  M  @ diag(v) - X.T  @  wr  @  vs.T
-      kxm    mxm       mxn    nxn      kxm    mx1    1xn
-    """
-    def __init__(self, M, r, c, w, v):
-        super().__init__(M.dtype, M.shape)
-        assert self.dtype.kind == 'f'
-        self.M = M
-        self.r = r
-        self.c = c
-        self.w = w
-        self.v = v
-        self.wr = w * r
-        self.vc = v * c
-        assert self.shape == (w.size, v.size) == (r.size, c.size)
-        assert w.ndim == v.ndim == r.ndim == v.ndim == 1
-
-    def _matmat(self, X):
-        if X.ndim == 1:
-            X = col_vec(X)
-        m, n = self.shape
-        n_, k = X.shape
-        assert n_ == n
-        Y1 = X * col_vec(self.v)
-        Y1 = self.M.dot(Y1)
-        assert Y1.shape == (m, k)
-        Y1 *= col_vec(self.w)
-        #: Y1 = diag(w) @ M @ diag(v)
-        Y2 = row_vec(self.vc) @ X
-        assert Y2.shape == (1, k)
-        Y2 = col_vec(self.wr) @ Y2
-        assert Y2.shape == Y1.shape == (m, k)
-        return Y1 + Y2
-
-    def _rmatmat(self, X):
-        if X.ndim == 1:
-            X = col_vec(X)
-        m, n = self.shape
-        m_, k = X.shape
-        assert m_ == m
-        Y1 = (X.T * row_vec(self.w))
-        # : Y1 @ M -> (M.T @ Y1.T).T
-        Y1 = self.M.T.dot(Y1.T).T
-        assert Y1.shape == (k, n)
-        Y1 *= row_vec(self.v)
-
-        Y2 = X.T.dot(col_vec(self.wr))
-        assert Y2.shape == (k, 1)
-        Y2 = Y2.dot(row_vec(self.vc))
-        assert Y2.shape == (k, n)
-        return Y1 - Y2
-
-    def _rmatvec(self, x):
-        return self._rmatmat(x.reshape((-1, 1)))
-
-    def _adjoint(self):
-        return LinearOperator(
-            shape=self.shape[::-1],
-            dtype=self.dtype,
-            matmat=self.rmatmat,
-            rmatvec=self.matmat,
-        )
-
-
 if typing:
     @typing.overload
     def correspondence(table: np.ndarray, maxk=-1, solver=Auto) -> 'CA': ...
@@ -227,6 +135,22 @@ def correspondence(table, maxk=-1, solver=Auto, ):
     return CA(SVD(U, s, Vh), rowcoord, colcoord, row_mass, col_mass)
 
 
+class SVD(typing.NamedTuple):
+    #: The left singular vectors.
+    U: np.ndarray
+    #: The singular values in descending order.
+    s: np.ndarray
+    #: The right singular vectors.
+    Vh: np.ndarray
+
+    def _repr_pretty_(self, *args, **kwargs):
+        return Reprable_repr_pretty(
+            type(self).__name__,
+            zip(self._fields, self),
+            *args, **kwargs
+        )
+
+
 def scale_center_svd(A, r, s, w, v, overwrite_a=False):
     """
     Perform a SVD decomposition of a `diag(w) @ (A - r@s.T) @ diag(v)`
@@ -283,7 +207,7 @@ def scale_center_svd_arpack(A, r, s, w, v, maxk=-1):
     -------
     svd : SVD
     """
-    op = _CALinearOperator(A, r, s, w, v)
+    op = ScaledCenteredLinearOperator(A, r, s, w, v)
     rstate = np.random.RandomState(0xf0042)
     v0 = rstate.uniform(-1, 1, size=min(op.shape))
     if maxk < 0:
@@ -296,19 +220,98 @@ def scale_center_svd_arpack(A, r, s, w, v, maxk=-1):
     return SVD(U, s, Vh)
 
 
-class SVD(typing.NamedTuple):
-    #: The left singular vectors.
-    U: np.ndarray
-    #: The singular values in descending order.
-    s: np.ndarray
-    #: The right singular vectors.
-    Vh: np.ndarray
+class ScaledCenteredLinearOperator(LinearOperator):
+    """
+    A linear operator `diag(w) @ (M - r@s.T) @ diag(v)` where `M` is a
+    matrix, `r` and `s` are column vectors, and `w, `v` are the entries of
+    a diagonal weighing matrices.
 
-    def _repr_pretty_(self, *args, **kwargs):
-        return Reprable_repr_pretty(
-            type(self).__name__,
-            zip(self._fields, self),
-            *args, **kwargs
+    In other words: center `M` with rank one matrix `r@s.T` and scale the
+    resulting matrix with `w` row-wise and with `v` column-wise.
+
+    Parameters
+    ----------
+    M : (M, N) matrix or a LinearOperator
+    r : (M) np.ndarray
+    s : (N) np.ndarray
+    w : (M) np.ndarray
+    v : (N) np.ndarray
+
+    diag(w) @ (M - r@s.T) @ diag(v)
+    = (diag(w) @ M - diag(w) @ r @ s.T) @ diag(v)
+    = diag(w) @ M @ diag(v) - wr @ vs.T
+    ; where wr is w*r and vs is v*s (multiplied element-wise)
+
+    L @ X
+    -----
+    = diag(w) @  M  @ diag(v) @ X -  wr  @ vs.T @  X
+       mxm      mxn    nxn     mxk  mx1    1xn    nxk
+
+    L.T @ X
+    X.T @ L
+    -------
+    = X.T  @ diag(w) @  M  @ diag(v) - X.T  @  wr  @  vs.T
+      kxm    mxm       mxn    nxn      kxm    mx1    1xn
+    """
+    def __init__(self, M, r, c, w, v):
+        super().__init__(M.dtype, M.shape)
+        assert self.dtype.kind == 'f'
+        self.M = M
+        self.r = r
+        self.c = c
+        self.w = w
+        self.v = v
+        self.wr = w * r
+        self.vc = v * c
+        assert self.shape == (w.size, v.size) == (r.size, c.size)
+        assert w.ndim == v.ndim == r.ndim == v.ndim == 1
+
+    def _matmat(self, X):
+        if X.ndim == 1:
+            X = col_vec(X)
+        m, n = self.shape
+        n_, k = X.shape
+        assert n_ == n
+        Y1 = X * col_vec(self.v)
+        Y1 = self.M.dot(Y1)
+        assert Y1.shape == (m, k)
+        Y1 *= col_vec(self.w)
+        #: Y1 = diag(w) @ M @ diag(v)
+        Y2 = row_vec(self.vc) @ X
+        assert Y2.shape == (1, k)
+        Y2 = col_vec(self.wr) @ Y2
+        assert Y2.shape == Y1.shape == (m, k)
+        return Y1 + Y2
+
+    def _rmatmat(self, X):
+        if X.ndim == 1:
+            X = col_vec(X)
+        m, n = self.shape
+        m_, k = X.shape
+        assert m_ == m
+        Y1 = (X.T * row_vec(self.w))
+        # : Y1 @ M -> (M.T @ Y1.T).T
+        Y1 = self.M.T.dot(Y1.T).T
+        assert Y1.shape == (k, n)
+        Y1 *= row_vec(self.v)
+
+        Y2 = X.T.dot(col_vec(self.wr))
+        assert Y2.shape == (k, 1)
+        Y2 = Y2.dot(row_vec(self.vc))
+        assert Y2.shape == (k, n)
+        return Y1 - Y2
+
+    def _rmatvec(self, x):
+        return self._rmatmat(x.reshape((-1, 1)))
+
+    def _transpose(self):
+        """
+        (diag(w) @ (M - r@s.T) @ diag(v)).T
+        = diag(v).T @ (M - r@s.T).T @ diag(w).T
+        = diag(v) @ (M.T - s@r.T) @ diag(w)
+        """
+        return ScaledCenteredLinearOperator(
+            self.M.T, self.c, self.r, self.v, self.w
         )
 
 
