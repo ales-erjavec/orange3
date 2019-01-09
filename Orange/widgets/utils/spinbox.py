@@ -1,5 +1,5 @@
-from AnyQt.QtCore import Qt, QPoint
-from AnyQt.QtGui import QKeySequence
+from AnyQt.QtCore import Qt, QPoint, QMetaObject
+from AnyQt.QtGui import QKeySequence, QWheelEvent
 from AnyQt.QtWidgets import QDoubleSpinBox, QStyle, QAction, QLineEdit, QSlider
 
 __all__ = ["DoubleSpinBoxWithSlider"]
@@ -33,7 +33,7 @@ class DoubleSpinBoxWithSlider(QDoubleSpinBox):
             return
         le = self.lineEdit()
         # Slider could also be horizontal below or above the spinbox?
-        slider = QSlider(Qt.Vertical, self, objectName="-slider-popup")
+        slider = PopupSlider(Qt.Vertical, self, objectName="-slider-popup")
         slider.setWindowFlags(Qt.Popup)
         slider.setAttribute(Qt.WA_DeleteOnClose)
         slider.setInvertedAppearance(True)
@@ -66,3 +66,25 @@ class DoubleSpinBoxWithSlider(QDoubleSpinBox):
         slider.valueChanged.connect(setvalue)
         slider.show()
         slider.setFocus(Qt.PopupFocusReason)
+
+
+class PopupSlider(QSlider):
+    # are we in a middle of a kinetic scroll phase (this really only works
+    # with Qt 5.12)
+    __phaseDidBegin = False
+
+    def wheelEvent(self, event):
+        # type: (QWheelEvent) -> None
+        phase = event.phase()
+        if phase == Qt.ScrollBegin:
+            self.__phaseDidBegin = True
+        elif phase == Qt.ScrollEnd:
+            self.__phaseDidBegin = False
+        if self.isWindow() \
+                and not self.rect().contains(event.pos()) \
+                and (not self.__phaseDidBegin
+                     or phase == Qt.ScrollBegin):
+            event.ignore()
+            self.close()
+        else:
+            super().wheelEvent(event)
