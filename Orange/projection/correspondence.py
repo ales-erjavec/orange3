@@ -1,4 +1,6 @@
 """
+Correspondence analysis
+-----------------------
 
 """
 from typing import List, Tuple, Union, Sequence
@@ -21,15 +23,20 @@ from Orange.projection import Projector
 from Orange.statistics import contingency
 from Orange.util import Reprable_repr_pretty
 
-Auto, Lapack, Arpack,  = 'auto', 'lapack', 'arpack'
+Lapack, Arpack, Auto = 'lapack', 'arpack', 'auto'
+
+ndarray = np.ndarray
+
+if typing.TYPE_CHECKING:
+    Matrix = typing.Union[ndarray, sp.spmatrix]
 
 
-def col_vec(x):
+def col_vec(x):  # type: (ndarray) -> ndarray
     """Return x as a column vector."""
     return x.reshape((-1, 1))
 
 
-def row_vec(x):
+def row_vec(x):  # type: (ndarray) -> ndarray
     """Return x as a row vector."""
     return x.reshape((1, -1))
 
@@ -134,6 +141,20 @@ if typing:
 
 
 def correspondence(table, maxk=-1, solver=Auto, ):
+    """
+    Compute simple correspondence analysis
+
+    Parameters
+    ----------
+    table: (N, M) matrix
+        A (N x M) matrix of frequency data.
+    maxk : int
+        The maximum number of principal components to compute/retain in the
+        output. If -1 then the maximum number of components are retained.
+    solver : str
+        One of 'lapack', 'arpack' or 'auto'. 'auto' chooses the one of the other
+        based on the input type and size.
+    """
     if isinstance(table, sp.spmatrix):
         table = table.tocsc(copy=False)  # type: sp.csc_matrix
         assert np.all(np.isfinite(table.data))
@@ -144,8 +165,8 @@ def correspondence(table, maxk=-1, solver=Auto, ):
         assert np.all(table >= 0)
         assert np.all(np.isfinite(table))
         M, N = table.shape
-    total = table.sum()
 
+    total = table.sum()
     if total > 0:
         table = table / total
 
@@ -207,6 +228,26 @@ def correspondence(table, maxk=-1, solver=Auto, ):
 
 
 def scale_center_svd(A, r, s, w, v, overwrite_a=False):
+    """
+    Perform a SVD decomposition of a `diag(w) @ (A - r@s.T) @ diag(v)`
+    centered and scaled matrix using *lapack*.
+
+    .. note::
+        The centered/weighted matrix is formed in memory.
+    --
+    Parameters
+    ----------
+    A : (N, M) matrix
+    r : (N) array
+    s : (M) array
+    w : (N) array
+    v : (M) array
+    overwrite_a : bool
+
+    Returns
+    -------
+    svd : SVD
+    """
     assert A.shape == (r.size, s.size) == (w.size, v.size)
     if overwrite_a:
         A -= col_vec(r) @ row_vec(s)
@@ -221,6 +262,27 @@ def scale_center_svd(A, r, s, w, v, overwrite_a=False):
 
 
 def scale_center_svd_arpack(A, r, s, w, v, maxk=-1):
+    """
+    Perform a SVD decomposition of a `diag(w) @ (A - r@s.T) @ diag(v)`
+    centered and scaled matrix using *arpack*.
+
+    .. note::
+        The centered/weighted matrix is never formed in memory.
+
+    Parameters
+    ----------
+    A : (N, M) matrix
+    r : (N) array
+    s : (M) array
+    w : (N) array
+    v : (M) array
+    maxk : int
+        Number of singular numbers/vectors to return
+
+    Returns
+    -------
+    svd : SVD
+    """
     op = _CALinearOperator(A, r, s, w, v)
     rstate = np.random.RandomState(0xf0042)
     v0 = rstate.uniform(-1, 1, size=min(op.shape))
@@ -235,8 +297,11 @@ def scale_center_svd_arpack(A, r, s, w, v, maxk=-1):
 
 
 class SVD(typing.NamedTuple):
+    #: The left singular vectors.
     U: np.ndarray
+    #: The singular values in descending order.
     s: np.ndarray
+    #: The right singular vectors.
     Vh: np.ndarray
 
     def _repr_pretty_(self, *args, **kwargs):
@@ -248,8 +313,6 @@ class SVD(typing.NamedTuple):
 
 
 symmetric, rowprinc, colprinc = 'symetric', 'rowprincipal', 'colprincipal'
-
-ndarray = np.ndarray
 
 
 class CA:
@@ -454,16 +517,18 @@ class MCA(CA):
         return self.adjusted_inertia
 
 
-def multiple_correspondence(B, counts):
+def multiple_correspondence(B, counts, maxk=-1, solver=Auto):
     # type: (ndarray, Sequence[int]) -> MCA
     """
+    Compute the multiple correspondence analysis on a *Burt* table.
 
     Parameters
     ----------
-    B : Matrix
-        Burt table.
+    B : (N, N) Matrix
+        A burt table.
     counts : Sequence[int]
-        Counts of
+        The counts of levels/categories for each category. `sum(counts)`
+        must equal `N`
 
     Returns
     -------
@@ -486,10 +551,10 @@ def multiple_correspondence(B, counts):
     J = np.sum(Js)
     assert J == N
 
-    ca = correspondence(B)
+    ca = correspondence(B, maxk=maxk, solver=solver)
 
     if Q <= 1:
-        # Single variable. Maybe warn?
+        # Single variable. Maybe warn? Error?
         return MCA(ca.svd, ca.rowcoord, ca.colcoord, ca.rowmass, ca.colmass,
                    adjusted_inertia=ca.total_inertia)
 
