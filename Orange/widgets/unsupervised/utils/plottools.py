@@ -7,13 +7,13 @@ import pkg_resources
 from AnyQt.QtCore import QObject, QEvent, Qt, QRectF, QPointF
 from AnyQt.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
 from AnyQt.QtGui import (
-    QPainterPath, QColor, QPen, QBrush, QKeySequence, QIcon, QPalette,
+    QPainterPath,  QPen, QBrush, QKeySequence, QIcon, QPalette, QTransform
 )
 from AnyQt.QtWidgets import (
-    QGraphicsPathItem, QGraphicsRectItem, QPinchGesture, QAction, QActionGroup,
-    QToolButton, QGraphicsSceneMouseEvent, QGestureEvent,
-    QWidget, QAbstractButton,
-    QMenu, QApplication)
+    QGraphicsItem, QGraphicsPathItem, QGraphicsRectItem, QPinchGesture,
+    QAction, QActionGroup, QToolButton, QGraphicsSceneMouseEvent,
+    QGestureEvent, QWidget, QAbstractButton, QMenu, QApplication
+)
 
 import pyqtgraph as pg
 
@@ -67,12 +67,18 @@ class PlotTool(QObject):
             return
         if self.__viewbox is not None:
             self.__viewbox.removeEventFilter(self)
+            self.__viewbox.sigTransformChanged.disconnect(
+                self.viewTransformChanged,
+            )
             self.__viewbox.destroyed.disconnect(self.__viewdestroyed)
 
         self.__viewbox = viewbox
 
         if self.__viewbox is not None:
             self.__viewbox.installEventFilter(self)
+            self.__viewbox.sigTransformChanged.connect(
+                self.viewTransformChanged, Qt.UniqueConnection
+            )
             self.__viewbox.destroyed.connect(self.__viewdestroyed)
 
     def viewBox(self):
@@ -89,6 +95,14 @@ class PlotTool(QObject):
     @Slot()
     def __viewdestroyed(self):
         self.__viewbox = None
+
+    @Slot()
+    def viewTransformChanged(self):
+        # type: () -> None
+        """
+        Called when the current `viewBox` transform has changed.
+        """
+        pass
 
     def mousePressEvent(self, event):
         # type: (QGraphicsSceneMouseEvent) -> bool
@@ -239,8 +253,9 @@ class PlotSelectionTool(PlotTool):
     def __init__(self, parent=None, selectionMode=Rect, **kwargs):
         super().__init__(parent, **kwargs)
         self.__mode = selectionMode
-        self.__path = None
-        self.__item = None
+        self.__path = None  # type: Optional[QPainterPath]
+        self.__item = None  # type: Optional[QGraphicsItem]
+        self.__buttonDownPos = None  # type: Optional[QPointF]
 
     def setSelectionMode(self, mode):
         """
@@ -255,7 +270,7 @@ class PlotSelectionTool(PlotTool):
         assert mode in {PlotSelectionTool.Rect, PlotSelectionTool.Lasso}
         if self.__mode != mode:
             if self.__path is not None:
-                self.selectionFinished.emit()
+                self.selectionFinished.emit(self.__path)
             self.__mode = mode
             self.__path = None
 
@@ -274,31 +289,41 @@ class PlotSelectionTool(PlotTool):
         Returns
         -------
         shape : QPainterPath
-            The selection shape in view coordinates.
+            The selection shape in data coordinates.
         """
         if self.__path is not None:
             shape = QPainterPath(self.__path)
             shape.closeSubpath()
         else:
             shape = QPainterPath()
-        viewbox = self.viewBox()
+        return shape
 
-        if viewbox is None:
-            return QPainterPath()
+    def mapToData(self, *args):
+        vb = self.viewBox()
+        if vb is None:
+            return QTransform().map(*args)
+        cg = vb.childGroup  # type: QGraphicsItem
+        return cg.mapFromParent(*args)
 
-        return viewbox.childGroup.mapFromParent(shape)
+    def mapFromData(self, *args):
+        vb = self.viewBox()
+        if vb is None:
+            return QTransform.map(*args)
+        cg = vb.childGroup  # type: QGraphicsItem
+        return cg.mapToParent(*args)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            pos = event.pos()
+            self.__buttonDownPos = pos = self.mapToData(event.pos())
             if self.__mode == PlotSelectionTool.Rect:
-                rect = QRectF(pos, pos)
-                self.__path = QPainterPath()
-                self.__path.addRect(rect)
+                path = QPainterPath()
+                path.addRect(QRectF(pos, pos))
+                self.__path = path
             else:
-                self.__path = QPainterPath()
-                self.__path.moveTo(event.pos())
-            self.selectionStarted.emit(self.selectionShape())
+                path = QPainterPath()
+                path.moveTo(pos)
+                self.__path = path
+            self.selectionStarted.emit(self.__path)
             self.__updategraphics()
             event.accept()
             return True
@@ -307,13 +332,13 @@ class PlotSelectionTool(PlotTool):
 
     def mouseMoveEvent(self, event):
         if event.buttons() & Qt.LeftButton:
+            pos = self.mapToData(event.pos())
             if self.__mode == PlotSelectionTool.Rect:
-                rect = QRectF(event.buttonDownPos(Qt.LeftButton), event.pos())
                 self.__path = QPainterPath()
-                self.__path.addRect(rect)
+                self.__path.addRect(QRectF(self.__buttonDownPos, pos))
             else:
-                self.__path.lineTo(event.pos())
-            self.selectionUpdated.emit(self.selectionShape())
+                self.__path.lineTo(pos)
+            self.selectionUpdated.emit(self.__path)
             self.__updategraphics()
             event.accept()
             return True
@@ -322,15 +347,17 @@ class PlotSelectionTool(PlotTool):
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
+            pos = self.mapToData(event.pos())
             if self.__mode == PlotSelectionTool.Rect:
-                rect = QRectF(event.buttonDownPos(Qt.LeftButton), event.pos())
-                self.__path = QPainterPath()
-                self.__path.addRect(rect)
+                path = QPainterPath()
+                path.addRect(QRectF(self.__buttonDownPos, pos))
+                self.__path = path
             else:
-                self.__path.lineTo(event.pos())
-            self.selectionFinished.emit(self.selectionShape())
+                self.__path.lineTo(pos)
+            self.selectionFinished.emit(self.__path)
             self.__path = QPainterPath()
             self.__updategraphics()
+            self.__buttonDownPos = None
             event.accept()
             return True
         else:
@@ -340,11 +367,11 @@ class PlotSelectionTool(PlotTool):
         viewbox = self.viewBox()
         if viewbox is None:
             return
-
-        if self.__path.isEmpty():
+        cg = viewbox.childGroup  # type: QGraphicsItem
+        mapToViewBox = cg.mapToParent
+        if self.__path is None or self.__path.isEmpty():
             if self.__item is not None:
                 self.__item.setParentItem(None)
-                viewbox.removeItem(self.__item)
                 if self.__item.scene():
                     self.__item.scene().removeItem(self.__item)
                 self.__item = None
@@ -353,13 +380,16 @@ class PlotSelectionTool(PlotTool):
                 palette = viewbox.palette()
                 color = palette.color(QPalette.Disabled, QPalette.Highlight)
                 item = QGraphicsPathItem()
-                item.setPen(QPen(color, 0))
-                color.setAlpha(50)
+                item.setPen(QPen(color, 1))
+                color.setAlpha(75)
                 item.setBrush(QBrush(color))
                 self.__item = item
-                viewbox.addItem(item)
+                self.__item.setParentItem(viewbox)
+            self.__item.setPath(mapToViewBox(self.__path))
 
-            self.__item.setPath(self.selectionShape())
+    def viewTransformChanged(self):
+        super().viewTransformChanged()
+        self.__updategraphics()
 
 
 class PlotNavigationTool(PlotTool):
@@ -389,6 +419,8 @@ class PlotNavigationTool(PlotTool):
                 PlotTool.popViewRect(self.viewBox())
             self.__didMove = False
             return True
+        else:
+            return super().mouseReleaseEvent(event)
 
 
 class PlotZoomTool(PlotNavigationTool):
