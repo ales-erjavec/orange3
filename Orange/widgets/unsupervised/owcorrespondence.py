@@ -189,6 +189,22 @@ PointSizeItems = [
     }
 ]
 
+PointLabelItems = [
+    {
+        Qt.DisplayRole: "None",
+        Qt.ToolTip: "No labels are displayed",
+        Qt.UserRole: "none",
+    }, {
+        Qt.DisplayRole: "Short",
+        Qt.ToolTip: "Only category values are displayed",
+        Qt.UserRole: "names-short",
+    }, {
+        Qt.DisplayRole: "Full",
+        Qt.ToolTip: "Both category name and values are displayed",
+        Qt.UserRole: "names",
+    },
+]
+
 
 # The Madness and the Damage Done
 class GraphicsScene(pg.GraphicsScene):
@@ -257,6 +273,8 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
     inertia_limit_col = settings.Setting(1.0)  # type: float
     row_point_size = settings.Setting("same")  # type: str
     col_point_size = settings.Setting("same")  # type: str
+    col_point_label = settings.Setting("label")  # type: str
+    row_point_label = settings.Setting("label")  # type: str
     opacity = settings.Setting(255)            # type: int
     base_point_size = settings.Setting(12)     # type: int
 
@@ -455,13 +473,31 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         )
         self.row_point_size_cb.setModel(sizesmodel)
         self.row_point_size_cb.setCurrentValue(self.row_point_size)
+        self.row_point_size_cb.currentValueChanged.connect(
+            self.set_row_point_size_property)
+
         self.col_point_size_cb.setModel(sizesmodel)
         self.col_point_size_cb.setCurrentValue(self.col_point_size)
-
         self.col_point_size_cb.currentValueChanged.connect(
-            self.set_size_property_col)
-        self.row_point_size_cb.currentValueChanged.connect(
-            self.set_size_property_row)
+            self.set_col_point_size_property)
+
+        labelsmodel = create_list_model(PointLabelItems)
+        self.row_point_label_cb = EnumComboBox(
+            sizeAdjustPolicy=QComboBox.AdjustToMinimumContentsLength,
+            minimumContentsLength=5,
+        )
+        self.row_point_label_cb.setModel(labelsmodel)
+        self.row_point_label_cb.currentValueChanged.connect(
+            self.set_row_label_property)
+
+        self.col_point_label_cb = EnumComboBox(
+            sizeAdjustPolicy=QComboBox.AdjustToMinimumContentsLength,
+            minimumContentsLength=5,
+        )
+        self.col_point_label_cb.setModel(labelsmodel)
+        self.col_point_label_cb.setCurrentValue(self.col_point_label)
+        self.col_point_label_cb.currentValueChanged.connect(
+            self.set_col_label_property)
 
         grid.addWidget(QLabel("Point size:", sizePolicy=sp), PSizeRow, 0)
         grid.addWidget(self.row_point_size_cb, PSizeRow, 1)
@@ -476,8 +512,12 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
             self.set_base_point_size)
         grid.addWidget(self.base_point_size_slider, PSizeRow + 1, 1, 1, 2)
 
+        LabelRow = PSizeRow + 2
+        grid.addWidget(QLabel("Label:", ), LabelRow, 0)
+        grid.addWidget(self.row_point_label_cb, LabelRow, 1)
+        grid.addWidget(self.col_point_label_cb, LabelRow, 2)
 
-        LabelLimitRow = PSizeRow + 2
+        LabelLimitRow = LabelRow + 1
         self.inertia_limit_row_sb = DoubleSpinBoxWithSlider(
             value=self.inertia_limit_row, minimum=0., maximum=25.,
             singleStep=0.1, decimals=1, suffix="%", keyboardTracking=False,
@@ -820,13 +860,13 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
             if item is not None:
                 item.set_inertia_threshold(limit / 100)
 
-    def set_size_property_row(self, which):
+    def set_row_point_size_property(self, which):
         self.row_point_size = which
         item = self.plot.rowitem()
         if item is not None:
             item.set_size_property(which)
 
-    def set_size_property_col(self, which):
+    def set_col_point_size_property(self, which):
         self.col_point_size = which
         item = self.plot.colitem()
         if item is not None:
@@ -838,6 +878,25 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
             for item in [self.plot.colitem(), self.plot.rowitem()]:
                 if item is not None:
                     item.set_base_point_size(size)
+
+    def set_row_label_property(self, which):
+        # type: (str) -> None
+        """
+        Set the plot row point labels source property
+        """
+        if which != self.row_point_label:
+            self.row_point_label = which
+            item = self.plot.rowitem()
+            if item is not None:
+                item.set_label_property(which)
+
+    def set_col_label_property(self, which):
+        # type: (str) -> None
+        if which != self.col_point_label:
+            self.col_point_label = which
+            item = self.plot.colitem()
+            if item is not None:
+                item.set_label_property(which)
 
     def _update_CA(self):
         # Recompute the CA solution based on current settings and set it for
@@ -962,15 +1021,16 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         else:
             self.plot.plotCA(cadata, dim=dim, maptype=map_type)
 
-        for item, limit, size in zip(
+        for item, limit, size, label in zip(
                 [self.plot.rowitem(), self.plot.colitem()],
                 [self.inertia_limit_row, self.inertia_limit_col],
-                [self.row_point_size, self.col_point_size]):
+                [self.row_point_size, self.col_point_size],
+                [self.row_point_label, self.col_point_label]):
             if item is not None:
                 item.set_inertia_threshold(limit)
                 item.set_base_point_size(self.base_point_size)
                 item.set_size_property(size)
-                item.set_label_property("names-short")
+                item.set_label_property(label)
 
     def _update_info(self):
         # update the info text labels in the GUI control area
@@ -1558,6 +1618,9 @@ class CAPlotItem(pg.PlotItem):
         self.vb.autoRange()
 
 
+# NOTE: Rename to DepictionDelegate
+
+
 class DepictItem:
     scpitem = ...     # type: ScatterPlotItem
     names = ...       # type: List[str]
@@ -1657,14 +1720,19 @@ class DepictItem:
         return thunk()
 
     def _update_labels(self):
-        if self.labelsitem is None:
+        if self.labelsitem is None and self.arrowsitem is None:
             return
         data = self.label_data_for_property(self.label_property_name)
         if data is None:
             data = [""] * len(self.labelsitem.items)
         assert len(data) == len(self.labelsitem.items)
-        for item, data in zip(self.labelsitem.items, data):
-            item.setText(str(data))
+        if self.labelsitem is not None:
+            for item, data_ in zip(self.labelsitem.items, data):
+                item.setText(str(data_))
+
+        if self.arrowsitem is not None:
+            for item, data_ in zip(self.arrowsitem.items, data):
+                item.setText(str(data_))
 
 
 def extract_coords2D(data, dim):
