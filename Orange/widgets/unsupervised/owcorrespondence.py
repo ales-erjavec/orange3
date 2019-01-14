@@ -1,4 +1,3 @@
-from Orange.widgets.unsupervised.utils.plottools import PlotToolBox, PlotPinchZoomTool
 from xml.sax.saxutils import escape
 
 import sys
@@ -55,6 +54,9 @@ from Orange.widgets.visualize.owscatterplotgraph import (
 )
 from Orange.widgets.unsupervised.utils import (
     MappedColumnProxyModel, AnalysisRoleView, EnumItemDelegate
+)
+from Orange.widgets.unsupervised.utils.plottools import (
+    PlotToolBox, PlotPinchZoomTool
 )
 
 from Orange.widgets.evaluate.owrocanalysis import once
@@ -389,16 +391,10 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         box.layout().addWidget(view)
 
         grid = QGridLayout(objectName="pr-axis-grid", spacing=5)
-
         frame = QGroupBox("Principal Components")
-        # frame.setContentsMargins(0, 0, 0, 0)
         frame.setLayout(grid)
         self.controlArea.layout().addWidget(frame)
         frame.ensurePolished()
-        print(frame.getContentsMargins())
-        # gui.widgetBox(self.controlArea, "Principal Components",
-        #               orientation=grid, addSpace=False)
-
         self.axis_x_cb = gui.comboBox(
             None, self, "component_x", callback=self._component_changed,
             contentsLength=5, maximumContentsLength=5,
@@ -438,8 +434,6 @@ class OWCorrespondenceAnalysis(widget.OWWidget):
         frame = QGroupBox("Plot")
         frame.setLayout(grid)
         self.controlArea.layout().addWidget(frame)
-        # box = gui.widgetBox(self.controlArea, "Plot", addSpace=False,
-        #                     orientation=grid)
         # map type selection combo box
         self.map_type_cb = catype_cb = EnumComboBox()
         catype_model = create_list_model(MapTypesItems)
@@ -1152,38 +1146,6 @@ class CAPlotItem(pg.PlotItem):
         self.__rowitem = None  # type: Optional[DepictItem]
         self.__colitem = None  # type: Optional[DepictItem]
 
-        # zoomfit = QAction(
-        #     "Fit in view", self, objectName="action-zoom-fit",
-        #     shortcut=QKeySequence(Qt.ControlModifier | Qt.Key_0),
-        #
-        # )
-        # zoomout = QAction(
-        #     "Zoom out", self, objectName="action-zoom-out",
-        #     shortcut=QKeySequence.ZoomOut
-        # )
-        # zoomin = QAction(
-        #     "Zoom in tool", self, objectName="action-zoom-in",
-        #     shortcut=QKeySequence.ZoomIn
-        # )
-        # zoomfit.triggered.connect(self.zoomToFit)
-        # zoomout.triggered.connect(self.zoomOut)
-        # zoomin.triggered.connect(self.zoomIn)
-        # grp = QActionGroup(
-        #     self, objectName="actiongroup-view-tool", exclusive=True,
-        # )
-        # zoom_to_rect = QAction(
-        #     "Zoom to", self, objectName="action-zoom-to-rect", checkable=True,
-        #     shortcut=QKeySequence(Qt.ControlModifier | Qt.Key_1),
-        # )
-        # pan = QAction(
-        #     "Pan view", self, objectName="action-pan-view", checkable=True,
-        #     shortcut=QKeySequence(Qt.ControlModifier | Qt.Key_2)
-        # )
-        #
-        # grp.addAction(zoom_to_rect)
-        # grp.addAction(pan)
-        # pan.setChecked(True)
-
         toolbox = PlotToolBox(self)
         toolbox.setViewBox(self.vb)
         zoomout = toolbox.standardAction(PlotToolBox.ZoomOut)
@@ -1193,7 +1155,6 @@ class CAPlotItem(pg.PlotItem):
         zoomout.triggered.connect(self.zoomOut)
         zoomin.triggered.connect(self.zoomIn)
         zoomfit.triggered.connect(self.zoomToFit)
-        # selecttool = toolbox.standardAction(PlotToolBox.SelectTool)
         self.addActions([zoomfit, zoomout, zoomin, pantool])
         gs = PlotPinchZoomTool(self)
         gs.setViewBox(self.vb)
