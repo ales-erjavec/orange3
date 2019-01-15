@@ -3,11 +3,8 @@ Correspondence analysis
 -----------------------
 
 """
-from typing import List, Tuple, Union, Sequence
-
-import Orange
-
 import typing
+from typing import List, Tuple, Union, Sequence
 
 import numpy as np
 import scipy.sparse as sp
@@ -16,10 +13,11 @@ from scipy.linalg import svd as lapack_svd
 from scipy.sparse.linalg import svds as arpack_svd
 from scipy.sparse.linalg import LinearOperator
 
+import Orange
+
 from Orange.data import DiscreteVariable, Variable, Table, Domain
 from Orange.data.util import SharedComputeValue
 import Orange.preprocess
-from Orange.projection import Projector, Projection
 from Orange.statistics import contingency
 from Orange.util import Reprable_repr_pretty
 
@@ -41,20 +39,14 @@ def row_vec(x):  # type: (ndarray) -> ndarray
     return x.reshape((1, -1))
 
 
-if typing:
-    @typing.overload
-    def correspondence(table: np.ndarray, maxk=-1, solver=Auto) -> 'CA': ...
-    @typing.overload
-    def correspondence(table: sp.spmatrix, maxk=-1, solver=Auto) -> 'CA': ...
-
-
 def correspondence(table, maxk=-1, solver=Auto, ):
+    # type: (Matrix, int, str) -> CA
     """
     Compute simple correspondence analysis
 
     Parameters
     ----------
-    table: (N, M) matrix
+    table: (N, M) Matrix
         A (N x M) matrix of frequency data.
     maxk : int
         The maximum number of principal components to compute/retain in the
@@ -412,8 +404,7 @@ class CA:
         return self.svd.s
 
     def plot(self, dim=(0, 1), map=symmetric):
-        from matplotlib import pyplot as plt
-        from matplotlib import gridspec
+        from matplotlib import gridspec, pyplot as plt
         if map == symmetric:
             rowcoords = self.row_principal_coordinates[:, dim]
             colcoords = self.col_principal_coordinates[:, dim]
@@ -425,9 +416,6 @@ class CA:
             colcoords = self.col_principal_coordinates[:, dim]
         else:
             raise ValueError(map)
-
-        row_labels = ...
-        col_labels = ...
 
         fig = plt.figure()
         coords_conc = np.vstack((rowcoords, colcoords))
@@ -521,7 +509,7 @@ class MCA(CA):
 
 
 def multiple_correspondence(B, counts, maxk=-1, solver=Auto):
-    # type: (ndarray, Sequence[int]) -> MCA
+    # type: (Matrix, Sequence[int]) -> MCA
     """
     Compute the multiple correspondence analysis on a *Burt* table.
 
@@ -719,10 +707,7 @@ class CATransform(SharedComputeValue):
         ]
 
 
-class MCA_(Projector):
-    name = 'MCA'
-    fit = None
-
+class MCAProjection:
     def __init__(self, n_components=2, solver=Auto):
         self.n_components = n_components
         self.solver = solver
@@ -733,15 +718,15 @@ class MCA_(Projector):
         catvars = [var for var in domain.attributes if var.is_discrete]
         if not catvars:
             raise ValueError("no categorical vars")
-            return MCAProjectionModel(
-                MCA(...), [], Domain([], domain.class_vars, domain.metas)
-            )
+            # return MCAProjectionModel(
+            #     MCA(...), [], Domain([], domain.class_vars, domain.metas)
+            # )
         counts = [len(v.values) for v in catvars]
         if not sum(counts):
             raise ValueError("no categories")
-            return MCAProjectionModel(
-                MCA(...), [], Domain([], domain.class_vars, domain.metas)
-            )
+            # return MCAProjectionModel(
+            #     MCA(...), [], Domain([], domain.class_vars, domain.metas)
+            # )
 
         B = burt_table(data, catvars)
         mca = multiple_correspondence(
@@ -749,10 +734,10 @@ class MCA_(Projector):
         )
         cavars = CATransform.create_transformed("MCA{}", catvars, mca.cpc)
         tdomain = Domain(cavars, [], [])
-        return CAProjectionModel(mca, catvars, tdomain)
+        return MCAProjectionModel(mca, catvars, tdomain)
 
 
-class MCAProjectionModel(Projection):
+class MCAProjectionModel:
     def __init__(self, mca, variables):
         # type: (MCA, List[DiscreteVariable]) -> None
         self.mca = mca
@@ -767,15 +752,13 @@ class MCAProjectionModel(Projection):
         return data.transform(self.domain)
 
 
-class CA_(Projector):
-    name = "CA"
-    fit = None
-
+class CAProjection:
     def __init__(self, n_components=2, solver=Auto):
         self.n_components = n_components
         self.solver = solver
 
     def __call__(self, data, rowvars=None, colvars=None):
+        # type: (Table, ...) -> CAProjectionModel
         domain = data.domain
         if rowvars is None:
             rowvars = [v for v in domain.attributes if v.is_discrete]
@@ -786,7 +769,7 @@ class CA_(Projector):
         return CAProjectionModel(ca, rowvars, colvars)
 
 
-class CAProjectionModel(Projection):
+class CAProjectionModel:
     def __init__(self, ca, rowvars, colvars):
         # type: (CA, List[DiscreteVariable], List[DiscreteVariable]) -> None
         self.ca = ca
@@ -800,4 +783,5 @@ class CAProjectionModel(Projection):
         )
 
     def __call__(self, data):
+        # type: (Table) -> Table
         return data.transform(self.domain)
