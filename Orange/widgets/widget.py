@@ -21,14 +21,9 @@ from AnyQt.QtCore import (
 )
 from AnyQt.QtGui import QIcon, QKeySequence, QDesktopServices, QPainter
 
-# OutputSignal and InputSignal are imported for compatibility, but shouldn't
-# be used; use Input and Output instead
-# pylint: disable=unused-import
-from orangecanvas.registry import description as widget_description, \
-    OutputSignal, InputSignal
-
 from Orange.data import FileFormat
 from Orange.widgets import settings, gui
+
 from Orange.widgets.report import Report
 from Orange.widgets.gui import OWComponent, VerticalScrollArea
 from Orange.widgets.io import ClipboardFormat
@@ -37,6 +32,7 @@ from Orange.widgets.utils import saveplot, getdeepattr
 from Orange.widgets.utils.progressbar import ProgressBarMixin
 from Orange.widgets.utils.messages import \
     WidgetMessagesMixin, UnboundMsg, MessagesWidget
+from Orange.widgets.utils import signals as _signals
 from Orange.widgets.utils.signals import WidgetSignalsMixin
 # Module exposes Input, Output and AttributeList to be used in widgets
 # pylint: disable=unused-import
@@ -48,6 +44,24 @@ from Orange.widgets.utils.buttons import SimpleButton
 # than the one with the mixin (Orange.widgets.utils.messages). Assignment is
 # used instead of "import ... as", otherwise PyCharm does not suggest import
 Msg = UnboundMsg
+
+
+class OutputSignal(_signals.OutputSignal):
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "'OutputSignal' is deprecated. Use `Output`",
+            DeprecationWarning, stacklevel=2
+        )
+        super().__init__(*args, **kwargs)
+
+
+class InputSignal(_signals.InputSignal):
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "'InputSignal' is deprecated. Use 'Input'",
+            DeprecationWarning, stacklevel=2
+        )
+        super().__init__(*args, **kwargs)
 
 
 def _asmappingproxy(mapping):
@@ -1284,23 +1298,23 @@ class Message(object):
 #: When there are multiple IO signals with the same type the
 #: one with the default flag takes precedence when adding a new
 #: link in the canvas.
-Default = widget_description.Default
-NonDefault = widget_description.NonDefault
+Default = _signals.Default
+NonDefault = _signals.NonDefault
 #: Single input signal (default)
-Single = widget_description.Single
+Single = _signals.Single
 #: Multiple outputs can be linked to this signal.
 #: Signal handlers with this flag have (object, id: object) -> None signature.
-Multiple = widget_description.Multiple
+Multiple = _signals.Multiple
 #: Applies to user interaction only.
 #: Only connected if specifically requested (in a dedicated "Links" dialog)
 #: or it is the only possible connection.
-Explicit = widget_description.Explicit
+Explicit = _signals.Explicit
 #: Dynamic output type.
 #: Specifies that the instances on the output will in general be
 #: subtypes of the declared type and that the output can be connected
 #: to any input signal which can accept a subtype of the declared output
 #: type.
-Dynamic = widget_description.Dynamic
+Dynamic = _signals.Dynamic
 
 
 class StateInfo(QObject):
