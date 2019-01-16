@@ -21,14 +21,12 @@ from AnyQt.QtCore import (
 )
 from AnyQt.QtGui import QIcon, QKeySequence, QDesktopServices, QPainter
 
-# OutputSignal and InputSignal are imported for compatibility, but shouldn't
-# be used; use Input and Output instead
-# pylint: disable=unused-import
-from orangecanvas.registry import description as widget_description, \
-    OutputSignal, InputSignal
+from orangecanvas.registry import description as _widget_description, \
+    OutputSignal as _OutputSignal, InputSignal as _InputSignal
 
 from Orange.data import FileFormat
 from Orange.widgets import settings, gui
+
 from Orange.widgets.report import Report
 from Orange.widgets.gui import OWComponent
 from Orange.widgets.io import ClipboardFormat
@@ -48,6 +46,22 @@ from Orange.widgets.utils.buttons import SimpleButton
 # than the one with the mixin (Orange.widgets.utils.messages). Assignment is
 # used instead of "import ... as", otherwise PyCharm does not suggest import
 Msg = UnboundMsg
+
+
+class OutputSignal(_OutputSignal):
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "'OutputSignal' is deprecated", DeprecationWarning, stacklevel=2
+        )
+        super().__init__(*args, **kwargs)
+
+
+class InputSignal(_InputSignal):
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "'InputSignal' is deprecated", DeprecationWarning, stacklevel=2
+        )
+        super().__init__(*args, **kwargs)
 
 
 def _asmappingproxy(mapping):
@@ -1236,23 +1250,23 @@ class Message(object):
 #: When there are multiple IO signals with the same type the
 #: one with the default flag takes precedence when adding a new
 #: link in the canvas.
-Default = widget_description.Default
-NonDefault = widget_description.NonDefault
+Default = _widget_description.Default
+NonDefault = _widget_description.NonDefault
 #: Single input signal (default)
-Single = widget_description.Single
+Single = _widget_description.Single
 #: Multiple outputs can be linked to this signal.
 #: Signal handlers with this flag have (object, id: object) -> None signature.
-Multiple = widget_description.Multiple
+Multiple = _widget_description.Multiple
 #: Applies to user interaction only.
 #: Only connected if specifically requested (in a dedicated "Links" dialog)
 #: or it is the only possible connection.
-Explicit = widget_description.Explicit
+Explicit = _widget_description.Explicit
 #: Dynamic output type.
 #: Specifies that the instances on the output will in general be
 #: subtypes of the declared type and that the output can be connected
 #: to any input signal which can accept a subtype of the declared output
 #: type.
-Dynamic = widget_description.Dynamic
+Dynamic = _widget_description.Dynamic
 
 
 class StateInfo(QObject):
