@@ -37,6 +37,7 @@ from Orange.widgets import widget, gui, settings
 from Orange.widgets.utils import colorpalette, itemmodels, combobox
 from Orange.widgets.utils.annotated_data import (create_annotated_table,
                                                  ANNOTATED_DATA_SIGNAL_NAME)
+from Orange.widgets.utils.graphicsitems import TextListWidget
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.widget import Input, Output, Msg
 
@@ -311,15 +312,20 @@ class DendrogramWidget(QGraphicsWidget):
             self.setParentItem(parent)
 
     def clear(self):
-        for item in self._items.values():
-            item.setParentItem(None)
-            if item.scene() is self.scene() and self.scene() is not None:
-                self.scene().removeItem(item)
+        scene = self.scene()
+        if scene is not None:
+            scene.removeItem(self._itemgroup)
+        else:
+            self._itemgroup.setParentItem(None)
+        self._itemgroup = QGraphicsWidget(self)
+        self._itemgroup.setGeometry(self.contentsRect())
+        self._items.clear()
 
         for item in self._selection.values():
-            item.setParentItem(None)
-            if item.scene():
-                item.scene().removeItem(item)
+            if scene is not None:
+                scene.removeItem(item)
+            else:
+                item.setParentItem(None)
 
         self._root = None
         self._items = {}
@@ -1016,7 +1022,7 @@ class OWHierarchicalClustering(widget.OWWidget):
 
         gui.auto_send(box, self, "autocommit", box=False)
 
-        self.scene = QGraphicsScene()
+        self.scene = QGraphicsScene(self)
         self.view = StickyGraphicsView(
             self.scene,
             horizontalScrollBarPolicy=Qt.ScrollBarAlwaysOff,
@@ -1050,12 +1056,11 @@ class OWHierarchicalClustering(widget.OWWidget):
                                       QSizePolicy.MinimumExpanding)
         self.dendrogram.selectionChanged.connect(self._invalidate_output)
         self.dendrogram.selectionEdited.connect(self._selection_edited)
-
-        self.labels = GraphicsSimpleTextList()
+        self.labels = TextListWidget()
         self.labels.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
-        self.labels.setAlignment(Qt.AlignLeft)
+        # self.labels.setAlignment(Qt.AlignLeft)
         self.labels.setMaximumWidth(200)
-        self.labels.layout().setSpacing(0)
+        # self.labels.layout().setSpacing(0)
 
         scenelayout.addItem(self.top_axis, 0, 0,
                             alignment=Qt.AlignLeft | Qt.AlignVCenter)
@@ -1145,7 +1150,7 @@ class OWHierarchicalClustering(widget.OWWidget):
                 else self.annotation_if_enumerate
 
     def _clear_plot(self):
-        self.labels.set_labels([])
+        self.labels.setItems([])
         self.dendrogram.set_root(None)
 
     def _set_displayed_root(self, root):
@@ -1212,7 +1217,7 @@ class OWHierarchicalClustering(widget.OWWidget):
                 labels = [", ".join(labels[leaf.value.first: leaf.value.last])
                           for leaf in joined]
 
-        self.labels.set_labels(labels)
+        self.labels.setItems(labels)
         self.labels.setMinimumWidth(1 if labels else -1)
 
     def _restore_selection(self, state):
@@ -1404,7 +1409,7 @@ class OWHierarchicalClustering(widget.OWWidget):
         super().onDeleteWidget()
         self._clear_plot()
         self.dendrogram.clear()
-        self.dendrogram.deleteLater()
+        # self.dendrogram.deleteLater()
 
     def _dendrogram_geom_changed(self):
         pos = self.dendrogram.pos_at_height(self.cutoff_height)
@@ -1618,29 +1623,42 @@ class GraphicsSimpleTextList(QGraphicsWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.label_items = []
         self.set_labels(labels)
+        self.__grp = QGraphicsItemGroup(self)
 
     def clear(self):
         """Remove all text items."""
         layout = self.layout()
+        # grp = QGraphicsSimpleTextItem(self)
+
         for i in reversed(range(layout.count())):
             witem = layout.itemAt(i)
-            witem.item.setParentItem(None)
-            if self.scene():
-                self.scene().removeItem(witem.item)
-            layout.removeAt(i)
+            # witem.item.setParentItem(grp)
 
+            # if self.scene():
+            #     self.scene().removeItem(witem.item)
+            layout.removeAt(i)
+        self.__grp.setParentItem(None)
+        if self.scene():
+            self.scene().removeItem(self.__grp)
+        self.__grp = QGraphicsItemGroup(self)
+        # grp.setParentItem(None)
+        # if self.scene():
+        #     self.scene().removeItem(grp)
         self.label_items = []
         self.updateGeometry()
+
+    def setItems(self, items):
+        self.set_labels(items)
 
     def set_labels(self, labels):
         """Set the text labels."""
         self.clear()
         orientation = Qt.Horizontal if self.orientation == Qt.Vertical else Qt.Vertical
         for text in labels:
-            item = QGraphicsSimpleTextItem(text, self)
+            item = QGraphicsSimpleTextItem(text, self.__grp)
             item.setFont(self.font())
             item.setToolTip(text)
-            witem = WrapperLayoutItem(item, orientation, parent=self)
+            witem = WrapperLayoutItem(item, orientation, parent=self.__grp)
             self.layout().addItem(witem)
             self.layout().setAlignment(witem, self.alignment)
             self.label_items.append(item)
@@ -1882,8 +1900,41 @@ def clusters_at_height(root, height):
     return cluster_list
 
 
-if __name__ == "__main__":  # pragma: no cover
-    from Orange import distance
-    data = Orange.data.Table("iris")
+def main(argv=None):  # pragma: no cover
+
+    from AnyQt.QtWidgets import QApplication
+    import Orange.distance as distance
+    import sip
+    if argv is None:
+        argv = sys.argv
+    argv = list(argv)
+    app = QApplication(argv)
+    if len(argv) > 1:
+        filename = argv[1]
+    else:
+        filename = "iris.tab"
+
+    w = OWHierarchicalClustering()
+
+    data = Orange.data.Table(filename)
     matrix = distance.Euclidean(distance._preprocess(data))
-    WidgetPreview(OWHierarchicalClustering).run(matrix)
+
+    w.set_distances(matrix)
+    w.handleNewSignals()
+    w.show()
+    w.raise_()
+    rval = app.exec_()
+    w.set_distances(None)
+    w.handleNewSignals()
+    w.saveSettings()
+    w.onDeleteWidget()
+    w.deleteLater()
+    sip.delete(w)
+    del w
+    app.processEvents()
+    return rval
+
+
+if __name__ == "__main__":  # pragma: no cover
+    import sys
+    sys.exit(main())
