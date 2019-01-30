@@ -9,6 +9,7 @@ import gc
 import re
 import time
 import logging
+import signal
 from logging.handlers import RotatingFileHandler
 import optparse
 import pickle
@@ -25,20 +26,20 @@ from AnyQt.QtCore import (
     Qt, QDir, QUrl, QSettings, QThread, pyqtSignal, QT_VERSION
 )
 
-from Orange import canvas
-from Orange.canvas.application.application import CanvasApplication
-from Orange.canvas.application.canvasmain import CanvasMainWindow
-from Orange.canvas.application.outputview import TextStream, ExceptHook
-from Orange.canvas.application.errorreporting import handle_exception
+import orangecanvas
+from orangecanvas.registry import qt
+from orangecanvas.registry import WidgetRegistry, set_global_registry
+from orangecanvas.registry import cache
+from orangecanvas.application.application import CanvasApplication
+from orangecanvas.application.canvasmain import CanvasMainWindow
+from orangecanvas.application.outputview import TextStream, ExceptHook
+from orangecanvas.gui.splashscreen import SplashScreen
+from orangecanvas import config
 
-from Orange.canvas.gui.splashscreen import SplashScreen
-from Orange.canvas.config import cache_dir
-from Orange.canvas import config
-from Orange.canvas.document.usagestatistics import UsageStatistics
+# from Orange.canvas.document.usagestatistics import UsageStatistics
 
-from Orange.canvas.registry import qt
-from Orange.canvas.registry import WidgetRegistry, set_global_registry
-from Orange.canvas.registry import cache
+from Orange.canvas.errorreporting import handle_exception
+from Orange.canvas import conf
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +48,6 @@ log = logging.getLogger(__name__)
 # pylint: disable=wrong-import-position
 
 # Allow termination with CTRL + C
-import signal
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 # Disable pyqtgraph's atexit and QApplication.aboutToQuit cleanup handlers.
@@ -345,18 +345,15 @@ def main(argv=None):
     # File handler should always be at least INFO level so we need
     # the application root level to be at least at INFO.
     root_level = min(levels[options.log_level], logging.INFO)
-    rootlogger = logging.getLogger(canvas.__name__)
+    rootlogger = logging.getLogger(orangecanvas.__name__)
     rootlogger.setLevel(root_level)
-
-    # Initialize SQL query and execution time logger (in SqlTable)
-    sql_level = min(levels[options.log_level], logging.INFO)
-    make_sql_logger(sql_level)
 
     # Standard output stream handler at the requested level
     stream_hander = logging.StreamHandler()
     stream_hander.setLevel(level=levels[options.log_level])
     rootlogger.addHandler(stream_hander)
 
+    config.set_default(conf.orangeconfig)
     log.info("Starting 'Orange Canvas' application.")
 
     qt_argv = argv[:1]
@@ -394,6 +391,10 @@ def main(argv=None):
 
     # NOTE: config.init() must be called after the QApplication constructor
     config.init()
+
+    # Initialize SQL query and execution time logger (in SqlTable)
+    sql_level = min(levels[options.log_level], logging.INFO)
+    make_sql_logger(sql_level)
 
     clear_settings_flag = os.path.join(
         config.widget_settings_dir(), "DELETE_ON_START")
@@ -445,7 +446,7 @@ def main(argv=None):
                 # no extension
                 stylesheet = os.path.extsep.join([stylesheet, "qss"])
 
-            pkg_name = canvas.__name__
+            pkg_name = orangecanvas.__name__
             resource = "styles/" + stylesheet
 
             if pkg_resources.resource_exists(pkg_name, resource):
@@ -472,7 +473,7 @@ def main(argv=None):
                 log.info("%r style sheet not found.", stylesheet)
 
     # Add the default canvas_icons search path
-    dirpath = os.path.abspath(os.path.dirname(canvas.__file__))
+    dirpath = os.path.abspath(os.path.dirname(orangecanvas.__file__))
     QDir.addSearchPath("canvas_icons", os.path.join(dirpath, "icons"))
 
     canvas_window = CanvasMainWindow()
@@ -487,16 +488,9 @@ def main(argv=None):
     else:
         reg_cache = None
 
-    widget_discovery = qt.QtWidgetDiscovery(cached_descriptions=reg_cache)
-
     widget_registry = qt.QtWidgetRegistry()
-
-    widget_discovery.found_category.connect(
-        widget_registry.register_category
-    )
-    widget_discovery.found_widget.connect(
-        widget_registry.register_widget
-    )
+    widget_discovery = config.widget_discovery(
+        widget_registry, cached_descriptions=reg_cache)
 
     want_splash = \
         settings.value("startup/show-splash-screen", True, type=bool) and \
@@ -511,23 +505,28 @@ def main(argv=None):
         def show_message(message):
             splash_screen.showMessage(message, color=color)
 
-        widget_discovery.discovery_start.connect(splash_screen.show)
-        widget_discovery.discovery_process.connect(show_message)
-        widget_discovery.discovery_finished.connect(splash_screen.hide)
+        widget_registry.category_added.connect(show_message)
 
     log.info("Running widget discovery process.")
 
-    cache_filename = os.path.join(cache_dir(), "widget-registry.pck")
+    cache_filename = os.path.join(config.cache_dir(), "widget-registry.pck")
     if options.no_discovery:
         with open(cache_filename, "rb") as f:
             widget_registry = pickle.load(f)
         widget_registry = qt.QtWidgetRegistry(widget_registry)
     else:
+        if want_splash:
+            splash_screen.show()
         widget_discovery.run(config.widgets_entry_points())
+        if want_splash:
+            splash_screen.hide()
+            splash_screen.deleteLater()
+
         # Store cached descriptions
         cache.save_registry_cache(widget_discovery.cached_descriptions)
         with open(cache_filename, "wb") as f:
             pickle.dump(WidgetRegistry(widget_registry), f)
+
     set_global_registry(widget_registry)
     canvas_window.set_widget_registry(widget_registry)
     canvas_window.show()
@@ -563,7 +562,7 @@ def main(argv=None):
     send_stat = send_usage_statistics()
 
     # Tee stdout and stderr into Output dock
-    log_view = canvas_window.log_view()
+    log_view = canvas_window.output_view()
 
     stdout = TextStream()
     stdout.stream.connect(log_view.write)
@@ -579,10 +578,10 @@ def main(argv=None):
         stderr.flushed.connect(sys.stderr.flush)
 
     log.info("Entering main event loop.")
+    excepthook = ExceptHook(stream=stderr)
+    excepthook.handledException.connect(handle_exception)
     try:
-        with patch('sys.excepthook',
-                   ExceptHook(stream=stderr,
-                              handledException=handle_exception)),\
+        with patch('sys.excepthook', excepthook),\
              patch('sys.stderr', stderr),\
              patch('sys.stdout', stdout):
             status = app.exec_()
