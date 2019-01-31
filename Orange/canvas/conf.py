@@ -23,7 +23,6 @@ class orangeconfig(config.default):
         """
         Return an `EntryPoint` iterator for all 'orange.widget' entry
         points plus the default Orange Widgets.
-
         """
         dist = pkg_resources.get_distribution("Orange3")
         default_ep = pkg_resources.EntryPoint(

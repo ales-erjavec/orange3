@@ -2,7 +2,6 @@
 Orange Canvas Configuration
 
 """
-
 import os
 import sys
 import logging
@@ -16,6 +15,11 @@ from AnyQt.QtCore import Qt, QCoreApplication, QPoint, QRect, QSettings
 
 log = logging.getLogger(__name__)
 
+warnings.warn(
+    "'Orange.canvas.config' module is deprecated and will be removed.",
+    DeprecationWarning, stacklevel=2
+)
+
 
 def init():
     """
@@ -26,6 +30,8 @@ def init():
               Otherwise it can break Qt's plugin search paths.
 
     """
+    raise RuntimeError("This is not the init you are looking for.")
+
     dist = pkg_resources.get_distribution("Orange3")
     version = dist.version
     # Use only major.minor
@@ -39,9 +45,6 @@ def init():
     # Make it a null op.
     global init
     init = lambda: None
-
-
-rc = {}
 
 
 spec = \
@@ -187,48 +190,6 @@ def widget_settings_dir():
     """
     from Orange.misc import environ
     return environ.widget_settings_dir()
-
-
-def open_config():
-    warnings.warn(
-        "open_config was never used and will be removed in the future",
-        DeprecationWarning, stacklevel=2
-    )
-    return
-
-
-def save_config():
-    warnings.warn(
-        "save_config was never used and will be removed in the future",
-        DeprecationWarning, stacklevel=2
-    )
-
-
-def recent_schemes():
-    """Return a list of recently accessed schemes.
-    """
-    app_dir = data_dir()
-    recent_filename = os.path.join(app_dir, "recent.pck")
-    recent = []
-    if os.path.isdir(app_dir) and os.path.isfile(recent_filename):
-        with open(recent_filename, "rb") as f:
-            recent = pickle.load(f)
-
-    # Filter out files not found on the file system
-    recent = [(title, path) for title, path in recent \
-              if os.path.exists(path)]
-    return recent
-
-
-def save_recent_scheme_list(scheme_list):
-    """Save the list of recently accessed schemes
-    """
-    app_dir = data_dir()
-    recent_filename = os.path.join(app_dir, "recent.pck")
-
-    if os.path.isdir(app_dir):
-        with open(recent_filename, "wb") as f:
-            pickle.dump(scheme_list, f)
 
 
 WIDGETS_ENTRY = "orange.widgets"
