@@ -51,3 +51,19 @@ class orangeconfig(config.default):
 
     widget_discovery = discovery.WidgetDiscovery
     workflow_constructor = widgetsscheme.WidgetsScheme
+
+    APPLICATION_URLS = {
+        #: Submit a bug report action in the Help menu
+        "Bug Report": "https://github.com/biolab/orange3/issues",
+        #: A url quick tour/getting started url
+        "Quick Start": "https://orange.biolab.si/getting-started/",
+        #: The 'full' documentation, should be something like current /docs/
+        #: but specific for 'Visual Programing' only
+        "Documentation": "https://orange.biolab.si/toolbox/",
+        #: YouTube tutorials
+        "Screencasts":
+            "https://www.youtube.com/watch"
+            "?v=HXjnDIgGDuI&list=PLmNPvQr9Tf-ZSDLwOzxpvY-HrE0yv-8Fy&index=1",
+        #: Used for 'Submit Feedback' action in the help menu
+        "Feedback": "https://orange.biolab.si/survey/long.html",
+    }
