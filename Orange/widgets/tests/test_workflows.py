@@ -13,17 +13,11 @@ from Orange.canvas import widgetsscheme
 from Orange.widgets.tests.base import WidgetTest
 
 
-def discover_workflows(tests_dir):
-    ows_path = join(tests_dir, "workflows")
-    ows_files = [f for f in listdir(ows_path)
-                 if isfile(join(ows_path, f)) and f.endswith(".ows")]
+def discover_workflows(dir):
+    ows_files = [f for f in listdir(dir)
+                 if isfile(join(dir, f)) and f.endswith(".ows")]
     for ows_file in ows_files:
-        yield join(ows_path, ows_file)
-
-TEST_WORKFLOWS = chain(
-    [t.abspath() for t in workflows.example_workflows()],
-    discover_workflows(dirname(__file__))
-)
+        yield join(dir, ows_file)
 
 
 def registry():
@@ -42,7 +36,11 @@ class TestWorkflows(WidgetTest):
         GH-2240
         """
         reg = registry()
-        for ows_file in TEST_WORKFLOWS:
+        test_workflows = chain(
+            discover_workflows(dirname(workflows.__file__)),
+            discover_workflows(join(dirname(__file__), "workflows"))
+        )
+        for ows_file in test_workflows:
             new_scheme = widgetsscheme.WidgetsScheme()
             with open(ows_file, "rb") as f:
                 try:
