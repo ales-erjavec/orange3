@@ -12,13 +12,11 @@ companion :class:`WidgetsSignalManager` class.
 .. autoclass:: WidgetsScheme
    :bases:
 
-
 .. autoclass:: WidgetsManager
    :bases:
 
 .. autoclass:: WidgetsSignalManager
-  :bases:
-
+   :bases:
 """
 import copy
 import logging
@@ -39,17 +37,20 @@ from AnyQt.QtGui import QKeySequence, QWhatsThisClickedEvent
 
 from AnyQt.QtCore import Qt, QCoreApplication, QEvent, QByteArray
 from AnyQt.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
-from Orange.widgets.widget import OWWidget
+
+from orangecanvas.registry import WidgetDescription
 
 from orangecanvas.scheme.signalmanager import (
     SignalManager, compress_signals
 )
-from orangecanvas.scheme.scheme import Scheme, SchemeNode
-from orangecanvas.scheme.widgetmanager import WidgetManager as _WidgetManager
+from orangecanvas.scheme import Scheme, SchemeNode, WorkflowEvent
 from orangecanvas.scheme.node import UserMessage
-from orangecanvas.scheme import WorkflowEvent
+from orangecanvas.scheme.widgetmanager import WidgetManager as _WidgetManager
 from orangecanvas.utils import name_lookup
 from orangecanvas.resources import icon_loader
+
+from Orange.widgets.widget import OWWidget
+from Orange.widgets.settings import SettingsPrinter
 
 
 log = logging.getLogger(__name__)
@@ -190,7 +191,6 @@ class WidgetsScheme(Scheme):
         self.__report_view = view
 
     def dump_settings(self, node: SchemeNode):
-        from Orange.widgets.settings import SettingsPrinter
         widget = self.widget_for_node(node)
 
         pp = SettingsPrinter(indent=4)
@@ -207,25 +207,27 @@ class WidgetsScheme(Scheme):
 
 
 class ProcessingState(enum.IntEnum):
-    """Widget processing state flags"""
+    """OWWidget processing state flags"""
     #: Signal manager is updating/setting the widget's inputs
     InputUpdate = 1
-    #: Widget has entered a blocking state (OWWidget.isBlocking)
+    #:  Widget has entered a blocking state (OWWidget.isBlocking() is True)
     BlockingUpdate = 2
-    #: Widget has entered processing state
+    #: Widget has entered processing state (progressBarInit/Finish)
     ProcessingUpdate = 4
     #: Widget is still in the process of initialization
     Initializing = 8
 
 
 class Item(types.SimpleNamespace):
-    def __init__(self, node, widget, state, pending_delete=False):
-        # type: (SchemeNode, Optional[OWWidget], int, bool) -> None
+    """
+    A Node, OWWidget pair tracked by OWWidgetManager
+    """
+    def __init__(self, node, widget, state):
+        # type: (SchemeNode, Optional[OWWidget], int) -> None
         super().__init__()
         self.node = node
         self.widget = widget
         self.state = state
-        self.pending_delete = pending_delete
 
 
 class OWWidgetManager(_WidgetManager):
@@ -236,12 +238,6 @@ class OWWidgetManager(_WidgetManager):
     :class:`WidgetsScheme`.
 
     """
-    # #: A new OWWidget was created and added by the manager.
-    # widget_for_node_added = Signal(SchemeNode, QWidget)
-    #
-    # #: An OWWidget was removed, hidden and will be deleted when appropriate.
-    # widget_for_node_removed = Signal(SchemeNode, QWidget)
-
     InputUpdate, BlockingUpdate, ProcessingUpdate, Initializing = ProcessingState
 
     #: State mask for widgets that cannot be deleted immediately
@@ -415,7 +411,7 @@ class OWWidgetManager(_WidgetManager):
         """
         Create a OWWidget instance for the node.
         """
-        desc = node.description
+        desc = node.description  # type: WidgetDescription
         klass = widget = None
         initialized = False
         error = None
@@ -431,14 +427,14 @@ class OWWidgetManager(_WidgetManager):
             error = "Could not import {0!r}\n\n{1}".format(
                 node.description.qualified_name, traceback.format_exc()
             )
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             log.exception("", exc_info=True)
             error = "An unexpected error during import of {0!r}\n\n{1}".format(
                 node.description.qualified_name, traceback.format_exc()
             )
 
         if klass is None:
-            widget = mock_error_owwidget(node, error)
+            item.widget = widget = mock_error_owwidget(node, error)
             initialized = True
 
         if widget is None:
@@ -452,7 +448,7 @@ class OWWidgetManager(_WidgetManager):
                 None,
                 captionTitle=node.title,
                 signal_manager=signal_manager,
-                stored_settings=node.properties,
+                stored_settings=copy.deepcopy(node.properties),
                 # NOTE: env is a view of the real env and reflects
                 # changes to the environment.
                 env=self.scheme().runtime_env()
@@ -479,9 +475,9 @@ class OWWidgetManager(_WidgetManager):
         # initialize and bind the OWWidget to the node
         node.title_changed.connect(widget.setCaption)
         # Widget's info/warning/error messages.
-        self.__initialize_widget_state(node, widget)
-        widget.messageActivated.connect(self.__on_widget_state_changed)
-        widget.messageDeactivated.connect(self.__on_widget_state_changed)
+        self.__initialize_widget_messages(node, widget)
+        widget.messageActivated.connect(self.__on_widget_message_changed)
+        widget.messageDeactivated.connect(self.__on_widget_message_changed)
 
         # Widget's statusMessage
         node.set_status_message(widget.statusMessage())
@@ -619,7 +615,7 @@ class OWWidgetManager(_WidgetManager):
         event = WorkflowEvent(WorkflowEvent.ActivateParentRequest)
         QCoreApplication.sendEvent(self.scheme(), event)
 
-    def __initialize_widget_state(self, node, widget):
+    def __initialize_widget_messages(self, node, widget):
         """
         Initialize the tracked info/warning/error message state.
         """
@@ -628,14 +624,14 @@ class OWWidgetManager(_WidgetManager):
             if message:
                 node.set_state_message(message)
 
-    def __on_widget_state_changed(self, msg):
+    def __on_widget_message_changed(self, msg):
         """
-        The OWBaseWidget info/warning/error state has changed.
+        The OWWidget info/warning/error state has changed.
         """
         widget = msg.group.widget
         node = self.node_for_widget(widget)
         if node is not None:
-            self.__initialize_widget_state(node, widget)
+            self.__initialize_widget_messages(node, widget)
 
     @Slot(int)
     def __on_processing_state_changed(self, state):
@@ -878,16 +874,7 @@ class WidgetsSignalManager(SignalManager):
 
     def eventFilter(self, receiver, event):
         if event.type() == QEvent.DeferredDelete and receiver is self.scheme():
-            try:
-                state = self.runtime_state()
-            except AttributeError:
-                # If the scheme (which is a parent of this object) is
-                # already being deleted the SignalManager can also be in
-                # the process of destruction (noticeable by its __dict__
-                # being empty). There is nothing really to do in this
-                # case.
-                state = None
-
+            state = self.runtime_state()
             if state == SignalManager.Processing:
                 log.info("Deferring a 'DeferredDelete' event for the Scheme "
                          "instance until SignalManager exits the current "
