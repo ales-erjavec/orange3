@@ -258,7 +258,6 @@ class OWWidgetManager(_WidgetManager):
 
         # Tracks the widget in the update loop by the SignalManager
         self.__updating_widget = None
-        self.__float_widgets_on_top = False
 
     def set_scheme(self, scheme):
         """
@@ -522,8 +521,6 @@ class OWWidgetManager(_WidgetManager):
         # befriend class Report
         widget._Report__report_view = self.scheme().report_view
 
-        self.__set_float_on_top_flag(widget)
-
         # Schedule an update with the signal manager, due to the cleared
         # implicit Initializing flag
         self.signal_manager()._update()
@@ -548,15 +545,6 @@ class OWWidgetManager(_WidgetManager):
         """
         node = self.node_for_widget(widget)
         return self.__item_for_node[node].state
-
-    def set_float_widgets_on_top(self, float_on_top):
-        """
-        Set `Float Widgets on Top` flag on all widgets.
-        """
-        self.__float_widgets_on_top = float_on_top
-        for item in self.__item_for_node.values():
-            if item.widget is not None:
-                self.__set_float_on_top_flag(item.widget)
 
     def save_widget_geometry(self, node, widget):
         # type: (SchemeNode, QWidget) -> bytes
@@ -733,24 +721,6 @@ class OWWidgetManager(_WidgetManager):
         for item in self.__item_for_node.values():
             if item.widget is not None:
                 item.widget.workflowEnvChanged(key, newvalue, oldvalue)
-
-    def __set_float_on_top_flag(self, widget):
-        """Set or unset widget's float on top flag"""
-        should_float_on_top = self.__float_widgets_on_top
-        float_on_top = bool(widget.windowFlags() & Qt.WindowStaysOnTopHint)
-
-        if float_on_top == should_float_on_top:
-            return
-
-        widget_was_visible = widget.isVisible()
-        if should_float_on_top:
-            widget.setWindowFlags(widget.windowFlags() | Qt.WindowStaysOnTopHint)
-        else:
-            widget.setWindowFlags(widget.windowFlags() & ~Qt.WindowStaysOnTopHint)
-
-        # Changing window flags hid the widget
-        if widget_was_visible:
-            widget.show()
 
 
 WidgetManager = OWWidgetManager
