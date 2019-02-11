@@ -28,20 +28,18 @@ import warnings
 from urllib.parse import urlencode
 from weakref import finalize
 
-from typing import Optional, Dict, Any
-
-import sip
+from typing import Optional, Dict, Any, List
 
 from AnyQt.QtWidgets import QWidget, QShortcut, QLabel, QSizePolicy, QAction
 from AnyQt.QtGui import QKeySequence, QWhatsThisClickedEvent
 
 from AnyQt.QtCore import Qt, QCoreApplication, QEvent, QByteArray
-from AnyQt.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
+from AnyQt.QtCore import pyqtSignal, pyqtSlot as Slot
 
 from orangecanvas.registry import WidgetDescription
 
 from orangecanvas.scheme.signalmanager import (
-    SignalManager, compress_signals
+    SignalManager, Signal, compress_signals
 )
 from orangecanvas.scheme import Scheme, SchemeNode, WorkflowEvent
 from orangecanvas.scheme.node import UserMessage
@@ -70,7 +68,7 @@ class WidgetsScheme(Scheme):
     #: Emitted when a report_view is requested for the first time, before a
     #: default instance is created. Clients can connect to this signal to
     #: set a report view (`set_report_view`) to use instead.
-    report_view_requested = Signal()
+    report_view_requested = pyqtSignal()
 
     def __init__(self, parent=None, title=None, description=None, env={}):
         super().__init__(parent, title, description, env=env)
@@ -749,7 +747,7 @@ class WidgetsSignalManager(SignalManager):
         # handlers with Multiple flag.
         signal_id = (widget.widget_id, channelname, signal_id)
 
-        SignalManager.send(self, node, channel, value, signal_id)
+        super().send(node, channel, value, signal_id)
 
     def is_blocking(self, node):
         """Reimplemented from `SignalManager`"""
@@ -766,7 +764,8 @@ class WidgetsSignalManager(SignalManager):
 
         """
         widget = self.scheme().widget_for_node(node)
-        self.process_signals_for_widget(node, widget, signals)
+        if widget is not None:
+            self.process_signals_for_widget(node, widget, signals)
 
     def compress_signals(self, signals):
         """
@@ -775,50 +774,43 @@ class WidgetsSignalManager(SignalManager):
         return compress_signals(signals)
 
     def process_signals_for_widget(self, node, widget, signals):
+        # type: (SchemeNode, OWWidget, List[Signal]) -> None
         """
         Process new signals for the OWWidget.
         """
-        if sip.isdeleted(widget):
-            log.critical("Widget %r was deleted. Cannot process signals",
-                         widget)
-            return
-
         app = QCoreApplication.instance()
-
-        for signal in signals:
-            link = signal.link
-            value = signal.value
-            handler = link.sink_channel.handler
-            if handler.startswith("self."):
-                handler = handler.split(".", 1)[1]
-
-            handler = getattr(widget, handler)
-
-            if link.sink_channel.single:
-                args = (value,)
-            else:
-                args = (value, signal.id)
-
-            log.debug("Process signals: calling %s.%s (from %s with id:%s)",
-                      type(widget).__name__, handler.__name__, link, signal.id)
-
-            app.setOverrideCursor(Qt.WaitCursor)
-            try:
-                handler(*args)
-            except Exception:
-                log.exception("Error calling '%s' of '%s'",
-                              handler.__name__, node.title)
-                raise
-            finally:
-                app.restoreOverrideCursor()
-
-        app.setOverrideCursor(Qt.WaitCursor)
         try:
-            widget.handleNewSignals()
-        except Exception:
-            log.exception("Error calling 'handleNewSignals()' of '%s'",
-                          node.title)
-            raise
+            app.setOverrideCursor(Qt.WaitCursor)
+            for signal in signals:
+                link = signal.link
+                value = signal.value
+                handler = link.sink_channel.handler
+                if handler.startswith("self."):
+                    handler = handler.split(".", 1)[1]
+
+                handler = getattr(widget, handler)
+
+                if link.sink_channel.single:
+                    args = (value,)
+                else:
+                    args = (value, signal.id)
+
+                log.debug("Process signals: calling %s.%s (from %s with id:%s)",
+                          type(widget).__name__, handler.__name__, link, signal.id)
+
+                try:
+                    handler(*args)
+                except Exception:
+                    log.exception("Error calling '%s' of '%s'",
+                                  handler.__name__, node.title)
+                    raise
+
+            try:
+                widget.handleNewSignals()
+            except Exception:
+                log.exception("Error calling 'handleNewSignals()' of '%s'",
+                              node.title)
+                raise
         finally:
             app.restoreOverrideCursor()
 
@@ -834,7 +826,7 @@ class WidgetsSignalManager(SignalManager):
                 self.stop()
                 return True
 
-        return SignalManager.eventFilter(self, receiver, event)
+        return super().eventFilter(receiver, event)
 
 
 def mock_error_owwidget(node, message):
