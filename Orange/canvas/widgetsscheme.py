@@ -552,7 +552,7 @@ class OWWidgetManager(_WidgetManager):
         Save and return the current geometry and state for node
         """
         if isinstance(widget, OWWidget):
-            return widget.saveGeometryAndLayoutState()
+            return bytes(widget.saveGeometryAndLayoutState())
         else:
             return super().save_widget_geometry(node, widget)
 
