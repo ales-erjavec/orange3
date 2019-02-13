@@ -100,26 +100,6 @@ class WidgetsScheme(Scheme):
         """
         return self.widget_manager.node_for_widget(widget)
 
-    def save_widget_geometry_for_node(self, node):
-        # type: (SchemeNode) -> bytes
-        """
-        Save and return the current geometry and state for node
-
-        Parameters
-        ----------
-        node : Scheme
-        """
-        w = self.widget_for_node(node)  # type: OWWidget
-        return bytes(w.saveGeometryAndLayoutState())
-
-    def restore_widget_geometry_for_node(self, node, state):
-        # type: (SchemeNode, bytes) -> bool
-        w = self.widget_for_node(node)
-        if w is not None:
-            return w.restoreGeometryAndLayoutState(QByteArray(state))
-        else:
-            return False
-
     def sync_node_properties(self):
         """
         Sync the widget settings/properties with the SchemeNode.properties.
