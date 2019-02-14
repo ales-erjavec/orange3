@@ -19,6 +19,7 @@ companion :class:`WidgetsSignalManager` class.
    :bases:
 """
 import copy
+
 import logging
 import traceback
 import enum
@@ -50,8 +51,9 @@ from orangecanvas.resources import icon_loader
 from Orange.widgets.widget import OWWidget
 from Orange.widgets.report.owreport import OWReport
 
-from Orange.widgets.settings import SettingsPrinter
-
+from Orange.widgets.settings import (
+    SettingsPrinter, unpickle_settings_for_widget
+)
 
 log = logging.getLogger(__name__)
 
@@ -385,6 +387,7 @@ class OWWidgetManager(_WidgetManager):
         Create a OWWidget instance for the node.
         """
         desc = node.description  # type: WidgetDescription
+        settings = node.properties
         klass = widget = None
         initialized = False
         error = None
@@ -409,19 +412,39 @@ class OWWidgetManager(_WidgetManager):
         if klass is None:
             item.widget = widget = mock_error_owwidget(node, error)
             initialized = True
+        restore_error = None
 
         if widget is None:
-            log.info("WidgetManager: Creating '%s.%s' instance '%s'.",
-                     klass.__module__, klass.__name__, node.title)
+            pickledata = node.property("__pickle_data_ows_2_0")
+            if isinstance(pickledata, bytes):
+                log.info("Unpicking data for %s.%s (%s)",
+                         klass.__module__, klass.__name__, node.title)
+                try:
+                    settings = unpickle_settings_for_widget(klass, pickledata)
+                except Exception:  # pylint: disable=broad-except
+                    restore_error = (
+                        "Could not restore pickle serialized settings\n\n" +
+                        traceback.format_exc()
+                    )
+                else:
+                    # on success clear the existing notification.
+                    node.clear_state_message(
+                        "settings-restore-has-pickle-data"
+                    )
+                    # and unset the data
+                    node.setProperty("__pickle_data_ows_2_0", None)
 
             signal_manager = self.signal_manager()
+
+            log.info("WidgetManager: Creating '%s.%s' instance '%s'.",
+                     klass.__module__, klass.__name__, node.title)
 
             widget = klass.__new__(
                 klass,
                 None,
                 captionTitle=node.title,
                 signal_manager=signal_manager,
-                stored_settings=copy.deepcopy(node.properties),
+                stored_settings=copy.deepcopy(settings),
                 # NOTE: env is a view of the real env and reflects
                 # changes to the environment.
                 env=self.scheme().runtime_env()
@@ -434,7 +457,6 @@ class OWWidgetManager(_WidgetManager):
                 widget.__init__()
             except Exception:  # pylint: disable=broad-except
                 log.exception("", exc_info=True)
-                # # sys.excepthook(*sys.exc_info())
                 msg = traceback.format_exc()
                 msg = "Could not create {0!r}\n\n{1}".format(
                     node.description.name, msg
@@ -442,6 +464,16 @@ class OWWidgetManager(_WidgetManager):
                 # substitute it with a mock error widget.
                 item.widget = widget = mock_error_owwidget(node, msg)
                 item.state = 0
+
+        if restore_error:
+            # TODO: Permanent message in the widget.
+            #       Frequently the message are cleared en masse.
+            widget.Error.add_message("_settings_restore_error")
+            widget.Error._settings_restore_error(restore_error)
+            node.set_state_message(
+                UserMessage(restore_error, UserMessage.Error,
+                            "owwidget-restore-error")
+            )
 
         # Clear Initializing flag
         item.state &= ~ProcessingState.Initializing

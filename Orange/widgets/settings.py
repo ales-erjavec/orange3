@@ -34,11 +34,16 @@ import copy
 import itertools
 import os
 import logging
+import io
 import pickle
 import pprint
 import time
+import typing
 import warnings
+
 from operator import itemgetter
+from functools import singledispatch
+from typing import Set, Type, Dict, Any
 
 from Orange.data import Domain, Variable
 from Orange.misc.environ import widget_settings_dir
@@ -616,10 +621,21 @@ class ContextHandler(SettingsHandler):
         """Initialize the widget: call the inherited initialization and
         add an attribute 'context_settings' to the widget. This method
         does not open a context."""
+        if isinstance(data, bytes):
+            data = pickle.loads(data)
         instance.current_context = None
         super().initialize(instance, data)
         if data and "context_settings" in data:
-            instance.context_settings = data["context_settings"]
+            def ascontext(data):
+                if isinstance(data, Context):
+                    return data
+                if isinstance(data, dict):
+                    c = Context.__new__(Context)
+                    c.__dict__.update(data["__dict__"])
+                    return c
+            instance.context_settings = [
+                ascontext(c) for c in data["context_settings"]
+            ]
             self._migrate_contexts(instance.context_settings)
         else:
             instance.context_settings = []
@@ -665,7 +681,14 @@ class ContextHandler(SettingsHandler):
         self.settings_from_widget(widget)
         for context in widget.context_settings:
             context.values[VERSION_KEY] = self.widget_class.settings_version
-        data["context_settings"] = widget.context_settings
+
+        def decons(context):
+            return {
+                "__class__": f"{Context.__module__}:{Context.__qualname__}",
+                "__dict__": context.__getstate__()
+            }
+
+        data["context_settings"] = [decons(c) for c in widget.context_settings]
         return data
 
     def update_defaults(self, widget):
@@ -1248,3 +1271,155 @@ def migrate_str_to_variable(settings, names=None, none_placeholder=None):
     else:
         for name in names:
             _fix(name)
+
+
+# ###############################
+# Customized unpickling machinery
+# ###############################
+
+class SettingsPickler(pickle.Pickler):
+    """
+    A Pickler class restricting pickling to basic builtin types.
+    """
+    assert sys.version_info >= (3, 3)
+    Extra = (
+        # On serialization 'builtins:builtin_function_or_method' is necessary
+        # to traverse/resolve the reducers
+        "builtins:builtin_function_or_method",
+    )
+
+    class DispatchTable(dict):
+        # A 'pickle' dispatch table restricting serialization to an
+        # allowed subset.
+
+        #: Allowed classes/names
+        allowed = ...  # type: Set[str]
+
+        def __missing__(self, key):
+            try:
+                fullname = "{}:{}".format(key.__module__, key.__qualname__)
+            except AttributeError:
+                fullname = "{}:{}".format(key.__module__, key.__qualname__)
+
+            if fullname in self.allowed:
+                # raise a key error to allow the default pickling
+                raise KeyError()
+            else:
+                # return an 'reducer' that will raise an error on invocation
+                def reduce_raise_error(obj):
+                    raise pickle.PicklingError(
+                        f"'{key}' is not registered for pickling.")
+                return reduce_raise_error
+
+    def __init__(self, file, allowed=None, **kwargs):
+        super().__init__(file, **kwargs)
+        if allowed is None:
+            allowed = set([])
+        dispatch_table = SettingsPickler.DispatchTable()
+        dispatch_table.allowed = set(allowed)
+        self.dispatch_table = dispatch_table
+
+
+AllowedSettingsTypes = (
+    # dispatcher for general __reduce__ operations (needed by ControledList)
+    "copyreg:_reconstructor",
+    "Orange.widgets.gui:ControledList",
+
+    "Orange.widgets.settings:Context",
+
+    # numpy scalars, uint8: int8, ..., float32, ...
+    "numpy.core.multiarray:scalar",
+    "numpy.core._multiarray_umath:scalar",  # an alias
+    "numpy:dtype",
+
+    "numpy:uint8", "numpy:int8", "numpy:uint16", "numpy:int16",
+    "numpy:uint32", "numpy:int32", "numpy:uint64", "numpy:int64",
+    "numpy:float16", "numpy:float32", "numpy:float64", "numpy:float128",
+
+    "builtins:list",
+    "builtins:set",
+    "builtins:tuple",
+)
+
+
+class SettingsUnpickler(pickle.Unpickler):
+    Extra = (
+        # Extra builtin and extension types allowed in addition to basic
+        # builtins.
+        "builtins:frozenset",
+        "builtins:complex",
+        "builtins:range",
+        "decimal:Decimal",
+        "datetime:date",
+        "datetime:datetime",
+        "datetime:timedelta",
+        "collections:deque",
+        "collections:defaultdict",
+        "collections:OrderedDict",
+        "types:SimpleNamespace",
+        # Extra known possible types
+    ) + AllowedSettingsTypes
+
+    def __init__(self, file, allowed=None, **kwargs):
+        super().__init__(file, **kwargs)
+        if allowed is None:
+            allowed = set()
+        self.allowed = set(allowed)
+
+    def find_class(self, module, qualname):
+        fullname = "{}:{}".format(module, qualname)
+        if fullname in self.allowed:
+            mod = __import__(module, fromlist=[qualname.split(".")[0]])
+            return getattr(mod, qualname)
+
+        if fullname == "builtins:getattr":
+            # dispatch getattr to our implementation
+            return self._getattr
+
+        raise pickle.UnpicklingError(
+            "'{}:{}' is not registered for unpickling".format(module, qualname)
+        )
+
+    def _getattr(self, obj, name, *args):
+        # `getattr` substitute.
+        r = getattr(obj, name, *args)
+        try:
+            # types, functions
+            fullname = "{}:{}".format(r.__module__, r.__qualname__)
+        except AttributeError:
+            # 'regular' instances
+            fullname = "{}:{}".format(type(r).__module__, type(r).__qualname__)
+
+        if fullname in self.allowed:
+            return r
+        else:
+            raise pickle.PicklingError(
+                "'{}' is not registered for unpickling".format(fullname)
+            )
+
+
+def unpickle_settings_for_widget(widgetclass, data):
+    # type: (Type[OWWidget], bytes) -> Dict[str, Any]
+    """
+    Parameters
+    ----------
+    widgetclass: Type[OWWidget]
+    data : bytes
+
+    Returns
+    -------
+
+    """
+    extra = []
+    for klass in widgetclass.mro():
+        extra += getattr(klass, "SETTINGS_PICKLE_TYPES", [])
+
+    unpickler = SettingsUnpickler(
+        io.BytesIO(data),
+        allowed=SettingsUnpickler.Extra + tuple(extra)
+    )
+    return unpickler.load()
+
+
+if typing.TYPE_CHECKING:
+    from Orange.widgets.widget import OWWidget
