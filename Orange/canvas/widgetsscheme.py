@@ -173,9 +173,6 @@ class WidgetsScheme(Scheme):
             self.signal_manager.stop()
         return super().event(event)
 
-    def close(self):
-        QCoreApplication.sendEvent(self, QEvent(QEvent.Close))
-
 
 class ProcessingState(enum.IntEnum):
     """OWWidget processing state flags"""
