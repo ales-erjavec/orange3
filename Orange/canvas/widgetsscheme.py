@@ -48,6 +48,8 @@ from orangecanvas.utils import name_lookup
 from orangecanvas.resources import icon_loader
 
 from Orange.widgets.widget import OWWidget
+from Orange.widgets.report.owreport import OWReport
+
 from Orange.widgets.settings import SettingsPrinter
 
 
@@ -142,7 +144,6 @@ class WidgetsScheme(Scheme):
         -------
         report : OWReport
         """
-        from Orange.widgets.report.owreport import OWReport
         if self.__report_view is None:
             self.report_view_requested.emit()
 
@@ -175,9 +176,10 @@ class WidgetsScheme(Scheme):
         pp.pprint(widget.settingsHandler.pack_data(widget))
 
     def event(self, event):
-        if event.type() == QEvent.Close and \
-                self.__report_view is not None:
-            self.__report_view.close()
+        if event.type() == QEvent.Close:
+            if self.__report_view is not None:
+                self.__report_view.close()
+            self.signal_manager.stop()
         return super().event(event)
 
     def close(self):
@@ -272,6 +274,9 @@ class OWWidgetManager(_WidgetManager):
         if node is None:
             for item in self.__item_for_node.values():
                 if item.widget is widget:
+                    # the node -> widget mapping requested while the widget is
+                    # still in __init__ (via signalManager.send ->
+                    # node_for_widget)
                     assert item.state & ProcessingState.Initializing
                     return item.node
         return node
@@ -543,8 +548,6 @@ class OWWidgetManager(_WidgetManager):
 
     def eventFilter(self, receiver, event):
         if event.type() == QEvent.Close and receiver is self.__scheme:
-            self.signal_manager().stop()
-
             # Notify the remaining widget instances (if any).
             for item in list(self.__item_for_node.values()):
                 widget = item.widget
@@ -562,7 +565,7 @@ class OWWidgetManager(_WidgetManager):
         the scheme and hope someone responds to it.
 
         """
-        # Sender is the QShortcut, and parent the OWBaseWidget
+        # Sender is the QShortcut, and parent the OWWidget
         widget = self.sender().parent()
         try:
             node = self.node_for_widget(widget)
