@@ -76,15 +76,6 @@ class WidgetsScheme(Scheme):
         super().__init__(parent, title, description, env=env)
         self.widget_manager = WidgetManager()
         self.signal_manager = WidgetsSignalManager(self)
-
-        def onchanged(state):
-            # Update widget creation policy based on signal manager's state
-            if state == SignalManager.Running:
-                self.widget_manager.set_creation_policy(WidgetManager.Normal)
-            else:
-                self.widget_manager.set_creation_policy(WidgetManager.OnDemand)
-
-        self.signal_manager.stateChanged.connect(onchanged)
         self.widget_manager.set_scheme(self)
         self.__report_view = None  # type: Optional[OWReport]
 
