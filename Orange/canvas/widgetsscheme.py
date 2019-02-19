@@ -722,7 +722,6 @@ class WidgetsSignalManager(SignalManager):
     """
     def __init__(self, scheme, **kwargs):
         super().__init__(scheme, **kwargs)
-        scheme.installEventFilter(self)
 
     def send(self, widget, channelname, value, signal_id):
         # type: (OWWidget, str, Any, Any) -> None
@@ -764,7 +763,6 @@ class WidgetsSignalManager(SignalManager):
         Implementation of `SignalManager.send_to_node`.
 
         Deliver input signals to an OWWidget instance.
-
         """
         widget = self.scheme().widget_for_node(node)
         if widget is not None:
@@ -816,20 +814,6 @@ class WidgetsSignalManager(SignalManager):
                 raise
         finally:
             app.restoreOverrideCursor()
-
-    def eventFilter(self, receiver, event):
-        if event.type() == QEvent.DeferredDelete and receiver is self.scheme():
-            state = self.runtime_state()
-            if state == SignalManager.Processing:
-                log.info("Deferring a 'DeferredDelete' event for the Scheme "
-                         "instance until SignalManager exits the current "
-                         "update loop.")
-                event.setAccepted(False)
-                self.processingFinished.connect(self.scheme().deleteLater)
-                self.stop()
-                return True
-
-        return super().eventFilter(receiver, event)
 
 
 def mock_error_owwidget(node, message):
