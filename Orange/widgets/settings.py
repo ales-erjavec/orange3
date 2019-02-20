@@ -1321,10 +1321,13 @@ class SettingsPickler(pickle.Pickler):
 
 
 AllowedSettingsTypes = (
-    # dispatcher for general __reduce__ operations (needed by ControledList)
-    "copyreg:_reconstructor",
-    "Orange.widgets.gui:ControledList",
+    # dispatcher for general __reduce__ operations (needed by ControledList,
+    # namedtuple, ...). The types themselves still need to be included in the
+    # list
 
+    "copyreg:_reconstructor",
+
+    "Orange.widgets.gui:ControledList",
     "Orange.widgets.settings:Context",
 
     # numpy scalars, uint8: int8, ..., float32, ...
@@ -1346,6 +1349,9 @@ class SettingsUnpickler(pickle.Unpickler):
     Extra = (
         # Extra builtin and extension types allowed in addition to basic
         # builtins.
+        "builtins:list",
+        "builtins:set",
+        "builtins:tuple",
         "builtins:frozenset",
         "builtins:complex",
         "builtins:range",
@@ -1412,7 +1418,7 @@ def unpickle_settings_for_widget(widgetclass, data):
     """
     extra = []
     for klass in widgetclass.mro():
-        extra += getattr(klass, "SETTINGS_PICKLE_TYPES", [])
+        extra.extend(klass.__dict__.get("SETTINGS_PICKLE_TYPES", []))
 
     unpickler = SettingsUnpickler(
         io.BytesIO(data),

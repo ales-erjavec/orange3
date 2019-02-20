@@ -169,6 +169,17 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
     messageActivated = Signal(Msg)
     messageDeactivated = Signal(Msg)
 
+    #: A list of qualified class/object names that can be saved/restored
+    #: using pickle protocol. If not listed here settings for widget will
+    #: not be restored.
+    #: The qualified names must be formatted as `{module_name}:{qualname}`
+    #: e.g `"types.
+    #: Note that reconstructor functions etc. must also
+    #: be included.
+    #:
+    #: .. versionadded:: 3.?
+    SETTINGS_PICKLE_TYPES = []
+
     settingsHandler = None
     """:type: SettingsHandler"""
 

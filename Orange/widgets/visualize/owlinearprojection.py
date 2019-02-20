@@ -270,6 +270,11 @@ class OWLinearProjection(OWAnchorProjectionWidget):
     class Error(OWAnchorProjectionWidget.Error):
         no_cont_features = Msg("Plotting requires numeric features")
 
+    SETTINGS_PICKLE_TYPES = [
+        f"{__name__}:OWLinearProjection",
+        f"{__name__}:OWLinearProjection.Placement",
+    ]
+
     def __init__(self):
         self.model_selected = VariableListModel(enable_dnd=True)
         self.model_selected.removed.connect(self.__model_selected_changed)

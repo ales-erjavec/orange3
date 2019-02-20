@@ -89,6 +89,14 @@ class OWFile(widget.OWWidget, RecentPathsWComboMixin):
     SIZE_LIMIT = 1e7
     LOCAL_FILE, URL = range(2)
 
+    SETTINGS_PICKLE_TYPES = [
+        "Orange.data.variable:make_variable",
+        "Orange.data.variable:ContinuousVariable",
+        "Orange.data.variable:DiscreteVariable",
+        "Orange.data.variable:StringVariable",
+        "Orange.data.variable:TimeVariable",
+    ]
+
     settingsHandler = PerfectDomainContextHandler(
         match_values=PerfectDomainContextHandler.MATCH_VALUES_ALL
     )

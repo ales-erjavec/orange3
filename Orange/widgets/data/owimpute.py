@@ -142,6 +142,9 @@ class OWImpute(OWWidget):
         imputation_failed = Msg("Imputation failed for '{}'")
         model_based_imputer_sparse = Msg("Model based imputer does not work for sparse data")
 
+    SETTINGS_PICKLE_TYPES = [
+        f"{__name__}:Method",
+    ]
     settingsHandler = settings.DomainContextHandler()
 
     _default_method_index = settings.Setting(int(Method.Leave))  # type: int
