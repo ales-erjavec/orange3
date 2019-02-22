@@ -58,13 +58,12 @@ log = logging.getLogger(__name__)
 
 class WidgetsScheme(Scheme):
     """
-    A Scheme containing Orange Widgets managed with a `WidgetsSignalManager`
-    instance.
+    A workflow scheme containing Orange Widgets (:class:`OWWidget`).
 
     Extends the base `Scheme` class to handle the lifetime
     (creation/deletion, etc.) of `OWWidget` instances corresponding to
-    the nodes in the scheme. It also delegates the inter-widget signal
-    propagation to an instance of `WidgetsSignalManager`.
+    the nodes in the scheme. The inter-widget signal propagation is
+    delegated to an instance of `WidgetsSignalManager`.
     """
 
     #: Emitted when a report_view is requested for the first time, before a
@@ -188,7 +187,7 @@ class ProcessingState(enum.IntEnum):
 
 class Item(types.SimpleNamespace):
     """
-    A Node, OWWidget pair tracked by OWWidgetManager
+    A SchemeNode, OWWidget pair tracked by OWWidgetManager
     """
     def __init__(self, node, widget, state):
         # type: (SchemeNode, Optional[OWWidget], int) -> None
@@ -257,7 +256,10 @@ class OWWidgetManager(_WidgetManager):
         return self.__signal_manager
 
     def node_for_widget(self, widget):
-        # reimplemented
+        # type: (QWidget) -> Optional[SchemeNode]
+        """
+        Reimplemented.
+        """
         node = super().node_for_widget(widget)
         if node is None:
             for item in self.__item_for_node.values():
@@ -270,6 +272,7 @@ class OWWidgetManager(_WidgetManager):
         return node
 
     def widget_settings_for_node(self, node):
+        # type: (SchemeNode) -> Dict[str, Any]
         """
         Return the properties/settings from the widget for node.
 
@@ -289,9 +292,24 @@ class OWWidgetManager(_WidgetManager):
 
     def widget_settings(self, widget):
         # type: (OWWidget) -> Dict[str, Any]
+        """
+        Return the settings from `OWWidget` instance.
+
+        Parameters
+        ----------
+        widget : OWWidget
+
+        Returns
+        -------
+        settings : Dict[str, Any]
+        """
         return widget.settingsHandler.pack_data(widget)
 
     def create_widget_for_node(self, node):
+        # type: (SchemeNode) -> QWidget
+        """
+        Reimplemented.
+        """
         widget = self.create_widget_instance(node)
         return widget
 
@@ -508,11 +526,11 @@ class OWWidgetManager(_WidgetManager):
         return self.__item_for_node[node].state
 
     def widget_processing_state(self, widget):
+        # type: (OWWidget) -> int
         """
         Return the processing state flags for the widget.
 
-        The state is an bitwise or of `InputUpdate` and `BlockingUpdate`.
-
+        The state is an bitwise of the :class:`ProcessingState` flags.
         """
         node = self.node_for_widget(widget)
         return self.__item_for_node[node].state
@@ -520,7 +538,9 @@ class OWWidgetManager(_WidgetManager):
     def save_widget_geometry(self, node, widget):
         # type: (SchemeNode, QWidget) -> bytes
         """
-        Save and return the current geometry and state for node
+        Reimplemented.
+
+        Save and return the current geometry and state for node.
         """
         if isinstance(widget, OWWidget):
             return bytes(widget.saveGeometryAndLayoutState())
@@ -529,6 +549,11 @@ class OWWidgetManager(_WidgetManager):
 
     def restore_widget_geometry(self, node, widget, state):
         # type: (SchemeNode, QWidget, bytes) -> bool
+        """
+        Restore the widget geometry state.
+
+        Reimplemented.
+        """
         if isinstance(widget, OWWidget):
             return widget.restoreGeometryAndLayoutState(QByteArray(state))
         else:
