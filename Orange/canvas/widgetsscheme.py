@@ -523,6 +523,11 @@ class OWWidgetManager(_WidgetManager):
         Same as `manager.widget_processing_state(manger.widget_for_node(node))`
 
         """
+        if node not in self.__item_for_node:
+            if node in self.__scheme.nodes:
+                return ProcessingState.Initializing
+            else:
+                return 0
         return self.__item_for_node[node].state
 
     def widget_processing_state(self, widget):
