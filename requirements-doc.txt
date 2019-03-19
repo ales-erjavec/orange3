@@ -1,4 +1,0 @@
-docutils
-numpydoc
-Sphinx>=1.3
-recommonmark
