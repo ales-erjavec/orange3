@@ -22,21 +22,13 @@ from AnyQt.QtGui import QCursor, QColor
 from AnyQt.QtWidgets import (
     QApplication, QStyle, QSizePolicy, QWidget, QLabel, QGroupBox, QSlider,
     QTableWidgetItem, QItemDelegate, QStyledItemDelegate,
-    QTableView, QHeaderView, QListView, QScrollArea)
+    QTableView, QHeaderView, QListView, QScrollArea
+)
 
-try:
-    # Some Orange widgets might expect this here
-    from Orange.widgets.utils.webview import WebviewWidget  # pylint: disable=unused-import
-except ImportError:
-    pass  # Neither WebKit nor WebEngine are available
+from orangewidget.utils import getdeepattr
+from orangewidget.utils.buttons import VariableTextPushButton
+from orangewidget.utils.combobox import OrangeComboBox
 
-import Orange.data
-from Orange.widgets.utils import getdeepattr
-from Orange.data import \
-    ContinuousVariable, StringVariable, TimeVariable, DiscreteVariable, Variable
-from Orange.widgets.utils import vartype
-from Orange.widgets.utils.buttons import VariableTextPushButton
-from Orange.util import namegen
 
 YesNo = NoYes = ("No", "Yes")
 _enter_icon = None
@@ -46,7 +38,7 @@ log = logging.getLogger(__name__)
 
 OrangeUserRole = itertools.count(Qt.UserRole)
 
-LAMBDA_NAME = namegen('_lambda_')
+LAMBDA_NAME = (f"_lambda_{i}" for i in itertools.count(1))
 
 
 class TableView(QTableView):
@@ -987,83 +979,6 @@ def toolButton(widget, master, label="", callback=None,
                   buttonType=QtWidgets.QToolButton, tooltip=tooltip)
 
 
-def createAttributePixmap(char, background=Qt.black, color=Qt.white):
-    """
-    Create a QIcon with a given character. The icon is 13 pixels high and wide.
-
-    :param char: The character that is printed in the icon
-    :type char: str
-    :param background: the background color (default: black)
-    :type background: QColor
-    :param color: the character color (default: white)
-    :type color: QColor
-    :rtype: QIcon
-    """
-    icon = QtGui.QIcon()
-    for size in (13, 16, 18, 20, 22, 24, 28, 32, 64):
-        pixmap = QtGui.QPixmap(size, size)
-        pixmap.fill(Qt.transparent)
-        painter = QtGui.QPainter()
-        painter.begin(pixmap)
-        painter.setRenderHints(painter.Antialiasing | painter.TextAntialiasing |
-                               painter.SmoothPixmapTransform)
-        painter.setPen(background)
-        painter.setBrush(background)
-        margin = 1 + size // 16
-        text_margin = size // 20
-        rect = QtCore.QRectF(margin, margin,
-                             size - 2 * margin, size - 2 * margin)
-        painter.drawRoundedRect(rect, 30.0, 30.0, Qt.RelativeSize)
-        painter.setPen(color)
-        font = painter.font()  # type: QtGui.QFont
-        font.setPixelSize(size - 2 * margin - 2 * text_margin)
-        painter.setFont(font)
-        painter.drawText(rect, Qt.AlignCenter, char)
-        painter.end()
-        icon.addPixmap(pixmap)
-    return icon
-
-
-class __AttributeIconDict(dict):
-    def __getitem__(self, key):
-        if not self:
-            for tpe, char, col in ((vartype(ContinuousVariable()),
-                                    "N", (202, 0, 32)),
-                                   (vartype(DiscreteVariable()),
-                                    "C", (26, 150, 65)),
-                                   (vartype(StringVariable()),
-                                    "S", (0, 0, 0)),
-                                   (vartype(TimeVariable()),
-                                    "T", (68, 170, 255)),
-                                   (-1, "?", (128, 128, 128))):
-                self[tpe] = createAttributePixmap(char, QtGui.QColor(*col))
-        if key not in self:
-            key = vartype(key) if isinstance(key, Variable) else -1
-        return super().__getitem__(key)
-
-#: A dict that returns icons for different attribute types. The dict is
-#: constructed on first use since icons cannot be created before initializing
-#: the application.
-#:
-#: Accepted keys are variable type codes and instances
-#: of :obj:`Orange.data.variable`: `attributeIconDict[var]` will give the
-#: appropriate icon for variable `var` or a question mark if the type is not
-#: recognized
-attributeIconDict = __AttributeIconDict()
-
-
-def attributeItem(var):
-    """
-    Construct a pair (icon, name) for inserting a variable into a combo or
-    list box
-
-    :param var: variable
-    :type var: Orange.data.Variable
-    :rtype: tuple with QIcon and str
-    """
-    return attributeIconDict[var], var.name
-
-
 class ListViewWithSizeHint(QListView):
     def __init__(self, *args, preferred_size=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1495,96 +1410,6 @@ def valueSlider(widget, master, value, box=None, label=None,
     return slider
 
 
-class OrangeComboBox(QtWidgets.QComboBox):
-    """
-    A QComboBox subclass extended to support bounded contents width hint.
-
-    Prefer to use this class in place of plain QComboBox when the used
-    model will possibly contain many items.
-    """
-    def __init__(self, parent=None, maximumContentsLength=-1, **kwargs):
-        # Forward-declared for sizeHint()
-        self.__maximumContentsLength = maximumContentsLength
-        super().__init__(parent, **kwargs)
-
-        self.__in_mousePressEvent = False
-        # Yet Another Mouse Release Ignore Timer
-        self.__yamrit = QTimer(self, singleShot=True)
-        view = self.view()
-        # optimization for displaying large models
-        if isinstance(view, QListView):
-            view.setUniformItemSizes(True)
-            view.viewport().installEventFilter(self)
-
-    def setMaximumContentsLength(self, length):
-        """
-        Set the maximum contents length hint.
-
-        The hint specifies the upper bound on the `sizeHint` and
-        `minimumSizeHint` width specified in character length.
-        Set to 0 or negative value to disable.
-
-        .. note::
-             This property does not affect the widget's `maximumSize`.
-             The widget can still grow depending on its `sizePolicy`.
-
-        Parameters
-        ----------
-        length : int
-            Maximum contents length hint.
-        """
-        if self.__maximumContentsLength != length:
-            self.__maximumContentsLength = length
-            self.updateGeometry()
-
-    def maximumContentsLength(self):
-        """
-        Return the maximum contents length hint.
-        """
-        return self.__maximumContentsLength
-
-    def sizeHint(self):
-        # reimplemented
-        sh = super().sizeHint()
-        if self.__maximumContentsLength > 0:
-            width = (self.fontMetrics().width("X") * self.__maximumContentsLength
-                     + self.iconSize().width() + 4)
-            sh = sh.boundedTo(QtCore.QSize(width, sh.height()))
-        return sh
-
-    def minimumSizeHint(self):
-        # reimplemented
-        sh = super().minimumSizeHint()
-        if self.__maximumContentsLength > 0:
-            width = (self.fontMetrics().width("X") * self.__maximumContentsLength
-                     + self.iconSize().width() + 4)
-            sh = sh.boundedTo(QtCore.QSize(width, sh.height()))
-        return sh
-
-    # workaround for QTBUG-67583
-    def mousePressEvent(self, event):
-        # reimplemented
-        self.__in_mousePressEvent = True
-        super().mousePressEvent(event)
-        self.__in_mousePressEvent = False
-
-    def showPopup(self):
-        # reimplemented
-        super().showPopup()
-        if self.__in_mousePressEvent:
-            self.__yamrit.start(QApplication.doubleClickInterval())
-
-    def eventFilter(self, obj, event):
-        # type: (QObject, QEvent) -> bool
-        if event.type() == QEvent.MouseButtonRelease \
-                and event.button() == Qt.LeftButton \
-                and obj is self.view().viewport() \
-                and self.__yamrit.isActive():
-            return True
-        else:
-            return super().eventFilter(obj, event)
-
-
 # TODO comboBox looks overly complicated:
 # - can valueType be anything else than str?
 # - sendSelectedValue is not a great name
@@ -1642,9 +1467,12 @@ def comboBox(widget, master, value, box=None, label=None, labelWidth=None,
         length (default: 25, use 0 to disable)
     :rtype: QComboBox
     """
-
-    # Local import to avoid circular imports
-    from Orange.widgets.utils.itemmodels import VariableListModel
+    try:
+        # Local import to avoid circular imports
+        from Orange.widgets.utils.itemmodels import VariableListModel
+    except ImportError:
+        class VariableListModel:
+            pass
 
     if box or label:
         hb = widgetBox(widget, box, orientation, addToLayout=False)
@@ -1674,6 +1502,7 @@ def comboBox(widget, master, value, box=None, label=None, labelWidth=None,
         model = misc.pop("model", None)
         if model is not None:
             combo.setModel(model)
+
         if isinstance(model, VariableListModel):
             callfront = CallFrontComboBoxModel(combo, model)
             callfront.action(cindex)
@@ -2518,35 +2347,6 @@ class CallFrontRadioButtons(ControlledCallFront):
         self.control.buttons[value].setChecked(1)
 
 
-class CallFrontListView(ControlledCallFront):
-    def action(self, values):
-        view = self.control
-        model = view.model()
-        sel_model = view.selectionModel()
-
-        if not isinstance(values, Sequence):
-            values = [values]
-
-        selection = QItemSelection()
-        for value in values:
-            index = None
-            if not isinstance(value, int):
-                if isinstance(value, Variable):
-                    search_role = TableVariable
-                else:
-                    search_role = Qt.DisplayRole
-                    value = str(value)
-                for i in range(model.rowCount()):
-                    if model.data(model.index(i), search_role) == value:
-                        index = i
-                        break
-            else:
-                index = value
-            if index is not None:
-                selection.select(model.index(index), model.index(index))
-        sel_model.select(selection, sel_model.ClearAndSelect)
-
-
 class CallFrontListBox(ControlledCallFront):
     def action(self, value):
         if value is not None:
@@ -2689,69 +2489,69 @@ BarBrushRole = next(OrangeUserRole)  # Brush for distribution bar
 SortOrderRole = next(OrangeUserRole)  # Used for sorting
 
 
-class TableBarItem(QItemDelegate):
-    BarRole = next(OrangeUserRole)
-    BarColorRole = next(OrangeUserRole)
-
-    def __init__(self, parent=None, color=QtGui.QColor(255, 170, 127),
-                 color_schema=None):
-        """
-        :param QObject parent: Parent object.
-        :param QColor color: Default color of the distribution bar.
-        :param color_schema:
-            If not None it must be an instance of
-            :class:`OWColorPalette.ColorPaletteGenerator` (note: this
-            parameter, if set, overrides the ``color``)
-        :type color_schema: :class:`OWColorPalette.ColorPaletteGenerator`
-        """
-        super().__init__(parent)
-        self.color = color
-        self.color_schema = color_schema
-
-    def paint(self, painter, option, index):
-        painter.save()
-        self.drawBackground(painter, option, index)
-        ratio = index.data(TableBarItem.BarRole)
-        if isinstance(ratio, float):
-            if math.isnan(ratio):
-                ratio = None
-
-        color = None
-        if ratio is not None:
-            if self.color_schema is not None:
-                class_ = index.data(TableClassValueRole)
-                if isinstance(class_, Orange.data.Value) and \
-                        class_.variable.is_discrete and \
-                        not math.isnan(class_):
-                    color = self.color_schema[int(class_)]
-            else:
-                color = index.data(self.BarColorRole)
-        if color is None:
-            color = self.color
-        rect = option.rect
-        if ratio is not None:
-            pw = 5
-            hmargin = 3 + pw / 2  # + half pen width for the round line cap
-            vmargin = 1
-            textoffset = pw + vmargin * 2
-            baseline = rect.bottom() - textoffset / 2
-            width = (rect.width() - 2 * hmargin) * ratio
-            painter.save()
-            painter.setRenderHint(QtGui.QPainter.Antialiasing)
-            painter.setPen(QtGui.QPen(QtGui.QBrush(color), pw,
-                                      Qt.SolidLine, Qt.RoundCap))
-            line = QtCore.QLineF(
-                rect.left() + hmargin, baseline,
-                rect.left() + hmargin + width, baseline
-            )
-            painter.drawLine(line)
-            painter.restore()
-            text_rect = rect.adjusted(0, 0, 0, -textoffset)
-        else:
-            text_rect = rect
-        text = str(index.data(Qt.DisplayRole))
-        self.drawDisplay(painter, option, text_rect, text)
-        painter.restore()
+# class TableBarItem(QItemDelegate):
+#     BarRole = next(OrangeUserRole)
+#     BarColorRole = next(OrangeUserRole)
+#
+#     def __init__(self, parent=None, color=QtGui.QColor(255, 170, 127),
+#                  color_schema=None):
+#         """
+#         :param QObject parent: Parent object.
+#         :param QColor color: Default color of the distribution bar.
+#         :param color_schema:
+#             If not None it must be an instance of
+#             :class:`OWColorPalette.ColorPaletteGenerator` (note: this
+#             parameter, if set, overrides the ``color``)
+#         :type color_schema: :class:`OWColorPalette.ColorPaletteGenerator`
+#         """
+#         super().__init__(parent)
+#         self.color = color
+#         self.color_schema = color_schema
+#
+#     def paint(self, painter, option, index):
+#         painter.save()
+#         self.drawBackground(painter, option, index)
+#         ratio = index.data(TableBarItem.BarRole)
+#         if isinstance(ratio, float):
+#             if math.isnan(ratio):
+#                 ratio = None
+#
+#         color = None
+#         if ratio is not None:
+#             if self.color_schema is not None:
+#                 class_ = index.data(TableClassValueRole)
+#                 if isinstance(class_, Orange.data.Value) and \
+#                         class_.variable.is_discrete and \
+#                         not math.isnan(class_):
+#                     color = self.color_schema[int(class_)]
+#             else:
+#                 color = index.data(self.BarColorRole)
+#         if color is None:
+#             color = self.color
+#         rect = option.rect
+#         if ratio is not None:
+#             pw = 5
+#             hmargin = 3 + pw / 2  # + half pen width for the round line cap
+#             vmargin = 1
+#             textoffset = pw + vmargin * 2
+#             baseline = rect.bottom() - textoffset / 2
+#             width = (rect.width() - 2 * hmargin) * ratio
+#             painter.save()
+#             painter.setRenderHint(QtGui.QPainter.Antialiasing)
+#             painter.setPen(QtGui.QPen(QtGui.QBrush(color), pw,
+#                                       Qt.SolidLine, Qt.RoundCap))
+#             line = QtCore.QLineF(
+#                 rect.left() + hmargin, baseline,
+#                 rect.left() + hmargin + width, baseline
+#             )
+#             painter.drawLine(line)
+#             painter.restore()
+#             text_rect = rect.adjusted(0, 0, 0, -textoffset)
+#         else:
+#             text_rect = rect
+#         text = str(index.data(Qt.DisplayRole))
+#         self.drawDisplay(painter, option, text_rect, text)
+#         painter.restore()
 
 
 class BarItemDelegate(QtWidgets.QStyledItemDelegate):
@@ -3133,6 +2933,10 @@ class VerticalItemDelegate(QStyledItemDelegate):
 
 class ProgressBar:
     def __init__(self, widget, iterations):
+        warnings.warn(
+            "'ProgressBar' is deprecated.",
+            PendingDeprecationWarning, stacklevel=2
+        )
         self.iter = iterations
         self.widget = widget
         self.count = 0

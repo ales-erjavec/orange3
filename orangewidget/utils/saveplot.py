@@ -7,7 +7,6 @@ from AnyQt.QtCore import QSettings
 from Orange.widgets.utils import filedialogs
 
 
-# noinspection PyBroadException
 def save_plot(data, file_formats, filename=""):
     _LAST_DIR_KEY = "directories/last_graph_directory"
     _LAST_FILTER_KEY = "directories/last_graph_filter"

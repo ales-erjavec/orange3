@@ -8,7 +8,6 @@ from AnyQt.QtWidgets import (
     QGraphicsScene, QGraphicsView, QWidget, QApplication
 )
 
-from Orange.data.io import FileFormat
 from Orange.widgets.utils.matplotlib_export import scene_code
 
 # Importing WebviewWidget can fail if neither QWebKit (old, deprecated) nor
@@ -21,7 +20,7 @@ except ImportError:
     WebviewWidget = None
 
 
-class ImgFormat(FileFormat):
+class ImgFormat:
     @staticmethod
     def _get_buffer(size, filename):
         raise NotImplementedError

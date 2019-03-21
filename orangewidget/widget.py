@@ -1,4 +1,3 @@
-# Module imports Input, Output and AttributeList to be used in widgets
 # pylint: disable=too-many-lines
 
 import sys
@@ -21,12 +20,11 @@ from AnyQt.QtCore import (
 )
 from AnyQt.QtGui import QIcon, QKeySequence, QDesktopServices, QPainter
 
-from Orange.data import FileFormat
 from Orange.widgets import settings, gui
 
 from Orange.widgets.report import Report
 from Orange.widgets.gui import OWComponent, VerticalScrollArea
-from Orange.widgets.io import ClipboardFormat
+from Orange.widgets.io import ClipboardFormat, ImgFormat
 from Orange.widgets.settings import SettingsHandler
 from Orange.widgets.utils import saveplot, getdeepattr
 from Orange.widgets.utils.progressbar import ProgressBarMixin
@@ -34,6 +32,7 @@ from Orange.widgets.utils.messages import \
     WidgetMessagesMixin, UnboundMsg, MessagesWidget
 from Orange.widgets.utils import signals as _signals
 from Orange.widgets.utils.signals import WidgetSignalsMixin
+
 # Module exposes Input, Output and AttributeList to be used in widgets
 # pylint: disable=unused-import
 from Orange.widgets.utils.signals import Input, Output, AttributeList
@@ -163,7 +162,7 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
     want_message_bar = True
     #: Widget painted by `Save graph` button
     graph_name = None
-    graph_writers = FileFormat.img_writers
+    graph_writers = ImgFormat.img_writers
 
     save_position = True
 
@@ -753,6 +752,7 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
         saveplot.save_plot(graph_obj, self.graph_writers)
 
     def copy_to_clipboard(self):
+
         if self.graph_name:
             graph_obj = getdeepattr(self, self.graph_name, None)
             if graph_obj is None:
@@ -792,8 +792,8 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
             # Move the widget to the center of available space if it is
             # currently outside it
             if not space.contains(self.frameGeometry()):
-                x = max(0, space.width() / 2 - width / 2)
-                y = max(0, space.height() / 2 - height / 2)
+                x = max(0, (space.width() - width) / 2)
+                y = max(0, (space.height()- height) / 2)
 
                 self.move(x, y)
         return restored
@@ -1020,9 +1020,9 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
         While this flag is set this widget and all its descendants
         will not receive any new signals from the workflow signal manager.
 
-        This is useful for instance if the widget does it's work in a
+        This is useful for instance if the widget does its work in a
         separate thread or schedules processing from the event queue.
-        In this case it can set the blocking flag in it's processNewSignals
+        In this case it can set the blocking flag in its processNewSignals
         method schedule the task and return immediately. After the task
         has completed the widget can clear the flag and send the updated
         outputs.
@@ -1291,8 +1291,8 @@ class Message(object):
         self.persistent_id = persistent_id
 
 
-#: Input/Output flags.
-#: -------------------
+#: Input/Output flags (deprecated).
+#: --------------------------------
 #:
 #: The input/output is the default for its type.
 #: When there are multiple IO signals with the same type the

@@ -21,10 +21,6 @@ matrix:
 cache:
     apt: true
     pip: true
-    ccache: true
-    directories:
-        - $TRAVIS_BUILD_DIR/postgres
-        - $TRAVIS_BUILD_DIR/pyqt
 
 before_cache:
 

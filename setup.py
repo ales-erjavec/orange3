@@ -3,33 +3,12 @@
 import os
 import sys
 import subprocess
-from setuptools import find_packages, Command
+from setuptools import setup, find_packages, Command
 
-if sys.version_info < (3, 4):
-    sys.exit('Orange requires Python >= 3.4')
+if False:
+    from typing import Type
 
-try:
-    from numpy.distutils.core import setup
-    have_numpy = True
-except ImportError:
-    from setuptools import setup
-    have_numpy = False
-
-
-try:
-    # need sphinx and recommonmark for build_htmlhelp command
-    from sphinx.setup_command import BuildDoc
-    # pylint: disable=unused-import
-    import recommonmark
-    have_sphinx = True
-except ImportError:
-    have_sphinx = False
-
-from distutils.command.build_ext import build_ext
-from distutils.command import install_data, sdist, config, build
-
-
-NAME = 'Orange3'
+NAME = 'orange-widget-base'
 
 VERSION = '3.21.0'
 ISRELEASED = False
@@ -37,15 +16,28 @@ ISRELEASED = False
 # build/releases (this is filled/updated in `write_version_py`)
 FULLVERSION = VERSION
 
-DESCRIPTION = 'Orange, a component-based data mining framework.'
+DESCRIPTION = 'Base Widget for Orange Canvas'
 README_FILE = os.path.join(os.path.dirname(__file__), 'README.md')
-LONG_DESCRIPTION = open(README_FILE).read()
+LONG_DESCRIPTION = """
+This project implements the base OWWidget class and utilitties for use in
+Orange Canvas  application workflows.
+
+Provides:
+
+    * `OWWidget` class
+    * `gui` module for building GUI
+    * `OWWidgetsScheme` the workflow execution model/bridge.
+
+    ...
+    
+"""
 AUTHOR = 'Bioinformatics Laboratory, FRI UL'
 AUTHOR_EMAIL = 'info@biolab.si'
 URL = 'http://orange.biolab.si/'
 LICENSE = 'GPLv3+'
 
 KEYWORDS = (
+    'workflow',
     'data mining',
     'machine learning',
     'artificial intelligence',
@@ -69,31 +61,19 @@ CLASSIFIERS = (
     'Intended Audience :: Developers',
 )
 
-requirements = ['requirements-core.txt', 'requirements-gui.txt']
-
-INSTALL_REQUIRES = sorted(set(
-    line.partition('#')[0].strip()
-    for file in (os.path.join(os.path.dirname(__file__), file)
-                 for file in requirements)
-    for line in open(file)
-) - {''})
-
+INSTALL_REQUIRES = [
+    "AnyQt",
+    "orange-canvas-core",
+]
 
 EXTRAS_REQUIRE = {
-    ':python_version<="3.4"': ["typing"],
 }
 
 ENTRY_POINTS = {
-    "orange.canvas.help": (
-        "html-index = Orange.widgets:WIDGET_HELP_PATH",
-    ),
-    "gui_scripts": (
-        "orange-canvas = Orange.canvas.__main__:main",
-    ),
 }
 
-
 DATA_FILES = []
+
 
 # Return the git revision as a string
 def git_version():
@@ -112,8 +92,8 @@ def git_version():
         env['LANGUAGE'] = 'C'
         env['LANG'] = 'C'
         env['LC_ALL'] = 'C'
-        out = subprocess.Popen(cmd, stdout=subprocess.PIPE, env=env).communicate()[0]
-        return out
+        out = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, env=env)
+        return out.stdout
 
     try:
         out = _minimal_ext_cmd(['git', 'rev-parse', 'HEAD'])
@@ -162,50 +142,18 @@ if not release:
         a.close()
 
 
-def configuration(parent_package='', top_path=None):
-    if os.path.exists('MANIFEST'):
-        os.remove('MANIFEST')
-
-    from numpy.distutils.misc_util import Configuration
-    config = Configuration(None, parent_package, top_path)
-
-    # Avoid non-useful msg:
-    # "Ignoring attempt to set 'name' (from ... "
-    config.set_options(ignore_setup_xxx_py=True,
-                       assume_default_configuration=True,
-                       delegate_options_to_subpackages=True,
-                       quiet=True)
-
-    config.add_subpackage('Orange')
-    return config
-
-
 PACKAGES = find_packages()
 
 # Extra non .py, .{so,pyd} files that are installed within the package dir
 # hierarchy
 PACKAGE_DATA = {
-    "Orange": ["datasets/*.{}".format(ext)
-               for ext in ["tab", "csv", "basket", "info", "dst", "metadata"]],
     "Orange.canvas": ["icons/*.png", "icons/*.svg"],
     "Orange.canvas.styles": ["*.qss", "orange/*.svg"],
-    "Orange.canvas.workflows": ["*.ows"],
-    "Orange.widgets": ["icons/*.png",
-                       "icons/*.svg"],
+    "Orange.widgets": ["icons/*.png", "icons/*.svg"],
     "Orange.widgets.report": ["icons/*.svg", "*.html"],
     "Orange.widgets.tests": ["datasets/*.tab",
                              "workflows/*.ows"],
-    "Orange.widgets.data": ["icons/*.svg",
-                            "icons/paintdata/*.png",
-                            "icons/paintdata/*.svg"],
-    "Orange.widgets.data.tests": ["origin1/*.tab",
-                                  "origin2/*.tab"],
-    "Orange.widgets.evaluate": ["icons/*.svg"],
-    "Orange.widgets.model": ["icons/*.svg"],
-    "Orange.widgets.visualize": ["icons/*.svg"],
-    "Orange.widgets.unsupervised": ["icons/*.svg"],
     "Orange.widgets.utils": ["_webview/*.js"],
-    "Orange.tests": ["xlsx_files/*.xlsx", "*.tab", "*.basket", "*.csv"]
 }
 
 
@@ -226,6 +174,7 @@ class LintCommand(Command):
         .travis/check_pylint_diff $best_ancestor
         ''', shell=True, cwd=os.path.dirname(os.path.abspath(__file__))))
 
+
 class CoverageCommand(Command):
     """A setup.py coverage subcommand developers can run locally."""
     description = "run code coverage"
@@ -244,15 +193,7 @@ class CoverageCommand(Command):
         ''', shell=True, cwd=os.path.dirname(os.path.abspath(__file__))))
 
 
-class build_ext_error(build_ext):
-    def initialize_options(self):
-        raise SystemExit(
-            "Cannot compile extensions. numpy is required to build Orange."
-        )
-
-
-# ${prefix} relative install path for html help files
-DATAROOTDIR = "share/help/en/orange3/htmlhelp"
+DATAROOTDIR = "share/help/en/orange3/widget/htmlhelp"
 
 
 def findall(startdir, followlinks=False, ):
@@ -421,28 +362,6 @@ else:
 
 def setup_package():
     write_version_py()
-    cmdclass = {
-        'lint': LintCommand,
-        'coverage': CoverageCommand,
-        'config': config,
-        'sdist': sdist,
-        'build': build,
-        'build_htmlhelp': build_htmlhelp,
-        # Use install_data from distutils, not numpy.distutils.
-        # numpy.distutils insist all data files are installed in site-packages
-        'install_data': install_data.install_data
-    }
-    if have_numpy:
-        extra_args = {
-            "configuration": configuration
-        }
-    else:
-        # substitute a build_ext command with one that raises an error when
-        # building. In order to fully support `pip install` we need to
-        # survive a `./setup egg_info` without numpy so pip can properly
-        # query our install dependencies
-        extra_args = {}
-        cmdclass["build_ext"] = build_ext_error
 
     setup(
         name=NAME,
@@ -463,8 +382,6 @@ def setup_package():
         entry_points=ENTRY_POINTS,
         zip_safe=False,
         test_suite='Orange.tests.suite',
-        cmdclass=cmdclass,
-        **extra_args
     )
 
 

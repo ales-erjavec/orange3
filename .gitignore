@@ -1,7 +1,8 @@
 # Build files
 build
 dist
-Orange3.egg-info
+*.egg-info
+*.dist-info
 Orange/version.py
 doc/build
 *.so

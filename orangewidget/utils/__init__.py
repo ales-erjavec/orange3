@@ -3,21 +3,21 @@ import sys
 
 from AnyQt.QtCore import QObject
 
-from Orange.data.variable import TimeVariable
+# from Orange.data.variable import TimeVariable
 from Orange.util import deepgetattr
 
 
-def vartype(var):
-    if var.is_discrete:
-        return 1
-    elif var.is_continuous:
-        if isinstance(var, TimeVariable):
-            return 4
-        return 2
-    elif var.is_string:
-        return 3
-    else:
-        return 0
+# def vartype(var):
+#     if var.is_discrete:
+#         return 1
+#     elif var.is_continuous:
+#         if isinstance(var, TimeVariable):
+#             return 4
+#         return 2
+#     elif var.is_string:
+#         return 3
+#     else:
+#         return 0
 
 
 def progress_bar_milestones(count, iterations=100):
@@ -37,17 +37,17 @@ def to_html(str):
 getHtmlCompatibleString = to_html
 
 
-def get_variable_values_sorted(variable):
-    """
-    Return a list of sorted values for given attribute, if all its values can be
-    cast to int's.
-    """
-    if variable.is_continuous:
-        return []
-    try:
-        return sorted(variable.values, key=int)
-    except ValueError:
-        return variable.values
+# def get_variable_values_sorted(variable):
+#     """
+#     Return a list of sorted values for given attribute, if all its values can be
+#     cast to int's.
+#     """
+#     if variable.is_continuous:
+#         return []
+#     try:
+#         return sorted(variable.values, key=int)
+#     except ValueError:
+#         return variable.values
 
 
 def dumpObjectTree(obj, _indent=0):
