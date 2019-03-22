@@ -29,8 +29,8 @@ from weakref import finalize
 
 from typing import Optional, Dict, Any, List
 
-from AnyQt.QtWidgets import QWidget, QShortcut, QAction
-from AnyQt.QtGui import QKeySequence, QWhatsThisClickedEvent
+from AnyQt.QtWidgets import QWidget, QAction
+from AnyQt.QtGui import QWhatsThisClickedEvent
 
 from AnyQt.QtCore import Qt, QCoreApplication, QEvent, QByteArray
 from AnyQt.QtCore import pyqtSignal, pyqtSlot as Slot
@@ -40,7 +40,7 @@ from orangecanvas.registry import WidgetDescription
 from orangecanvas.scheme.signalmanager import (
     SignalManager, Signal, compress_signals
 )
-from orangecanvas.scheme import Scheme, SchemeNode, WorkflowEvent
+from orangecanvas.scheme import Scheme, SchemeNode
 from orangecanvas.scheme.node import UserMessage
 from orangecanvas.scheme.widgetmanager import WidgetManager as _WidgetManager
 from orangecanvas.utils import name_lookup
@@ -466,11 +466,6 @@ class OWWidgetManager(_WidgetManager):
             help_action.setVisible(True)
             help_action.triggered.connect(self.__on_help_request)
 
-        # Up shortcut (activate/open parent)
-        up_shortcut = QShortcut(
-            QKeySequence(Qt.ControlModifier + Qt.Key_Up), widget)
-        up_shortcut.activated.connect(self.__on_activate_parent)
-
         widget.setWindowIcon(
             icon_loader.from_description(desc).get(desc.icon)
         )
@@ -569,13 +564,6 @@ class OWWidgetManager(_WidgetManager):
         node = sender.data()
         scheme = self.scheme()
         scheme.dump_settings(node)
-
-    def __on_activate_parent(self):
-        """
-        Activate parent shortcut was pressed.
-        """
-        event = WorkflowEvent(WorkflowEvent.ActivateParentRequest)
-        QCoreApplication.sendEvent(self.scheme(), event)
 
     def __initialize_widget_messages(self, node, widget):
         """
