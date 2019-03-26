@@ -10,11 +10,11 @@ from AnyQt.QtGui import QShowEvent
 from AnyQt.QtWidgets import QAction
 from AnyQt.QtTest import QSignalSpy
 
-from Orange.widgets.gui import OWComponent
-from Orange.widgets.settings import Setting, SettingProvider
-from Orange.widgets.tests.base import WidgetTest
-from Orange.widgets.widget import OWWidget, Msg
-from Orange.widgets.utils.messagewidget import MessagesWidget
+from orangewidget.gui import OWComponent
+from orangewidget.settings import Setting, SettingProvider
+from orangewidget.tests.base import WidgetTest
+from orangewidget.widget import OWWidget, Msg
+from orangewidget.utils.messagewidget import MessagesWidget
 
 
 class DummyComponent(OWComponent):

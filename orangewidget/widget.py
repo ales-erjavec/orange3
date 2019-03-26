@@ -20,24 +20,23 @@ from AnyQt.QtCore import (
 )
 from AnyQt.QtGui import QIcon, QKeySequence, QDesktopServices, QPainter
 
-from Orange.widgets import settings, gui
-
-from Orange.widgets.report import Report
-from Orange.widgets.gui import OWComponent, VerticalScrollArea
-from Orange.widgets.io import ClipboardFormat, ImgFormat
-from Orange.widgets.settings import SettingsHandler
-from Orange.widgets.utils import saveplot, getdeepattr
-from Orange.widgets.utils.progressbar import ProgressBarMixin
-from Orange.widgets.utils.messages import \
+from orangewidget import settings, gui
+from orangewidget.report import Report
+from orangewidget.gui import OWComponent, VerticalScrollArea
+from orangewidget.io import ClipboardFormat, ImgFormat
+from orangewidget.settings import SettingsHandler
+from orangewidget.utils import saveplot, getdeepattr
+from orangewidget.utils.progressbar import ProgressBarMixin
+from orangewidget.utils.messages import \
     WidgetMessagesMixin, UnboundMsg, MessagesWidget
-from Orange.widgets.utils import signals as _signals
-from Orange.widgets.utils.signals import WidgetSignalsMixin
+from orangewidget.utils import signals as _signals
+from orangewidget.utils.signals import WidgetSignalsMixin
 
 # Module exposes Input, Output and AttributeList to be used in widgets
 # pylint: disable=unused-import
-from Orange.widgets.utils.signals import Input, Output, AttributeList
-from Orange.widgets.utils.overlay import MessageOverlayWidget, OverlayWidget
-from Orange.widgets.utils.buttons import SimpleButton
+from orangewidget.utils.signals import Input, Output, AttributeList
+from orangewidget.utils.overlay import MessageOverlayWidget, OverlayWidget
+from orangewidget.utils.buttons import SimpleButton
 
 # Msg is imported and renamed, so widgets can import it from this module rather
 # than the one with the mixin (Orange.widgets.utils.messages). Assignment is

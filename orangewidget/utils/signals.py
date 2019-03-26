@@ -5,7 +5,7 @@ from orangecanvas.registry.description import (
     InputSignal, OutputSignal, Single, Multiple, Default, NonDefault,
     Explicit, Dynamic
 )
-from Orange.widgets.utils import getmembers
+from orangewidget.utils import getmembers
 from orangecanvas.registry.description import \
     Single, Multiple, Default, NonDefault, Explicit, Dynamic
 

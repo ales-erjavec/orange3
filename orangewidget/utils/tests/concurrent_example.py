@@ -5,11 +5,11 @@ from types import SimpleNamespace as namespace
 import numpy as np
 
 from Orange.data import Table
-from Orange.widgets import gui
-from Orange.widgets.settings import Setting
-from Orange.widgets.utils.concurrent import TaskState, ConcurrentWidgetMixin
-from Orange.widgets.utils.widgetpreview import WidgetPreview
-from Orange.widgets.visualize.utils.widget import OWDataProjectionWidget
+from orangewidget import gui
+from orangewidget.settings import Setting
+from orangewidget.utils.concurrent import TaskState, ConcurrentWidgetMixin
+from orangewidget.utils.widgetpreview import WidgetPreview
+from orangewidget.visualize.utils.widget import OWDataProjectionWidget
 
 
 class Result(namespace):

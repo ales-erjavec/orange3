@@ -20,14 +20,14 @@ from AnyQt.QtPrintSupport import QPrinter, QPrintDialog
 
 
 from Orange.util import deprecated
-from Orange.widgets import gui
-from Orange.widgets.widget import OWWidget
-from Orange.widgets.settings import Setting
+from orangewidget import gui
+from orangewidget.widget import OWWidget
+from orangewidget.settings import Setting
 
 # Importing WebviewWidget can fail if neither QWebKit (old, deprecated) nor
 # QWebEngine (bleeding-edge, hard to install) are available
 try:
-    from Orange.widgets.utils.webview import WebviewWidget
+    from orangewidget.utils.webview import WebviewWidget
 except ImportError:
     from unittest.mock import Mock
     WebviewWidget = Mock
@@ -502,10 +502,10 @@ class OWReport(OWWidget):
 if __name__ == "__main__":
     import sys
     from Orange.data import Table
-    from Orange.widgets.data.owfile import OWFile
-    from Orange.widgets.data.owtable import OWDataTable
-    from Orange.widgets.data.owdiscretize import OWDiscretize
-    from Orange.widgets.model.owrandomforest import OWRandomForest
+    from orangewidget.data.owfile import OWFile
+    from orangewidget.data.owtable import OWDataTable
+    from orangewidget.data.owdiscretize import OWDiscretize
+    from orangewidget.model.owrandomforest import OWRandomForest
 
     iris = Table("iris")
     app = QApplication(sys.argv)

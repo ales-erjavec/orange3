@@ -42,8 +42,9 @@ from operator import itemgetter
 from typing import Any
 
 
-from Orange.widgets.gui import OWComponent
-from Orange.canvas.conf import widget_settings_dir
+from orangewidget.gui import OWComponent
+from Orange.misc.environ import widget_settings_dir
+
 
 log = logging.getLogger(__name__)
 
