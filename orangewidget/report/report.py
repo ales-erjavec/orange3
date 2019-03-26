@@ -8,10 +8,8 @@ from AnyQt.QtCore import (
 from AnyQt.QtGui import QColor, QBrush
 from AnyQt.QtWidgets import QGraphicsScene, QTableView, QMessageBox
 
-from Orange.util import try_
-from Orange.widgets.io import PngFormat
-from Orange.data.sql.table import SqlTable
-from Orange.widgets.utils import getdeepattr
+from orangewidget.io import PngFormat
+from orangewidget.utils import getdeepattr
 
 __all__ = ["Report",
            "bool_str", "colored_square",
@@ -38,7 +36,7 @@ class Report:
 
     def _get_designated_report_view(self):
         # OWReport is a Report
-        from Orange.widgets.report.owreport import OWReport
+        from orangewidget.report.owreport import OWReport
         if self.__report_view is not None:
             return self.__report_view()
         else:
@@ -192,7 +190,7 @@ class Report:
             name, plot = self._fix_args(name, plot)
 
         from pyqtgraph import PlotWidget, PlotItem, GraphicsWidget, GraphicsView
-        from Orange.widgets.utils.webview import WebviewWidget
+        from orangewidget.utils.webview import WebviewWidget
 
         self.report_name(name)
         if plot is None:

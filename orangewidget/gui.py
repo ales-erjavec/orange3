@@ -31,7 +31,6 @@ from orangewidget.utils.buttons import VariableTextPushButton
 
 from orangewidget.utils.combobox import OrangeComboBox
 
-
 YesNo = NoYes = ("No", "Yes")
 _enter_icon = None
 __re_label = re.compile(r"(^|[^%])%\((?P<value>[a-zA-Z]\w*)\)")
@@ -2156,7 +2155,7 @@ class CallBackListView(ControlledCallback):
     # triggered by selectionModel().selectionChanged()
     def __call__(self, *_):
         # This must be imported locally to avoid circular imports
-        from Orange.widgets.utils.itemmodels import PyListModel
+        from orangewidget.utils.itemmodels import PyListModel
         values = [i.row()
                   for i in self.view.selectionModel().selection().indexes()]
         if values:

@@ -5,9 +5,6 @@ import sys
 import subprocess
 from setuptools import setup, find_packages, Command
 
-if False:
-    from typing import Type
-
 NAME = 'orange-widget-base'
 
 VERSION = '3.21.0'
@@ -19,17 +16,16 @@ FULLVERSION = VERSION
 DESCRIPTION = 'Base Widget for Orange Canvas'
 README_FILE = os.path.join(os.path.dirname(__file__), 'README.md')
 LONG_DESCRIPTION = """
-This project implements the base OWWidget class and utilitties for use in
-Orange Canvas  application workflows.
+This project implements the base OWWidget class and utilities for use in
+Orange Canvas workflows.
 
 Provides:
 
     * `OWWidget` class
     * `gui` module for building GUI
     * `OWWidgetsScheme` the workflow execution model/bridge.
-
     ...
-    
+  
 """
 AUTHOR = 'Bioinformatics Laboratory, FRI UL'
 AUTHOR_EMAIL = 'info@biolab.si'
@@ -38,9 +34,6 @@ LICENSE = 'GPLv3+'
 
 KEYWORDS = (
     'workflow',
-    'data mining',
-    'machine learning',
-    'artificial intelligence',
 )
 
 CLASSIFIERS = (
@@ -63,7 +56,7 @@ CLASSIFIERS = (
 
 INSTALL_REQUIRES = [
     "AnyQt",
-    "orange-canvas-core",
+    "orange-canvas-core>=0.1.*,<0.2a",
 ]
 
 EXTRAS_REQUIRE = {
@@ -103,57 +96,14 @@ def git_version():
     return GIT_REVISION
 
 
-def write_version_py(filename='Orange/version.py'):
-    # Copied from numpy setup.py
-    cnt = """
-# THIS FILE IS GENERATED FROM ORANGE SETUP.PY
-short_version = '%(version)s'
-version = '%(version)s'
-full_version = '%(full_version)s'
-git_revision = '%(git_revision)s'
-release = %(isrelease)s
-
-if not release:
-    version = full_version
-    short_version += ".dev"
-"""
-    global FULLVERSION
-    FULLVERSION = VERSION
-    if os.path.exists('.git'):
-        GIT_REVISION = git_version()
-    elif os.path.exists('Orange/version.py'):
-        # must be a source distribution, use existing version file
-        import imp
-        version = imp.load_source("Orange.version", "Orange/version.py")
-        GIT_REVISION = version.git_revision
-    else:
-        GIT_REVISION = "Unknown"
-
-    if not ISRELEASED:
-        FULLVERSION += '.dev0+' + GIT_REVISION[:7]
-
-    a = open(filename, 'w')
-    try:
-        a.write(cnt % {'version': VERSION,
-                       'full_version': FULLVERSION,
-                       'git_revision': GIT_REVISION,
-                       'isrelease': str(ISRELEASED)})
-    finally:
-        a.close()
-
-
 PACKAGES = find_packages()
 
 # Extra non .py, .{so,pyd} files that are installed within the package dir
 # hierarchy
 PACKAGE_DATA = {
-    "Orange.canvas": ["icons/*.png", "icons/*.svg"],
-    "Orange.canvas.styles": ["*.qss", "orange/*.svg"],
-    "Orange.widgets": ["icons/*.png", "icons/*.svg"],
-    "Orange.widgets.report": ["icons/*.svg", "*.html"],
-    "Orange.widgets.tests": ["datasets/*.tab",
-                             "workflows/*.ows"],
-    "Orange.widgets.utils": ["_webview/*.js"],
+    "orangewidget": ["icons/*.png", "icons/*.svg"],
+    "orangewidget.report": ["icons/*.svg", "*.html"],
+    "orangewidget.utils": ["_webview/*.js"],
 }
 
 
@@ -193,176 +143,7 @@ class CoverageCommand(Command):
         ''', shell=True, cwd=os.path.dirname(os.path.abspath(__file__))))
 
 
-DATAROOTDIR = "share/help/en/orange3/widget/htmlhelp"
-
-
-def findall(startdir, followlinks=False, ):
-    files = (
-        os.path.join(base, file)
-        for base, dirs, files in os.walk(startdir, followlinks=followlinks)
-        for file in files
-    )
-    return filter(os.path.isfile, files)
-
-
-def find_htmlhelp_files(subdir):
-    data_files = []
-    thisdir = os.path.dirname(__file__)
-    sourcedir = os.path.join(thisdir, subdir)
-    files = filter(
-        # filter out meta files
-        lambda path: not path.endswith((".hhc", ".hhk", ".hhp", ".stp")),
-        findall(sourcedir)
-    )
-    for file in files:
-        relpath = os.path.relpath(file, start=subdir)
-        relsubdir = os.path.dirname(relpath)
-        # path.join("a", "") results in "a/"; distutils install_data does not
-        # accept paths that end with "/" on windows.
-        if relsubdir:
-            targetdir = os.path.join(DATAROOTDIR, relsubdir)
-        else:
-            targetdir = DATAROOTDIR
-        assert not targetdir.endswith("/")
-        data_files.append((targetdir, [file]))
-    return data_files
-
-
-def add_with_option(option, help="", default=None, ):
-    """
-    A class decorator that adds a boolean --with(out)-option cmd line switch
-    to a distutils.cmd.Command class
-
-    Parameters
-    ----------
-    option : str
-        Name of the option without the 'with-' part i.e. passing foo will
-        create a `--with-foo` and `--without-foo` options
-    help : str
-        Help for `cmd --help`. This should document the positive option (i.e.
-        --with-foo)
-    default : Optional[bool]
-        The default state.
-
-    Returns
-    -------
-    command : Command
-
-    Examples
-    --------
-    >>> @add_with_option("foo", "Build with foo enabled", default=False)
-    >>> class foobuild(build):
-    >>>    def run(self):
-    >>>        if self.with_foo:
-    >>>            ...
-
-    """
-    def decorator(cmdclass):
-        # type: (Type[Command]) -> Type[Command]
-        cmdclass.user_options = getattr(cmdclass, "user_options", []) + [
-            ("with-" + option, None, help),
-            ("without-" + option, None, ""),
-        ]
-        cmdclass.boolean_options = getattr(cmdclass, "boolean_options", []) + [
-            ("with-" + option,),
-        ]
-        cmdclass.negative_opt = dict(
-            getattr(cmdclass, "negative_opt", {}), **{
-                "without-" + option: "with-" + option
-            }
-        )
-        setattr(cmdclass, "with_" + option, default)
-        return cmdclass
-    return decorator
-
-
-_HELP = "Build and include html help files in the distribution"
-
-
-@add_with_option("htmlhelp", _HELP)
-class config(config.config):
-    # just record the with-htmlhelp option for sdist and build's default
-    pass
-
-
-@add_with_option("htmlhelp", _HELP)
-class sdist(sdist.sdist):
-    # build_htmlhelp to fill in distribution.data_files which are then included
-    # in the source dist.
-    sub_commands = sdist.sdist.sub_commands + [
-        ("build_htmlhelp", lambda self: self.with_htmlhelp)
-    ]
-
-    def finalize_options(self):
-        super().finalize_options()
-        self.set_undefined_options(
-            "config", ("with_htmlhelp", "with_htmlhelp")
-        )
-
-
-@add_with_option("htmlhelp", _HELP)
-class build(build.build):
-    sub_commands = build.build.sub_commands + [
-        ("build_htmlhelp", lambda self: self.with_htmlhelp)
-    ]
-
-    def finalize_options(self):
-        super().finalize_options()
-        self.set_undefined_options(
-            "config", ("with_htmlhelp", 'with_htmlhelp')
-        )
-
-
-# Does the sphinx source for widget help exist the sources are in the checkout
-# but not in the source distribution (sdist). The sdist already contains
-# build html files.
-HAVE_SPHINX_SOURCE = os.path.isdir("doc/visual-programming/source")
-# Doest the build htmlhelp documentation exist
-HAVE_BUILD_HTML = os.path.exists("doc/visual-programming/build/htmlhelp/index.html")
-
-if have_sphinx and HAVE_SPHINX_SOURCE:
-    class build_htmlhelp(BuildDoc):
-        def initialize_options(self):
-            super().initialize_options()
-            self.build_dir = "doc/visual-programming/build"
-            self.source_dir = "doc/visual-programming/source"
-            self.builder = "htmlhelp"
-            self.version = VERSION
-
-        def run(self):
-            super().run()
-            helpdir = os.path.join(self.build_dir, "htmlhelp")
-            files = find_htmlhelp_files(helpdir)
-            # add the build files to distribution
-            self.distribution.data_files.extend(files)
-
-else:
-    # without sphinx we need the docs to be already build. i.e. from a
-    # source dist build --with-htmlhelp
-    class build_htmlhelp(Command):
-        user_options = [('build-dir=', None, 'Build directory')]
-        build_dir = None
-
-        def initialize_options(self):
-            self.build_dir = "doc/visual-programming/build"
-
-        def finalize_options(self):
-            pass
-
-        def run(self):
-            helpdir = os.path.join(self.build_dir, "htmlhelp")
-            if not (os.path.isdir(helpdir)
-                    and os.path.isfile(os.path.join(helpdir, "index.html"))):
-                self.warn("Sphinx is needed to build help files. Skipping.")
-                return
-            files = find_htmlhelp_files(os.path.join(helpdir))
-            # add the build files to distribution
-            self.distribution.data_files.extend(files)
-
-
 def setup_package():
-    write_version_py()
-
     setup(
         name=NAME,
         version=FULLVERSION,
@@ -380,8 +161,8 @@ def setup_package():
         install_requires=INSTALL_REQUIRES,
         extras_require=EXTRAS_REQUIRE,
         entry_points=ENTRY_POINTS,
+        python_requires=">=3.6",
         zip_safe=False,
-        test_suite='Orange.tests.suite',
     )
 
 

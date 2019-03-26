@@ -9,16 +9,24 @@ from AnyQt.QtWidgets import (
     QGraphicsScene, QGraphicsView, QWidget, QApplication
 )
 
-from Orange.widgets.utils.matplotlib_export import scene_code
+from orangewidget.utils.matplotlib_export import scene_code
 
 # Importing WebviewWidget can fail if neither QWebKit (old, deprecated) nor
 # QWebEngine (bleeding-edge, hard to install) are available
 try:
-    from Orange.widgets.utils.webview import WebviewWidget
+    from orangewidget.utils.webview import WebviewWidget
 except ImportError:
     warn('WebView from QWebKit or QWebEngine is not available. Orange '
          'widgets that depend on it will fail to work.')
     WebviewWidget = None
+
+
+class Compression:
+    """Supported compression extensions"""
+    GZIP = '.gz'
+    BZIP2 = '.bz2'
+    XZ = '.xz'
+    all = (GZIP, BZIP2, XZ)
 
 
 class _Registry(type):
@@ -189,7 +197,7 @@ class SvgFormat(ImgFormat):
 
     @staticmethod
     def _get_exporter():
-        from Orange.widgets.utils.SVGExporter import SVGExporter
+        from orangewidget.utils.SVGExporter import SVGExporter
         return SVGExporter
 
     @staticmethod

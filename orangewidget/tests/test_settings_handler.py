@@ -10,9 +10,9 @@ import warnings
 
 from AnyQt.QtCore import pyqtSignal as Signal, QObject
 
-from Orange.tests import named_file
-from Orange.widgets.settings import SettingsHandler, Setting, SettingProvider,\
-    VERSION_KEY, rename_setting, Context, migrate_str_to_variable
+from orangewidget.tests.base import named_file
+from orangewidget.settings import SettingsHandler, Setting, SettingProvider,\
+    VERSION_KEY, rename_setting, Context
 
 
 class SettingHandlerTestCase(unittest.TestCase):
@@ -405,26 +405,3 @@ class MigrationsTestCase(unittest.TestCase):
         context = Context(values=dict(foo=42, bar=13))
         rename_setting(context, "foo", "baz")
         self.assertDictEqual(context.values, dict(baz=42, bar=13))
-
-    def test_migrate_str_to_variable(self):
-        values = dict(foo=("foo", 1), baz=("baz", 2), qux=("qux", 102), bar=13)
-
-        context = Context(values=values.copy())
-        migrate_str_to_variable(context)
-        self.assertDictEqual(
-            context.values,
-            dict(foo=("foo", 101), baz=("baz", 102), qux=("qux", 102), bar=13))
-
-        context = Context(values=values.copy())
-        migrate_str_to_variable(context, ("foo", "qux"))
-        self.assertDictEqual(
-            context.values,
-            dict(foo=("foo", 101), baz=("baz", 2), qux=("qux", 102), bar=13))
-
-        context = Context(values=values.copy())
-        migrate_str_to_variable(context, "foo")
-        self.assertDictEqual(
-            context.values,
-            dict(foo=("foo", 101), baz=("baz", 2), qux=("qux", 102), bar=13))
-
-        self.assertRaises(KeyError, migrate_str_to_variable, context, "quuux")
