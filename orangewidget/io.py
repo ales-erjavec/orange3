@@ -1,5 +1,6 @@
 import os
 import tempfile
+from collections import OrderedDict
 from warnings import warn
 
 from AnyQt import QtGui, QtCore, QtSvg
@@ -20,7 +21,31 @@ except ImportError:
     WebviewWidget = None
 
 
-class ImgFormat:
+class _Registry(type):
+    """Metaclass that registers subtypes."""
+    def __new__(mcs, name, bases, attrs):
+        cls = type.__new__(mcs, name, bases, attrs)
+        if not hasattr(cls, 'registry'):
+            cls.registry = OrderedDict()
+        else:
+            cls.registry[name] = cls
+        return cls
+
+    def __iter__(cls):
+        return iter(cls.registry)
+
+    def __str__(cls):
+        if cls in cls.registry.values():
+            return cls.__name__
+        return '{}({{{}}})'.format(cls.__name__, ', '.join(cls.registry))
+
+
+class classproperty(property):
+    def __get__(self, instance, class_):
+        return self.fget(class_)
+
+
+class ImgFormat(metaclass=_Registry):
     @staticmethod
     def _get_buffer(size, filename):
         raise NotImplementedError
@@ -79,6 +104,12 @@ class ImgFormat:
         if type(scene) == dict:
             scene = scene['scene']
         cls.write_image(filename, scene)
+
+    @classproperty
+    def img_writers(cls):
+        return cls.registry.values()
+
+    graph_writers = img_writers
 
 
 class PngFormat(ImgFormat):
