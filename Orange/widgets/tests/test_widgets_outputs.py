@@ -4,15 +4,14 @@ import unittest
 import importlib.util
 
 from orangecanvas.registry import WidgetRegistry
-from Orange.canvas import discovery
-from Orange.canvas.conf import orangeconfig
+from Orange.canvas.config import Config
 
 
 class TestWidgetOutputs(unittest.TestCase):
     def test_outputs(self):
         re_send = re.compile('\\n\s+self.send\("([^"]*)"')
-        disc = orangeconfig.widget_discovery(WidgetRegistry())
-        disc.run(itertools.islice(orangeconfig.widgets_entry_points(), 0, 1))
+        disc = Config.widget_discovery(WidgetRegistry())
+        disc.run(itertools.islice(Config.widgets_entry_points(), 0, 1))
         errors = []
         for desc in disc.registry.widgets():
             signal_names = {output.name for output in desc.outputs}

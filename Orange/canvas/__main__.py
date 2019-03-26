@@ -34,12 +34,12 @@ from orangecanvas.application.application import CanvasApplication
 from orangecanvas.application.canvasmain import CanvasMainWindow
 from orangecanvas.application.outputview import TextStream, ExceptHook
 from orangecanvas.gui.splashscreen import SplashScreen
-from orangecanvas import config
+from orangecanvas import config as canvasconfig
 
 # from Orange.canvas.document.usagestatistics import UsageStatistics
 
 from Orange.canvas.errorreporting import handle_exception
-from Orange.canvas import conf
+from Orange.canvas import config
 
 log = logging.getLogger(__name__)
 
@@ -350,13 +350,13 @@ def main(argv=None):
     logging.getLogger("Orange").setLevel(root_level)
     logging.getLogger("orangecontrib").setLevel(root_level)
 
-
     # Standard output stream handler at the requested level
     stream_hander = logging.StreamHandler()
     stream_hander.setLevel(level=levels[options.log_level])
     rootlogger.addHandler(stream_hander)
-
-    config.set_default(conf.orangeconfig)
+    # set default application configuration
+    config_ = config.Config()
+    canvasconfig.set_default(config_)
     log.info("Starting 'Orange Canvas' application.")
 
     qt_argv = argv[:1]
@@ -382,6 +382,7 @@ def main(argv=None):
 
     log.debug("Starting CanvasApplicaiton with argv = %r.", qt_argv)
     app = CanvasApplication(qt_argv)
+    config_.init()
     if app.style().metaObject().className() == "QFusionStyle":
         if fusiontheme == "breeze-dark":
             app.setPalette(breeze_dark())
@@ -391,9 +392,6 @@ def main(argv=None):
     if style is None and palette.color(QPalette.Window).value() < 127:
         log.info("Switching default stylesheet to darkorange")
         defaultstylesheet = "darkorange.qss"
-
-    # NOTE: config.init() must be called after the QApplication constructor
-    config.init()
 
     # Initialize SQL query and execution time logger (in SqlTable)
     sql_level = min(levels[options.log_level], logging.INFO)
@@ -492,7 +490,7 @@ def main(argv=None):
         reg_cache = None
 
     widget_registry = qt.QtWidgetRegistry()
-    widget_discovery = config.widget_discovery(
+    widget_discovery = config_.widget_discovery(
         widget_registry, cached_descriptions=reg_cache)
 
     want_splash = \

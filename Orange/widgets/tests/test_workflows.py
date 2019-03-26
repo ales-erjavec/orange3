@@ -4,9 +4,8 @@ from os.path import isfile, join, dirname
 import unittest
 
 from orangecanvas.registry import WidgetRegistry
-from orangecanvas.scheme.readwrite import scheme_load
 
-from Orange.canvas.conf import orangeconfig
+from Orange.canvas.config import Config
 from Orange.canvas import workflows
 from Orange.canvas import widgetsscheme
 
@@ -21,8 +20,8 @@ def discover_workflows(dir):
 
 
 def registry():
-    d = orangeconfig.widget_discovery(WidgetRegistry())
-    d.run(orangeconfig.widgets_entry_points())
+    d = Config.widget_discovery(WidgetRegistry())
+    d.run(Config.widgets_entry_points())
     return d.registry
 
 
@@ -44,7 +43,7 @@ class TestWorkflows(WidgetTest):
             new_scheme = widgetsscheme.WidgetsScheme()
             with open(ows_file, "rb") as f:
                 try:
-                    scheme_load(new_scheme, f, registry=reg)
+                    new_scheme.load_from(f, registry=reg)
                 except Exception as e:
                     self.fail("Old workflow '{}' could not be loaded\n'{}'".
                               format(ows_file, str(e)))
