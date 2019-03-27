@@ -223,7 +223,7 @@ class OWWidgetManager(_WidgetManager):
         self.__delay_delete = {}  # type: Dict[OWWidget, Item]
 
         # Tracks the widget in the update loop by the SignalManager
-        self.__updating_widget = None
+        self.__updating_widget = None  # type: Optional[OWWidget]
 
     def set_scheme(self, scheme):
         """
@@ -579,6 +579,7 @@ class OWWidgetManager(_WidgetManager):
         The OWWidget info/warning/error state has changed.
         """
         widget = msg.group.widget
+        assert widget is not None
         node = self.node_for_widget(widget)
         if node is not None:
             self.__initialize_widget_messages(node, widget)
@@ -589,7 +590,9 @@ class OWWidgetManager(_WidgetManager):
         A widget processing state has changed (progressBarInit/Finished)
         """
         widget = self.sender()
-        item = self.__item_for_widget(widget)
+        item = None
+        if widget is not None:
+            item = self.__item_for_widget(widget)
         if item is None:
             warnings.warn(
                 "State change for a non-tracked widget {}".format(widget),
@@ -615,9 +618,10 @@ class OWWidgetManager(_WidgetManager):
         item = self.__item_for_node[node]
         # Remember the widget instance. The node and the node->widget mapping
         # can be removed between this and __on_processing_finished.
-        self.__updating_widget = item.widget
-        item.state |= ProcessingState.InputUpdate
-        self.__update_node_processing_state(node)
+        if item.widget is not None:
+            self.__updating_widget = item.widget
+            item.state |= ProcessingState.InputUpdate
+            self.__update_node_processing_state(node)
 
     def __on_processing_finished(self, node):
         """
@@ -625,8 +629,11 @@ class OWWidgetManager(_WidgetManager):
         """
         widget = self.__updating_widget
         self.__updating_widget = None
-
-        item = self.__item_for_widget(widget)
+        item = None
+        if widget is not None:
+            item = self.__item_for_widget(widget)
+        if item is None:
+            return
         item.state &= ~ProcessingState.InputUpdate
         if item.node is not None:
             self.__update_node_processing_state(node)
@@ -639,7 +646,9 @@ class OWWidgetManager(_WidgetManager):
         OWWidget blocking state has changed.
         """
         widget = self.sender()
-        item = self.__item_for_widget(widget)
+        item = None
+        if widget is not None:
+            item = self.__item_for_widget(widget)
         if item is None:
             warnings.warn(
                 "State change for a non-tracked widget {}".format(widget),
@@ -665,6 +674,7 @@ class OWWidgetManager(_WidgetManager):
             self.__try_delete(item)
 
     def __item_for_widget(self, widget):
+        # type: (OWWidget) -> Optional[Item]
         node = self.node_for_widget(widget)
         if node is not None:
             return self.__item_for_node[node]
