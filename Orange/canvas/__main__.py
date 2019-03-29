@@ -27,6 +27,7 @@ from AnyQt.QtCore import (
 )
 
 import orangecanvas
+from Orange.canvas.mainwindow import OWCanvasMainWindow
 from orangecanvas.registry import qt
 from orangecanvas.registry import WidgetRegistry, set_global_registry
 from orangecanvas.registry import cache
@@ -477,7 +478,7 @@ def main(argv=None):
     dirpath = os.path.abspath(os.path.dirname(orangecanvas.__file__))
     QDir.addSearchPath("canvas_icons", os.path.join(dirpath, "icons"))
 
-    canvas_window = CanvasMainWindow()
+    canvas_window = OWCanvasMainWindow()
     canvas_window.setAttribute(Qt.WA_DeleteOnClose)
     canvas_window.setWindowIcon(config.application_icon())
 
