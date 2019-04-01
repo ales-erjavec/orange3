@@ -97,7 +97,7 @@ class Config(config.Config):
 
     @staticmethod
     def addon_entry_points():
-        return pkg_resources.iter_entry_points(ADDONS_ENTRY)
+        return Config.widgets_entry_points()
 
     @staticmethod
     def addon_defaults_list(session=None):
