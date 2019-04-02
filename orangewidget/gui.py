@@ -992,25 +992,6 @@ class ListViewWithSizeHint(QListView):
             else super().sizeHint()
 
 
-def listView(widget, master, value=None, model=None, box=None, callback=None,
-             sizeHint=None, *, viewType=ListViewWithSizeHint, **misc):
-    if box:
-        bg = vBox(widget, box, addToLayout=False)
-    else:
-        bg = widget
-    view = viewType(preferred_size=sizeHint)
-    view.setModel(model)
-    if value is not None:
-        connectControl(master, value, callback,
-                       view.selectionModel().selectionChanged,
-                       CallFrontListView(view),
-                       CallBackListView(model, view, master, value))
-    misc.setdefault('addSpace', True)
-    misc.setdefault('uniformItemSizes', True)
-    miscellanea(view, bg, widget, **misc)
-    return view
-
-
 def listBox(widget, master, value=None, labels=None, box=None, callback=None,
             selectionMode=QtWidgets.QListWidget.SingleSelection,
             enableDragDrop=False, dragDropCallback=None,
