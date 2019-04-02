@@ -133,8 +133,8 @@ class WidgetTestCase(WidgetTest):
         self.assertIsNone(ref())
 
     def test_garbage_collect_from_scheme(self):
-        from Orange.canvas.widgetsscheme import WidgetsScheme
-        from Orange.canvas.discovery import widget_desc_from_module
+        from orangewidget.workflow.widgetsscheme import WidgetsScheme
+        from orangewidget.workflow.discovery import widget_desc_from_module
         new_scheme = WidgetsScheme()
         w_desc = widget_desc_from_module("Orange.widgets.tests.test_widget")
         node = new_scheme.new_node(w_desc)

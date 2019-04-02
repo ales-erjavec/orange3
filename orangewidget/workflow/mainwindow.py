@@ -4,7 +4,7 @@ from AnyQt.QtCore import Qt, QSettings
 from AnyQt.QtWidgets import QAction, QFileDialog, QMenu, QMenuBar
 
 from AnyQt.QtGui import QKeySequence
-from Orange.canvas.widgetsscheme import WidgetsScheme
+from orangewidget.workflow.widgetsscheme import WidgetsScheme
 from orangecanvas.application.canvasmain import CanvasMainWindow
 
 
@@ -98,7 +98,7 @@ class OWCanvasMainWindow(CanvasMainWindow):
         """
         Open and load a '*.report' from 'filename'
         """
-        from Orange.widgets.report.owreport import OWReport
+        from orangewidgets.report.owreport import OWReport
         report = OWReport.load(filename)
         # Create a new window for the report
         if self.is_transient():
