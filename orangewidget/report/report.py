@@ -22,6 +22,14 @@ __all__ = ["Report",
            "render_items", "render_items_vert"]
 
 
+def try_(func, default=None):
+    """Try return the result of func, else return default."""
+    try:
+        return func()
+    except Exception:
+        return default
+
+
 class Report:
     """
     A class that adds report-related methods to the widget.
@@ -640,7 +648,7 @@ def describe_domain(domain):
     Description contains keys "Features", "Meta attributes" and "Targets"
     with the corresponding clipped lists of names. If the domain contains no
     meta attributes or targets, the value is `False`, which prevents it from
-    being rendered by :obj:`~Orange.widgets.report.render_items`.
+    being rendered by :obj:`~orangewidget.report.render_items`.
 
     :param domain: domain
     :type domain: Orange.data.Domain

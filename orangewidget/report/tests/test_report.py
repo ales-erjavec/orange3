@@ -127,7 +127,7 @@ class TestReport(WidgetTest):
         rep = OWReport.get_instance()
         filenames = ["f.report", "f.html"]
         for filename in filenames:
-            with patch("Orange.widgets.report.owreport.open",
+            with patch("orangewidget.report.owreport.open",
                        create=True, side_effect=PermissionError),\
                     patch("AnyQt.QtWidgets.QFileDialog.getSaveFileName",
                           return_value=(filename, 'HTML (*.html)')),\
