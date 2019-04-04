@@ -37,7 +37,7 @@ from orangewidget.utils.overlay import MessageOverlayWidget, OverlayWidget
 from orangewidget.utils.buttons import SimpleButton
 
 # Msg is imported and renamed, so widgets can import it from this module rather
-# than the one with the mixin (Orange.widgets.utils.messages).
+# than the one with the mixin (orangewidget.utils.messages).
 Msg = UnboundMsg
 
 
@@ -292,7 +292,7 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
     @classmethod
     def get_widget_description(cls):
         if not cls.name:
-            return
+            return None
         properties = {name: getattr(cls, name) for name in
                       ("name", "icon", "description", "priority", "keywords",
                        "help", "help_ref", "url",
@@ -1251,7 +1251,7 @@ class _StatusBar(QStatusBar):
         painter.end()
 
 
-class Message(object):
+class Message:
     """
     A user message.
 
