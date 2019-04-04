@@ -1,5 +1,4 @@
 # pylint: disable=too-many-lines
-
 import sys
 import os
 import types
@@ -27,21 +26,19 @@ from orangewidget.io import ClipboardFormat, ImgFormat
 from orangewidget.settings import SettingsHandler
 from orangewidget.utils import saveplot, getdeepattr
 from orangewidget.utils.progressbar import ProgressBarMixin
-from orangewidget.utils.messages import \
-    WidgetMessagesMixin, UnboundMsg, MessagesWidget
+from orangewidget.utils.messages import WidgetMessagesMixin, UnboundMsg as Msg
+from orangewidget.utils.messagewidget import MessagesWidget
 from orangewidget.utils import signals as _signals
 from orangewidget.utils.signals import WidgetSignalsMixin
 
-# Module exposes Input, Output and AttributeList to be used in widgets
-# pylint: disable=unused-import
 from orangewidget.utils.signals import Input, Output, AttributeList
 from orangewidget.utils.overlay import MessageOverlayWidget, OverlayWidget
 from orangewidget.utils.buttons import SimpleButton
 
-# Msg is imported and renamed, so widgets can import it from this module rather
-# than the one with the mixin (Orange.widgets.utils.messages). Assignment is
-# used instead of "import ... as", otherwise PyCharm does not suggest import
-Msg = UnboundMsg
+__all__ = [
+    "Input", "Output", "AttributeList", "Msg", "OWWidget", "Message",
+    "StateInfo",
+]
 
 
 class OutputSignal(_signals.OutputSignal):
@@ -301,7 +298,7 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
     @classmethod
     def get_widget_description(cls):
         if not cls.name:
-            return
+            return None
         properties = {name: getattr(cls, name) for name in
                       ("name", "icon", "description", "priority", "keywords",
                        "help", "help_ref", "url",
@@ -1260,7 +1257,7 @@ class _StatusBar(QStatusBar):
         painter.end()
 
 
-class Message(object):
+class Message:
     """
     A user message.
 
