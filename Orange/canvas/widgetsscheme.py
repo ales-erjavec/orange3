@@ -70,8 +70,9 @@ class WidgetsScheme(Scheme):
     #: set a report view (`set_report_view`) to use instead.
     report_view_requested = pyqtSignal()
 
-    def __init__(self, parent=None, title=None, description=None, env={}):
-        super().__init__(parent, title, description, env=env)
+    def __init__(self, parent=None, title=None, description=None, env={},
+                 **kwargs):
+        super().__init__(parent, title, description, env=env, **kwargs)
         self.widget_manager = WidgetManager()
         self.signal_manager = WidgetsSignalManager(self)
         self.widget_manager.set_scheme(self)
