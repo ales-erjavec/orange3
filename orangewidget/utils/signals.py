@@ -145,7 +145,6 @@ class Output(OutputSignal, _Signal):
     def send(self, value, id=None):
         """Emit the signal through signal manager."""
         assert self.widget is not None
-        self.widget.send(self.name, value, id)
         signal_manager = self.widget.signalManager
         if signal_manager is not None:
             signal_manager.send(self.widget, self.name, value, id)
