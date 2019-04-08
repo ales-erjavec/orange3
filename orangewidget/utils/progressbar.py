@@ -2,7 +2,7 @@ import contextlib
 import time
 import warnings
 
-from AnyQt.QtCore import pyqtProperty
+from AnyQt.QtCore import pyqtProperty, pyqtSlot as Slot
 from AnyQt.QtWidgets import qApp
 
 from orangewidget import gui
@@ -15,6 +15,7 @@ class ProgressBarMixin:
     __progressState = 0
     startTime = time.time()  # used in progressbar
 
+    @Slot()
     def progressBarInit(self, processEvents=None):
         """
         Initialize the widget's progress (i.e show and set progress to 0%).
@@ -39,6 +40,8 @@ class ProgressBarMixin:
 
         self.progressBarSet(0, processEvents)
 
+    @Slot(float)
+    @Slot(int)
     def progressBarSet(self, value, processEvents=None):
         """
         Set the current progress bar to `value`.
@@ -85,6 +88,13 @@ class ProgressBarMixin:
             self.progressBarValueChanged.emit(value)
 
         if processEvents is not None and processEvents is not False:
+            warnings.warn(
+                "'processEvents' is deprecated and will be removed in the"
+                "future",
+                DeprecationWarning, stacklevel=2
+
+
+            )
             qApp.processEvents(processEvents)
 
     def progressBarValue(self):
@@ -96,6 +106,8 @@ class ProgressBarMixin:
         float, fset=progressBarSet, fget=progressBarValue)
     processingState = pyqtProperty(int, fget=lambda self: self.__progressState)
 
+    @Slot(float)
+    @Slot(int)
     def progressBarAdvance(self, value, processEvents=None):
         """
         Advance the progress bar by `value`.
@@ -114,6 +126,7 @@ class ProgressBarMixin:
         """
         self.progressBarSet(self.progressBarValue + value, processEvents)
 
+    @Slot()
     def progressBarFinished(self, processEvents=None):
         """
         Stop the widget's progress (i.e hide the progress bar).
@@ -136,6 +149,11 @@ class ProgressBarMixin:
             self.processingStateChanged.emit(0)
 
         if processEvents is not None and processEvents is not False:
+            warnings.warn(
+                "'processEvents' parameter is deprecated and will be removed"
+                "in the future.",
+                DeprecationWarning, stacklevel=2
+            )
             qApp.processEvents(processEvents)
 
     @contextlib.contextmanager
@@ -167,6 +185,10 @@ class ProgressBarMixin:
         :param iterations: the number of iterations (optional)
         :type iterations: int
         """
+        warnings.warn(
+            "`progressBar` is deprecated",
+            DeprecationWarning, stacklevel=2
+        )
         progress_bar = gui.ProgressBar(self, iterations)
         try:
             yield progress_bar
