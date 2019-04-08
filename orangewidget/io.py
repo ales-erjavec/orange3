@@ -1,7 +1,7 @@
 import os
+import sys
 import tempfile
 from collections import OrderedDict
-from warnings import warn
 
 from AnyQt import QtGui, QtCore, QtSvg
 from AnyQt.QtCore import QMimeData, QMarginsF
@@ -11,14 +11,15 @@ from AnyQt.QtWidgets import (
 
 from orangewidget.utils.matplotlib_export import scene_code
 
-# Importing WebviewWidget can fail if neither QWebKit (old, deprecated) nor
-# QWebEngine (bleeding-edge, hard to install) are available
 try:
     from orangewidget.utils.webview import WebviewWidget
 except ImportError:
-    warn('WebView from QWebKit or QWebEngine is not available. Orange '
-         'widgets that depend on it will fail to work.')
     WebviewWidget = None
+
+__all__ = [
+    "ImgFormat", "Compression", "PngFormat", "ClipboardFormat", "SvgFormat",
+    "MatplotlibPDFFormat", "MatplotlibFormat", "PdfFormat",
+]
 
 
 class Compression:
@@ -54,6 +55,8 @@ class classproperty(property):
 
 
 class ImgFormat(metaclass=_Registry):
+    PRIORITY = sys.maxsize
+
     @staticmethod
     def _get_buffer(size, filename):
         raise NotImplementedError
@@ -114,8 +117,13 @@ class ImgFormat(metaclass=_Registry):
         cls.write_image(filename, scene)
 
     @classproperty
-    def img_writers(cls):
-        return cls.registry.copy()
+    def img_writers(cls):  # type: () -> Mapping[str, Type[ImgFormat]]
+        formats = OrderedDict()
+        for format in sorted(cls.registry.values(), key=lambda x: x.PRIORITY):
+            for ext in getattr(format, 'EXTENSIONS', []):
+                # Only adds if not yet registered
+                formats.setdefault(ext, format)
+        return formats
 
     graph_writers = img_writers
 
@@ -208,7 +216,7 @@ class SvgFormat(ImgFormat):
     def write_image(cls, filename, scene):
         # WebviewWidget exposes its SVG contents more directly;
         # no need to go via QPainter if we can avoid it
-        if isinstance(scene, WebviewWidget):
+        if WebviewWidget is not None and isinstance(scene, WebviewWidget):
             try:
                 svg = scene.svg()
                 with open(filename, 'w') as f:
