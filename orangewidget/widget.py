@@ -255,11 +255,14 @@ class OWWidget(QDialog, OWComponent, Report, ProgressBarMixin,
         if self.want_basic_layout:
             self.set_basic_layout()
 
-        sc = QShortcut(QKeySequence(Qt.ShiftModifier | Qt.Key_F1), self)
-        sc.activated.connect(self.__quicktip)
+        if self.UserAdviceMessages:
+            sc = QShortcut(QKeySequence(Qt.ShiftModifier | Qt.Key_F1), self)
+            sc.activated.connect(self.__quicktip)
 
-        sc = QShortcut(QKeySequence.Copy, self)
-        sc.activated.connect(self.copy_to_clipboard)
+        if self.graph_name or \
+                type(self).copy_to_clipboard != OWWidget.copy_to_clipboard:
+            sc = QShortcut(QKeySequence.Copy, self)
+            sc.activated.connect(self.copy_to_clipboard)
 
         if self.controlArea is not None:
             # Otherwise, the first control has focus

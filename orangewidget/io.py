@@ -115,7 +115,7 @@ class ImgFormat(metaclass=_Registry):
 
     @classproperty
     def img_writers(cls):
-        return cls.registry.values()
+        return cls.registry.copy()
 
     graph_writers = img_writers
 
