@@ -41,19 +41,14 @@ import warnings
 from operator import itemgetter
 from typing import Any
 
-from Orange.data import Domain, Variable
-from Orange.misc.environ import widget_settings_dir
-from Orange.util import OrangeDeprecationWarning
-from Orange.widgets.utils import vartype
 from Orange.widgets.gui import OWComponent
+from Orange.canvas.config import widget_settings_dir
 
 log = logging.getLogger(__name__)
 
 __all__ = ["Setting", "SettingsHandler", "SettingProvider",
-           "ContextSetting", "ContextHandler",
-           "DomainContextHandler", "PerfectDomainContextHandler",
-           "ClassValuesContextHandler", "widget_settings_dir",
-           "IncompatibleContext"]
+           "ContextSetting", "ContextHandler", "IncompatibleContext",
+           "widget_settings_dir"]
 
 _IMMUTABLES = (str, int, bytes, bool, float, tuple)
 

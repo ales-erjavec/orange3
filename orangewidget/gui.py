@@ -22,21 +22,12 @@ from AnyQt.QtGui import QCursor, QColor
 from AnyQt.QtWidgets import (
     QApplication, QStyle, QSizePolicy, QWidget, QLabel, QGroupBox, QSlider,
     QTableWidgetItem, QItemDelegate, QStyledItemDelegate,
-    QTableView, QHeaderView, QListView, QScrollArea)
+    QTableView, QHeaderView, QListView, QScrollArea
+)
 
-try:
-    # Some Orange widgets might expect this here
-    from Orange.widgets.utils.webview import WebviewWidget  # pylint: disable=unused-import
-except ImportError:
-    pass  # Neither WebKit nor WebEngine are available
+from orangewidget.utils import getdeepattr
+from orangewidget.utils.buttons import VariableTextPushButton
 
-import Orange.data
-from Orange.widgets.utils import getdeepattr
-from Orange.data import \
-    ContinuousVariable, StringVariable, TimeVariable, DiscreteVariable, Variable
-from Orange.widgets.utils import vartype
-from Orange.widgets.utils.buttons import VariableTextPushButton
-from Orange.util import namegen
 
 from orangewidget.utils.combobox import OrangeComboBox
 
