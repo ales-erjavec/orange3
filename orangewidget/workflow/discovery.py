@@ -60,6 +60,8 @@ class WidgetDiscovery(discovery.WidgetDiscovery):
                            distribution=None):
         """
         Return widget description from a module.
+
+        Reimplemented from :class:`~discovery.WidgetDiscovery`
         """
         module = discovery.asmodule(module)
         desc = widget_desc_from_module(module)

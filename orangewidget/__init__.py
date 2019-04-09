@@ -1,32 +1,31 @@
 """
-
 """
-import os
-import sysconfig
 
-import pkg_resources
+# If Qt is available (GUI) and Qt5, install backport for PyQt4 imports
+try:
+    import AnyQt.importhooks
+except ImportError:
+    pass
+else:
+    if AnyQt.USED_API == "pyqt5":
+        # Make the chosen PyQt version pinned
+        from AnyQt.QtCore import QObject
+        del QObject
 
-import Orange
+        import pyqtgraph  # import pyqtgraph first so that it can detect Qt5
+        del pyqtgraph
 
-
-# Entry point for main Orange categories/widgets discovery
-def widget_discovery(discovery):
-    dist = pkg_resources.get_distribution("Orange3")
-    pkgs = [
-        "Orange.widgets.data",
-        "Orange.widgets.visualize",
-        "Orange.widgets.model",
-        "Orange.widgets.evaluate",
-        "Orange.widgets.unsupervised",
-    ]
-    for pkg in pkgs:
-        discovery.process_category_package(pkg, distribution=dist)
+        AnyQt.importhooks.install_backport_hook('pyqt4')
+    del AnyQt
 
 
-WIDGET_HELP_PATH = (
-    ("{DEVELOP_ROOT}/doc/visual-programming/build/htmlhelp/index.html", None),
-    (os.path.join(sysconfig.get_path("data"),
-                  "share/help/en/orange3/htmlhelp/index.html"),
-     None),
-    ("https://docs.orange.biolab.si/3/visual-programming/", ""),
-)
+# A hack that prevents segmentation fault with Nvidia drives on Linux if Qt's
+# browser window is shown (seen in https://github.com/spyder-ide/spyder/pull/7029/files)
+
+try:
+    import ctypes
+    ctypes.CDLL("libGL.so.1", mode=ctypes.RTLD_GLOBAL)
+except Exception:  # pylint: disable=bare-except
+    pass
+finally:
+    del ctypes

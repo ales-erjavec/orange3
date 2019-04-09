@@ -215,7 +215,11 @@ class ThreadExecutor(QObject, concurrent.futures.Executor):
 
     def __init__(self, parent=None, threadPool=None, **kwargs):
         super().__init__(parent, **kwargs)
-
+        warnings.warn(
+            "'ThreadExecutor' is deprecated. "
+            "Use stdlib 'concurrent.futures.ThreadPoolExecutor'",
+            DeprecationWarning, stacklevel=2
+        )
         if threadPool is None:
             threadPool = self.__global.instance()
 

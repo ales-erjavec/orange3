@@ -1469,9 +1469,12 @@ def comboBox(widget, master, value, box=None, label=None, labelWidth=None,
         length (default: 25, use 0 to disable)
     :rtype: QComboBox
     """
-
-    # Local import to avoid circular imports
-    from Orange.widgets.utils.itemmodels import VariableListModel
+    try:
+        # Local import to avoid circular imports
+        from Orange.widgets.utils.itemmodels import VariableListModel
+    except ImportError:
+        class VariableListModel:
+            pass
 
     if box or label:
         hb = widgetBox(widget, box, orientation, addToLayout=False)
@@ -1501,6 +1504,7 @@ def comboBox(widget, master, value, box=None, label=None, labelWidth=None,
         model = misc.pop("model", None)
         if model is not None:
             combo.setModel(model)
+
         if isinstance(model, VariableListModel):
             callfront = CallFrontComboBoxModel(combo, model)
             callfront.action(cindex)
@@ -2345,35 +2349,6 @@ class CallFrontRadioButtons(ControlledCallFront):
         self.control.buttons[value].setChecked(1)
 
 
-class CallFrontListView(ControlledCallFront):
-    def action(self, values):
-        view = self.control
-        model = view.model()
-        sel_model = view.selectionModel()
-
-        if not isinstance(values, Sequence):
-            values = [values]
-
-        selection = QItemSelection()
-        for value in values:
-            index = None
-            if not isinstance(value, int):
-                if isinstance(value, Variable):
-                    search_role = TableVariable
-                else:
-                    search_role = Qt.DisplayRole
-                    value = str(value)
-                for i in range(model.rowCount()):
-                    if model.data(model.index(i), search_role) == value:
-                        index = i
-                        break
-            else:
-                index = value
-            if index is not None:
-                selection.select(model.index(index), model.index(index))
-        sel_model.select(selection, sel_model.ClearAndSelect)
-
-
 class CallFrontListBox(ControlledCallFront):
     def action(self, value):
         if value is not None:
@@ -2516,69 +2491,69 @@ BarBrushRole = next(OrangeUserRole)  # Brush for distribution bar
 SortOrderRole = next(OrangeUserRole)  # Used for sorting
 
 
-class TableBarItem(QItemDelegate):
-    BarRole = next(OrangeUserRole)
-    BarColorRole = next(OrangeUserRole)
-
-    def __init__(self, parent=None, color=QtGui.QColor(255, 170, 127),
-                 color_schema=None):
-        """
-        :param QObject parent: Parent object.
-        :param QColor color: Default color of the distribution bar.
-        :param color_schema:
-            If not None it must be an instance of
-            :class:`OWColorPalette.ColorPaletteGenerator` (note: this
-            parameter, if set, overrides the ``color``)
-        :type color_schema: :class:`OWColorPalette.ColorPaletteGenerator`
-        """
-        super().__init__(parent)
-        self.color = color
-        self.color_schema = color_schema
-
-    def paint(self, painter, option, index):
-        painter.save()
-        self.drawBackground(painter, option, index)
-        ratio = index.data(TableBarItem.BarRole)
-        if isinstance(ratio, float):
-            if math.isnan(ratio):
-                ratio = None
-
-        color = None
-        if ratio is not None:
-            if self.color_schema is not None:
-                class_ = index.data(TableClassValueRole)
-                if isinstance(class_, Orange.data.Value) and \
-                        class_.variable.is_discrete and \
-                        not math.isnan(class_):
-                    color = self.color_schema[int(class_)]
-            else:
-                color = index.data(self.BarColorRole)
-        if color is None:
-            color = self.color
-        rect = option.rect
-        if ratio is not None:
-            pw = 5
-            hmargin = 3 + pw / 2  # + half pen width for the round line cap
-            vmargin = 1
-            textoffset = pw + vmargin * 2
-            baseline = rect.bottom() - textoffset / 2
-            width = (rect.width() - 2 * hmargin) * ratio
-            painter.save()
-            painter.setRenderHint(QtGui.QPainter.Antialiasing)
-            painter.setPen(QtGui.QPen(QtGui.QBrush(color), pw,
-                                      Qt.SolidLine, Qt.RoundCap))
-            line = QtCore.QLineF(
-                rect.left() + hmargin, baseline,
-                rect.left() + hmargin + width, baseline
-            )
-            painter.drawLine(line)
-            painter.restore()
-            text_rect = rect.adjusted(0, 0, 0, -textoffset)
-        else:
-            text_rect = rect
-        text = str(index.data(Qt.DisplayRole))
-        self.drawDisplay(painter, option, text_rect, text)
-        painter.restore()
+# class TableBarItem(QItemDelegate):
+#     BarRole = next(OrangeUserRole)
+#     BarColorRole = next(OrangeUserRole)
+#
+#     def __init__(self, parent=None, color=QtGui.QColor(255, 170, 127),
+#                  color_schema=None):
+#         """
+#         :param QObject parent: Parent object.
+#         :param QColor color: Default color of the distribution bar.
+#         :param color_schema:
+#             If not None it must be an instance of
+#             :class:`OWColorPalette.ColorPaletteGenerator` (note: this
+#             parameter, if set, overrides the ``color``)
+#         :type color_schema: :class:`OWColorPalette.ColorPaletteGenerator`
+#         """
+#         super().__init__(parent)
+#         self.color = color
+#         self.color_schema = color_schema
+#
+#     def paint(self, painter, option, index):
+#         painter.save()
+#         self.drawBackground(painter, option, index)
+#         ratio = index.data(TableBarItem.BarRole)
+#         if isinstance(ratio, float):
+#             if math.isnan(ratio):
+#                 ratio = None
+#
+#         color = None
+#         if ratio is not None:
+#             if self.color_schema is not None:
+#                 class_ = index.data(TableClassValueRole)
+#                 if isinstance(class_, Orange.data.Value) and \
+#                         class_.variable.is_discrete and \
+#                         not math.isnan(class_):
+#                     color = self.color_schema[int(class_)]
+#             else:
+#                 color = index.data(self.BarColorRole)
+#         if color is None:
+#             color = self.color
+#         rect = option.rect
+#         if ratio is not None:
+#             pw = 5
+#             hmargin = 3 + pw / 2  # + half pen width for the round line cap
+#             vmargin = 1
+#             textoffset = pw + vmargin * 2
+#             baseline = rect.bottom() - textoffset / 2
+#             width = (rect.width() - 2 * hmargin) * ratio
+#             painter.save()
+#             painter.setRenderHint(QtGui.QPainter.Antialiasing)
+#             painter.setPen(QtGui.QPen(QtGui.QBrush(color), pw,
+#                                       Qt.SolidLine, Qt.RoundCap))
+#             line = QtCore.QLineF(
+#                 rect.left() + hmargin, baseline,
+#                 rect.left() + hmargin + width, baseline
+#             )
+#             painter.drawLine(line)
+#             painter.restore()
+#             text_rect = rect.adjusted(0, 0, 0, -textoffset)
+#         else:
+#             text_rect = rect
+#         text = str(index.data(Qt.DisplayRole))
+#         self.drawDisplay(painter, option, text_rect, text)
+#         painter.restore()
 
 
 class BarItemDelegate(QtWidgets.QStyledItemDelegate):
