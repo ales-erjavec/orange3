@@ -4,8 +4,10 @@ from AnyQt.QtCore import Qt, QSettings
 from AnyQt.QtWidgets import QAction, QFileDialog, QMenu, QMenuBar
 
 from AnyQt.QtGui import QKeySequence
-from Orange.canvas.widgetsscheme import WidgetsScheme
+
 from orangecanvas.application.canvasmain import CanvasMainWindow
+from Orange.canvas.widgetsscheme import WidgetsScheme
+from Orange.widgets.report.owreport import HAVE_REPORT, OWReport
 
 
 def _insert_action(mb, menuid, beforeactionid, action):
@@ -53,13 +55,15 @@ class OWCanvasMainWindow(CanvasMainWindow):
             "Show report", self,
             objectName="action-show-report",
             toolTip="Show a report window",
-            shortcut=QKeySequence(Qt.ShiftModifier | Qt.Key_R)
+            shortcut=QKeySequence(Qt.ShiftModifier | Qt.Key_R),
+            enabled=HAVE_REPORT,
         )
         self.show_report_action.triggered.connect(self.show_report_view)
         self.open_report_action = QAction(
             "Open Report...", self,
             objectName="action-open-report",
             toolTip="Open a saved report",
+            enabled=HAVE_REPORT,
         )
         self.open_report_action.triggered.connect(self.open_report)
         menubar = self.menuBar()
@@ -104,7 +108,6 @@ class OWCanvasMainWindow(CanvasMainWindow):
         """
         Open and load a '*.report' from 'filename'
         """
-        from Orange.widgets.report.owreport import OWReport
         report = OWReport.load(filename)
         # Create a new window for the report
         if self.is_transient():
