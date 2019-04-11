@@ -1,8 +1,11 @@
+from collections import defaultdict, Sequence
+from math import isnan, isinf
 from numbers import Number, Integral
 
 import operator
 
 from contextlib import contextmanager
+from warnings import warn
 
 from AnyQt.QtCore import (
     Qt, QObject, QAbstractListModel, QAbstractTableModel, QModelIndex,
@@ -218,6 +221,247 @@ class AbstractSortTableModel(QAbstractTableModel):
             self.layoutChanged.emit([], QAbstractTableModel.VerticalSortHint)
         else:
             self.layoutChanged.emit()
+
+
+class PyTableModel(AbstractSortTableModel):
+    """ A model for displaying python tables (sequences of sequences) in
+    QTableView objects.
+
+    Parameters
+    ----------
+    sequence : list
+        The initial list to wrap.
+    parent : QObject
+        Parent QObject.
+    editable: bool or sequence
+        If True, all items are flagged editable. If sequence, the True-ish
+        fields mark their respective columns editable.
+
+    Notes
+    -----
+    The model rounds numbers to human readable precision, e.g.:
+    1.23e-04, 1.234, 1234.5, 12345, 1.234e06.
+
+    To set additional item roles, use setData().
+    """
+
+    @staticmethod
+    def _RoleData():
+        return defaultdict(lambda: defaultdict(dict))
+
+    def __init__(self, sequence=None, parent=None, editable=False):
+        super().__init__(parent)
+        self._headers = {}
+        self._editable = editable
+        self._table = None
+        self._roleData = None
+        self.wrap(sequence or [])
+
+    def rowCount(self, parent=QModelIndex()):
+        return 0 if parent.isValid() else len(self)
+
+    def columnCount(self, parent=QModelIndex()):
+        return 0 if parent.isValid() else max(map(len, self._table), default=0)
+
+    def flags(self, index):
+        flags = super().flags(index)
+        if not self._editable or not index.isValid():
+            return flags
+        if isinstance(self._editable, Sequence):
+            return flags | Qt.ItemIsEditable if self._editable[index.column()] else flags
+        return flags | Qt.ItemIsEditable
+
+    def setData(self, index, value, role=Qt.EditRole):
+        row = self.mapFromSourceRows(index.row())
+        if role == Qt.EditRole:
+            self[row][index.column()] = value
+            self.dataChanged.emit(index, index)
+        else:
+            self._roleData[row][index.column()][role] = value
+        return True
+
+    def data(self, index, role=Qt.DisplayRole):
+        if not index.isValid():
+            return
+
+        row, column = self.mapToSourceRows(index.row()), index.column()
+
+        role_value = self._roleData.get(row, {}).get(column, {}).get(role)
+        if role_value is not None:
+            return role_value
+
+        try:
+            value = self[row][column]
+        except IndexError:
+            return
+        if role == Qt.EditRole:
+            return value
+        # if role == Qt.DecorationRole and isinstance(value, Variable):
+        #     return gui.attributeIconDict[value]
+        if role == Qt.DisplayRole:
+            if (isinstance(value, Number) and
+                    not (isnan(value) or isinf(value) or isinstance(value, Integral))):
+                absval = abs(value)
+                strlen = len(str(int(absval)))
+                value = '{:.{}{}}'.format(value,
+                                          2 if absval < .001 else
+                                          3 if strlen < 2 else
+                                          1 if strlen < 5 else
+                                          0 if strlen < 6 else
+                                          3,
+                                          'f' if (absval == 0 or
+                                                  absval >= .001 and
+                                                  strlen < 6)
+                                          else 'e')
+            return str(value)
+        if role == Qt.TextAlignmentRole and isinstance(value, Number):
+            return Qt.AlignRight | Qt.AlignVCenter
+        if role == Qt.ToolTipRole:
+            return str(value)
+
+    def sortColumnData(self, column):
+        return [row[column] for row in self._table]
+
+    def setHorizontalHeaderLabels(self, labels):
+        """
+        Parameters
+        ----------
+        labels : list of str
+        """
+        self._headers[Qt.Horizontal] = tuple(labels)
+
+    def setVerticalHeaderLabels(self, labels):
+        """
+        Parameters
+        ----------
+        labels : list of str
+        """
+        self._headers[Qt.Vertical] = tuple(labels)
+
+    def headerData(self, section, orientation, role=Qt.DisplayRole):
+        headers = self._headers.get(orientation)
+
+        if headers and section < len(headers):
+            section = self.mapToSourceRows(section) if orientation == Qt.Vertical else section
+            value = headers[section]
+            if role == Qt.ToolTipRole:
+                role = Qt.DisplayRole
+            if role == Qt.DisplayRole:
+                return value
+
+        # Use QAbstractItemModel default for non-existent header/sections
+        return super().headerData(section, orientation, role)
+
+    def removeRows(self, row, count, parent=QModelIndex()):
+        if not parent.isValid():
+            del self[row:row + count]
+            for rowidx in range(row, row + count):
+                self._roleData.pop(rowidx, None)
+            return True
+        return False
+
+    def removeColumns(self, column, count, parent=QModelIndex()):
+        self.beginRemoveColumns(parent, column, column + count - 1)
+        for row in self._table:
+            del row[column:column + count]
+        for cols in self._roleData.values():
+            for col in range(column, column + count):
+                cols.pop(col, None)
+        del self._headers.get(Qt.Horizontal, [])[column:column + count]
+        self.endRemoveColumns()
+        return True
+
+    def insertRows(self, row, count, parent=QModelIndex()):
+        self.beginInsertRows(parent, row, row + count - 1)
+        self._table[row:row] = [[''] * self.columnCount() for _ in range(count)]
+        self.endInsertRows()
+        return True
+
+    def insertColumns(self, column, count, parent=QModelIndex()):
+        self.beginInsertColumns(parent, column, column + count - 1)
+        for row in self._table:
+            row[column:column] = [''] * count
+        self.endInsertColumns()
+        return True
+
+    def __len__(self):
+        return len(self._table)
+
+    def __bool__(self):
+        return len(self) != 0
+
+    def __iter__(self):
+        return iter(self._table)
+
+    def __getitem__(self, item):
+        return self._table[item]
+
+    def __delitem__(self, i):
+        if isinstance(i, slice):
+            start, stop, _ = _as_contiguous_range(i, len(self))
+            stop -= 1
+        else:
+            start = stop = i = i if i >= 0 else len(self) + i
+        self._check_sort_order()
+        self.beginRemoveRows(QModelIndex(), start, stop)
+        del self._table[i]
+        self.endRemoveRows()
+
+    def __setitem__(self, i, value):
+        if isinstance(i, slice):
+            start, stop, _ = _as_contiguous_range(i, len(self))
+            stop -= 1
+        else:
+            start = stop = i = i if i >= 0 else len(self) + i
+        self._check_sort_order()
+        self._table[i] = value
+        self.dataChanged.emit(self.index(start, 0),
+                              self.index(stop, self.columnCount() - 1))
+
+    def _check_sort_order(self):
+        if self.mapToSourceRows(Ellipsis) is not Ellipsis:
+            warn("Can't modify PyTableModel when it's sorted",
+                 RuntimeWarning, stacklevel=3)
+            raise RuntimeError("Can't modify PyTableModel when it's sorted")
+
+    def wrap(self, table):
+        self.beginResetModel()
+        self._table = table
+        self._roleData = self._RoleData()
+        self.resetSorting()
+        self.endResetModel()
+
+    def tolist(self):
+        return self._table
+
+    def clear(self):
+        self.beginResetModel()
+        self._table.clear()
+        self.resetSorting()
+        self._roleData.clear()
+        self.endResetModel()
+
+    def append(self, row):
+        self.extend([row])
+
+    def _insertColumns(self, rows):
+        n_max = max(map(len, rows))
+        if self.columnCount() < n_max:
+            self.insertColumns(self.columnCount(), n_max - self.columnCount())
+
+    def extend(self, rows):
+        i, rows = len(self), list(rows)
+        self.insertRows(i, len(rows))
+        self._insertColumns(rows)
+        self[i:] = rows
+
+    def insert(self, i, row):
+        self.insertRows(i, 1)
+        self._insertColumns((row,))
+        self[i] = row
+
+    def remove(self, val):
+        del self[self._table.index(val)]
 
 
 class PyListModel(QAbstractListModel):
