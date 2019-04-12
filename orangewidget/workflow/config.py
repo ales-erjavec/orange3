@@ -13,7 +13,7 @@ import pkg_resources
 import requests
 
 from AnyQt.QtGui import QPainter, QFont, QFontMetrics, QColor, QPixmap, QIcon
-from AnyQt.QtCore import Qt, QPoint, QRect
+from AnyQt.QtCore import Qt, QPoint, QRect, QStandardPaths, QCoreApplication
 
 from orangecanvas import config
 
@@ -164,28 +164,52 @@ def init():
     raise RuntimeError("This is not the init you are looking for.")
 
 
-def data_dir():
+def data_dir_base():
     """
-    Return the application data directory. If the directory path
-    does not yet exists then create it.
+    Return the platform dependent application directory.
+
+    This is usually
+
+        - on windows: "%USERPROFILE%\\AppData\\Local\\"
+        - on OSX:  "~/Library/Application Support/"
+        - other: "~/.local/share/
+    """
+    return QStandardPaths.writableLocation(QStandardPaths.GenericDataLocation)
+
+
+def data_dir(versioned=True):
+    """
+    Return the platform dependent Orange data directory.
+
+    This is ``data_dir_base()``/Orange/__VERSION__/ directory if versioned is
+    `True` and ``data_dir_base()``/Orange/ otherwise.
     """
 
-    from Orange.misc import environ
-    path = os.path.join(environ.data_dir(), "canvas")
-    try:
-        os.makedirs(path, exist_ok=True)
-    except OSError:
-        pass
-    return path
+    base = data_dir_base()
+    name = QCoreApplication.applicationName()
+    version = QCoreApplication.applicationVersion()
+    if not name:
+        name = "Orange"
+    if not version:
+        version = "0.0.0"
+    if versioned:
+        return os.path.join(base, name, version)
+    else:
+        return os.path.join(base, name)
 
 
 def cache_dir():
     """Return the application cache directory. If the directory path
     does not yet exists then create it.
-
     """
-    from Orange.misc import environ
-    path = os.path.join(environ.cache_dir(), "canvas")
+    base = QStandardPaths.writableLocation(QStandardPaths.GenericCacheLocation)
+    name = QCoreApplication.applicationName()
+    version = QCoreApplication.applicationVersion()
+    if not name:
+        name = "Orange"
+    if not version:
+        version = "0.0.0"
+    path = os.path.join(base, name, version)
     try:
         os.makedirs(path, exist_ok=True)
     except OSError:
@@ -210,12 +234,13 @@ def log_dir():
     return logdir
 
 
-def widget_settings_dir():
+def widget_settings_dir(versioned=True):
     """
-    Return the widget settings directory.
+    Return the platform dependent directory where widgets save their settings.
+
+    This a subdirectory of ``data_dir(versioned)`` named "widgets"
     """
-    from Orange.misc import environ
-    return environ.widget_settings_dir()
+    return os.path.join(data_dir(versioned), "widgets")
 
 
 def widgets_entry_points():
