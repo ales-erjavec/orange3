@@ -5,8 +5,8 @@ import sys
 import subprocess
 from setuptools import find_packages, Command
 
-if sys.version_info < (3, 4):
-    sys.exit('Orange requires Python >= 3.4')
+if sys.version_info < (3, 6):
+    sys.exit('Orange requires Python >= 3.6')
 
 try:
     from numpy.distutils.core import setup
@@ -29,9 +29,9 @@ from distutils.command.build_ext import build_ext
 from distutils.command import install_data, sdist, config, build
 
 
-NAME = 'Orange3'
+NAME = 'Orange'
 
-VERSION = '3.22.0'
+VERSION = '4.0.0a1'
 ISRELEASED = False
 # full version identifier including a git revision identifier for development
 # build/releases (this is filled/updated in `write_version_py`)
@@ -80,7 +80,6 @@ INSTALL_REQUIRES = sorted(set(
 
 
 EXTRAS_REQUIRE = {
-    ':python_version<="3.4"': ["typing"],
 }
 
 ENTRY_POINTS = {
@@ -194,7 +193,6 @@ PACKAGE_DATA = {
     "Orange.canvas.workflows": ["*.ows"],
     "Orange.widgets": ["icons/*.png",
                        "icons/*.svg"],
-    "Orange.widgets.report": ["icons/*.svg", "*.html"],
     "Orange.widgets.tests": ["datasets/*.tab",
                              "workflows/*.ows"],
     "Orange.widgets.data": ["icons/*.svg",
@@ -257,7 +255,7 @@ class build_ext_error(build_ext):
 
 
 # ${prefix} relative install path for html help files
-DATAROOTDIR = "share/help/en/orange3/htmlhelp"
+DATAROOTDIR = "share/help/en/orange/htmlhelp"
 
 
 def findall(startdir, followlinks=False, ):
@@ -469,6 +467,7 @@ def setup_package():
         zip_safe=False,
         test_suite='Orange.tests.suite',
         cmdclass=cmdclass,
+        python_requires=">=3.6",
         **extra_args
     )
 

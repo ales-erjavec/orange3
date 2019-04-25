@@ -2,7 +2,7 @@ import logging
 
 import keyring
 
-SERVICE_NAME = 'Orange3 - {}'
+SERVICE_NAME = 'Orange - {}'
 
 log = logging.getLogger(__name__)
 

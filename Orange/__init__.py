@@ -6,7 +6,7 @@ try:
 except ImportError:
     raise ImportError("Compiled libraries cannot be found.\n"
                       "Try reinstalling the package with:\n"
-                      "pip install --no-binary Orange3") from None
+                      "pip install --no-binary Orange") from None
 
 from Orange import data
 

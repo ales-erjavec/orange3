@@ -11,7 +11,7 @@ import Orange
 
 # Entry point for main Orange categories/widgets discovery
 def widget_discovery(discovery):
-    dist = pkg_resources.get_distribution("Orange3")
+    dist = pkg_resources.get_distribution("Orange")
     pkgs = [
         "Orange.widgets.data",
         "Orange.widgets.visualize",
@@ -26,7 +26,7 @@ def widget_discovery(discovery):
 WIDGET_HELP_PATH = (
     ("{DEVELOP_ROOT}/doc/visual-programming/build/htmlhelp/index.html", None),
     (os.path.join(sysconfig.get_path("data"),
-                  "share/help/en/orange3/htmlhelp/index.html"),
+                  "share/help/en/orange/htmlhelp/index.html"),
      None),
     ("https://docs.orange.biolab.si/3/visual-programming/", ""),
 )

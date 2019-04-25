@@ -4,7 +4,7 @@ import json
 import Orange
 
 external_datasets = [
-    ("iris_url", "https://raw.githubusercontent.com/biolab/orange3/master/Orange/datasets/iris.tab"),
+    ("iris_url", "https://raw.githubusercontent.com/biolab/orange/master/Orange/datasets/iris.tab"),
 ]
 
 
