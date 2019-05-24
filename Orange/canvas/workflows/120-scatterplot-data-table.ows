@@ -1,9 +1,9 @@
 <?xml version='1.0' encoding='utf-8'?>
 <scheme description="Most of visualizations in Orange are interactive. Like Scatter Plot. Double click its icon to open the plot and by click-and-drag select few data instances (points in the plot). Selected data will automatically propagate to Data Table. Double click its widget to check which data was selected. Change selection and observe the change in the Data Table. This works best if both widgets are open." title="Interactive Visualizations" version="2.0">
 	<nodes>
-		<node id="0" name="File" position="(102.0, 206.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owfile.OWFile" title="File" version="" />
-		<node id="1" name="Scatter Plot" position="(267.0, 205.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owscatterplot.OWScatterPlot" title="Scatter Plot" version="" />
-		<node id="2" name="Data Table" position="(412.0, 205.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owtable.OWDataTable" title="Data Table" version="" />
+		<node id="0" name="File" position="(102.0, 206.0)" project_name="Orange" qualified_name="Orange.widgets.data.owfile.OWFile" title="File" version="" />
+		<node id="1" name="Scatter Plot" position="(267.0, 205.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owscatterplot.OWScatterPlot" title="Scatter Plot" version="" />
+		<node id="2" name="Data Table" position="(412.0, 205.0)" project_name="Orange" qualified_name="Orange.widgets.data.owtable.OWDataTable" title="Data Table" version="" />
 	</nodes>
 	<links>
 		<link enabled="true" id="0" sink_channel="Data" sink_node_id="1" source_channel="Data" source_node_id="0" />

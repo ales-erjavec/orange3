@@ -1,75 +1,75 @@
 <?xml version='1.0' encoding='utf-8'?>
 <scheme description="" title="" version="2.0">
 	<nodes>
-		<node id="0" name="File" position="(81.0, 180.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owfile.OWFile" title="File" version="" />
-		<node id="1" name="Scatter Plot" position="(483.0, 178.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owscatterplot.OWScatterPlot" title="Scatter Plot" version="" />
-		<node id="2" name="Data Table" position="(633.0, 178.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owtable.OWDataTable" title="Data Table" version="" />
-		<node id="3" name="Paint Data" position="(783.0, 178.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owpaintdata.OWPaintData" title="Paint Data" version="" />
-		<node id="4" name="Data Info" position="(933.0, 178.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owdatainfo.OWDataInfo" title="Data Info" version="" />
-		<node id="5" name="Data Sampler" position="(1083.0, 178.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owdatasampler.OWDataSampler" title="Data Sampler" version="" />
-		<node id="6" name="Select Columns" position="(1233.0, 178.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owselectcolumns.OWSelectAttributes" title="Select Columns" version="" />
-		<node id="7" name="Select Rows" position="(1383.0, 178.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owselectrows.OWSelectRows" title="Select Rows" version="" />
-		<node id="8" name="Rank" position="(1533.0, 178.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owrank.OWRank" title="Rank" version="" />
-		<node id="9" name="Merge Data" position="(1683.0, 178.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owmergedata.OWMergeData" title="Merge Data" version="" />
-		<node id="10" name="Concatenate" position="(1833.0, 178.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owconcatenate.OWConcatenate" title="Concatenate" version="" />
-		<node id="11" name="Transpose" position="(72.0, 294.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owtranspose.OWTranspose" title="Transpose" version="" />
-		<node id="12" name="Randomize" position="(222.0, 294.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owrandomize.OWRandomize" title="Randomize" version="" />
-		<node id="13" name="Preprocess" position="(372.0, 294.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owpreprocess.OWPreprocess" title="Preprocess" version="" />
-		<node id="14" name="Impute" position="(522.0, 294.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owimpute.OWImpute" title="Impute" version="" />
-		<node id="15" name="Outliers" position="(672.0, 294.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owoutliers.OWOutliers" title="Outliers" version="" />
-		<node id="16" name="Edit Domain" position="(822.0, 294.0)" project_name="Orange3" qualified_name="Orange.widgets.data.oweditdomain.OWEditDomain" title="Edit Domain" version="" />
-		<node id="17" name="Python Script" position="(972.0, 294.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owpythonscript.OWPythonScript" title="Python Script" version="" />
-		<node id="19" name="Color" position="(1272.0, 294.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owcolor.OWColor" title="Color" version="" />
-		<node id="20" name="Continuize" position="(1422.0, 294.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owcontinuize.OWContinuize" title="Continuize" version="" />
-		<node id="21" name="Create Class" position="(64.0, 418.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owcreateclass.OWCreateClass" title="Create Class" version="" />
-		<node id="22" name="Discretize" position="(214.0, 418.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owdiscretize.OWDiscretize" title="Discretize" version="" />
-		<node id="23" name="Feature Constructor" position="(364.0, 418.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owfeatureconstructor.OWFeatureConstructor" title="Feature Constructor" version="" />
-		<node id="24" name="Purge Domain" position="(514.0, 418.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owpurgedomain.OWPurgeDomain" title="Purge Domain" version="" />
-		<node id="25" name="Save Data" position="(664.0, 418.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owsave.OWSave" title="Save Data" version="" />
-		<node id="26" name="Tree Viewer" position="(814.0, 418.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owtreeviewer.OWTreeGraph" title="Tree Viewer" version="" />
-		<node id="27" name="Box Plot" position="(964.0, 418.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owboxplot.OWBoxPlot" title="Box Plot" version="" />
-		<node id="28" name="Distributions" position="(1114.0, 418.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owdistributions.OWDistributions" title="Distributions" version="" />
-		<node id="29" name="Sieve Diagram" position="(1264.0, 418.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owsieve.OWSieveDiagram" title="Sieve Diagram" version="" />
-		<node id="30" name="Mosaic Display" position="(1414.0, 418.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owmosaic.OWMosaicDisplay" title="Mosaic Display" version="" />
-		<node id="31" name="Linear Projection" position="(67.0, 535.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owlinearprojection.OWLinearProjection" title="Linear Projection" version="" />
-		<node id="32" name="Heat Map" position="(217.0, 535.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owheatmap.OWHeatMap" title="Heat Map" version="" />
-		<node id="33" name="Venn Diagram" position="(367.0, 535.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owvenndiagram.OWVennDiagram" title="Venn Diagram" version="" />
-		<node id="34" name="Silhouette Plot" position="(517.0, 535.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owsilhouetteplot.OWSilhouettePlot" title="Silhouette Plot" version="" />
-		<node id="35" name="Pythagorean Tree" position="(667.0, 535.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owpythagorastree.OWPythagorasTree" title="Pythagorean Tree" version="" />
-		<node id="36" name="Pythagorean Forest" position="(817.0, 535.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owpythagoreanforest.OWPythagoreanForest" title="Pythagorean Forest" version="" />
-		<node id="37" name="CN2 Rule Viewer" position="(967.0, 535.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owruleviewer.OWRuleViewer" title="CN2 Rule Viewer" version="" />
-		<node id="38" name="Nomogram" position="(1117.0, 535.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.ownomogram.OWNomogram" title="Nomogram" version="" />
-		<node id="39" name="Constant" position="(1417.0, 535.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owconstant.OWConstant" title="Constant" version="" />
-		<node id="40" name="CN2 Rule Induction" position="(69.0, 641.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owrules.OWRuleLearner" title="CN2 Rule Induction" version="" />
-		<node id="41" name="kNN" position="(219.0, 641.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owknn.OWKNNLearner" title="kNN" version="" />
-		<node id="42" name="Tree" position="(369.0, 641.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owtree.OWTreeLearner" title="Tree" version="" />
-		<node id="43" name="Random Forest" position="(519.0, 641.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owrandomforest.OWRandomForest" title="Random Forest" version="" />
-		<node id="44" name="SVM" position="(669.0, 641.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owsvm.OWSVM" title="SVM" version="" />
-		<node id="45" name="Linear Regression" position="(819.0, 641.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owlinearregression.OWLinearRegression" title="Linear Regression" version="" />
-		<node id="46" name="Logistic Regression" position="(969.0, 641.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owlogisticregression.OWLogisticRegression" title="Logistic Regression" version="" />
-		<node id="47" name="Naive Bayes" position="(1119.0, 641.0)" project_name="Orange3" qualified_name="Orange.widgets.model.ownaivebayes.OWNaiveBayes" title="Naive Bayes" version="" />
-		<node id="48" name="AdaBoost" position="(1269.0, 641.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owadaboost.OWAdaBoost" title="AdaBoost" version="" />
-		<node id="49" name="Stochastic Gradient Descent" position="(1419.0, 641.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owsgd.OWSGD" title="Stochastic Gradient Descent" version="" />
-		<node id="50" name="Save Model" position="(80.0, 752.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owsavemodel.OWSaveModel" title="Save Model" version="" />
-		<node id="51" name="Load Model" position="(230.0, 752.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owloadmodel.OWLoadModel" title="Load Model" version="" />
-		<node id="52" name="Test &amp; Score" position="(380.0, 752.0)" project_name="Orange3" qualified_name="Orange.widgets.evaluate.owtestlearners.OWTestLearners" title="Test &amp; Score" version="" />
-		<node id="53" name="Predictions" position="(530.0, 752.0)" project_name="Orange3" qualified_name="Orange.widgets.evaluate.owpredictions.OWPredictions" title="Predictions" version="" />
-		<node id="54" name="Confusion Matrix" position="(680.0, 752.0)" project_name="Orange3" qualified_name="Orange.widgets.evaluate.owconfusionmatrix.OWConfusionMatrix" title="Confusion Matrix" version="" />
-		<node id="55" name="ROC Analysis" position="(830.0, 752.0)" project_name="Orange3" qualified_name="Orange.widgets.evaluate.owrocanalysis.OWROCAnalysis" title="ROC Analysis" version="" />
-		<node id="56" name="Lift Curve" position="(980.0, 752.0)" project_name="Orange3" qualified_name="Orange.widgets.evaluate.owliftcurve.OWLiftCurve" title="Lift Curve" version="" />
-		<node id="57" name="Calibration Plot" position="(1130.0, 752.0)" project_name="Orange3" qualified_name="Orange.widgets.evaluate.owcalibrationplot.OWCalibrationPlot" title="Calibration Plot" version="" />
-		<node id="58" name="Distance File" position="(1280.0, 752.0)" project_name="Orange3" qualified_name="Orange.widgets.unsupervised.owdistancefile.OWDistanceFile" title="Distance File" version="" />
-		<node id="59" name="Distance Matrix" position="(1430.0, 752.0)" project_name="Orange3" qualified_name="Orange.widgets.unsupervised.owdistancematrix.OWDistanceMatrix" title="Distance Matrix" version="" />
-		<node id="60" name="Distance Map" position="(64.0, 847.0)" project_name="Orange3" qualified_name="Orange.widgets.unsupervised.owdistancemap.OWDistanceMap" title="Distance Map" version="" />
-		<node id="61" name="Hierarchical Clustering" position="(214.0, 847.0)" project_name="Orange3" qualified_name="Orange.widgets.unsupervised.owhierarchicalclustering.OWHierarchicalClustering" title="Hierarchical Clustering" version="" />
-		<node id="62" name="k-Means" position="(364.0, 847.0)" project_name="Orange3" qualified_name="Orange.widgets.unsupervised.owkmeans.OWKMeans" title="k-Means" version="" />
-		<node id="63" name="Manifold Learning" position="(514.0, 847.0)" project_name="Orange3" qualified_name="Orange.widgets.unsupervised.owmanifoldlearning.OWManifoldLearning" title="Manifold Learning" version="" />
-		<node id="64" name="PCA" position="(664.0, 847.0)" project_name="Orange3" qualified_name="Orange.widgets.unsupervised.owpca.OWPCA" title="PCA" version="" />
-		<node id="65" name="Correspondence Analysis" position="(814.0, 847.0)" project_name="Orange3" qualified_name="Orange.widgets.unsupervised.owcorrespondence.OWCorrespondenceAnalysis" title="Correspondence Analysis" version="" />
-		<node id="66" name="Distances" position="(964.0, 847.0)" project_name="Orange3" qualified_name="Orange.widgets.unsupervised.owdistances.OWDistances" title="Distances" version="" />
-		<node id="67" name="Distance Transformation" position="(1114.0, 847.0)" project_name="Orange3" qualified_name="Orange.widgets.unsupervised.owdistancetransformation.OWDistanceTransformation" title="Distance Transformation" version="" />
-		<node id="68" name="MDS" position="(1264.0, 847.0)" project_name="Orange3" qualified_name="Orange.widgets.unsupervised.owmds.OWMDS" title="MDS" version="" />
-		<node id="69" name="Save Distance Matrix" position="(1414.0, 847.0)" project_name="Orange3" qualified_name="Orange.widgets.unsupervised.owsavedistances.OWSaveDistances" title="Save Distance Matrix" version="" />
+		<node id="0" name="File" position="(81.0, 180.0)" project_name="Orange" qualified_name="Orange.widgets.data.owfile.OWFile" title="File" version="" />
+		<node id="1" name="Scatter Plot" position="(483.0, 178.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owscatterplot.OWScatterPlot" title="Scatter Plot" version="" />
+		<node id="2" name="Data Table" position="(633.0, 178.0)" project_name="Orange" qualified_name="Orange.widgets.data.owtable.OWDataTable" title="Data Table" version="" />
+		<node id="3" name="Paint Data" position="(783.0, 178.0)" project_name="Orange" qualified_name="Orange.widgets.data.owpaintdata.OWPaintData" title="Paint Data" version="" />
+		<node id="4" name="Data Info" position="(933.0, 178.0)" project_name="Orange" qualified_name="Orange.widgets.data.owdatainfo.OWDataInfo" title="Data Info" version="" />
+		<node id="5" name="Data Sampler" position="(1083.0, 178.0)" project_name="Orange" qualified_name="Orange.widgets.data.owdatasampler.OWDataSampler" title="Data Sampler" version="" />
+		<node id="6" name="Select Columns" position="(1233.0, 178.0)" project_name="Orange" qualified_name="Orange.widgets.data.owselectcolumns.OWSelectAttributes" title="Select Columns" version="" />
+		<node id="7" name="Select Rows" position="(1383.0, 178.0)" project_name="Orange" qualified_name="Orange.widgets.data.owselectrows.OWSelectRows" title="Select Rows" version="" />
+		<node id="8" name="Rank" position="(1533.0, 178.0)" project_name="Orange" qualified_name="Orange.widgets.data.owrank.OWRank" title="Rank" version="" />
+		<node id="9" name="Merge Data" position="(1683.0, 178.0)" project_name="Orange" qualified_name="Orange.widgets.data.owmergedata.OWMergeData" title="Merge Data" version="" />
+		<node id="10" name="Concatenate" position="(1833.0, 178.0)" project_name="Orange" qualified_name="Orange.widgets.data.owconcatenate.OWConcatenate" title="Concatenate" version="" />
+		<node id="11" name="Transpose" position="(72.0, 294.0)" project_name="Orange" qualified_name="Orange.widgets.data.owtranspose.OWTranspose" title="Transpose" version="" />
+		<node id="12" name="Randomize" position="(222.0, 294.0)" project_name="Orange" qualified_name="Orange.widgets.data.owrandomize.OWRandomize" title="Randomize" version="" />
+		<node id="13" name="Preprocess" position="(372.0, 294.0)" project_name="Orange" qualified_name="Orange.widgets.data.owpreprocess.OWPreprocess" title="Preprocess" version="" />
+		<node id="14" name="Impute" position="(522.0, 294.0)" project_name="Orange" qualified_name="Orange.widgets.data.owimpute.OWImpute" title="Impute" version="" />
+		<node id="15" name="Outliers" position="(672.0, 294.0)" project_name="Orange" qualified_name="Orange.widgets.data.owoutliers.OWOutliers" title="Outliers" version="" />
+		<node id="16" name="Edit Domain" position="(822.0, 294.0)" project_name="Orange" qualified_name="Orange.widgets.data.oweditdomain.OWEditDomain" title="Edit Domain" version="" />
+		<node id="17" name="Python Script" position="(972.0, 294.0)" project_name="Orange" qualified_name="Orange.widgets.data.owpythonscript.OWPythonScript" title="Python Script" version="" />
+		<node id="19" name="Color" position="(1272.0, 294.0)" project_name="Orange" qualified_name="Orange.widgets.data.owcolor.OWColor" title="Color" version="" />
+		<node id="20" name="Continuize" position="(1422.0, 294.0)" project_name="Orange" qualified_name="Orange.widgets.data.owcontinuize.OWContinuize" title="Continuize" version="" />
+		<node id="21" name="Create Class" position="(64.0, 418.0)" project_name="Orange" qualified_name="Orange.widgets.data.owcreateclass.OWCreateClass" title="Create Class" version="" />
+		<node id="22" name="Discretize" position="(214.0, 418.0)" project_name="Orange" qualified_name="Orange.widgets.data.owdiscretize.OWDiscretize" title="Discretize" version="" />
+		<node id="23" name="Feature Constructor" position="(364.0, 418.0)" project_name="Orange" qualified_name="Orange.widgets.data.owfeatureconstructor.OWFeatureConstructor" title="Feature Constructor" version="" />
+		<node id="24" name="Purge Domain" position="(514.0, 418.0)" project_name="Orange" qualified_name="Orange.widgets.data.owpurgedomain.OWPurgeDomain" title="Purge Domain" version="" />
+		<node id="25" name="Save Data" position="(664.0, 418.0)" project_name="Orange" qualified_name="Orange.widgets.data.owsave.OWSave" title="Save Data" version="" />
+		<node id="26" name="Tree Viewer" position="(814.0, 418.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owtreeviewer.OWTreeGraph" title="Tree Viewer" version="" />
+		<node id="27" name="Box Plot" position="(964.0, 418.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owboxplot.OWBoxPlot" title="Box Plot" version="" />
+		<node id="28" name="Distributions" position="(1114.0, 418.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owdistributions.OWDistributions" title="Distributions" version="" />
+		<node id="29" name="Sieve Diagram" position="(1264.0, 418.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owsieve.OWSieveDiagram" title="Sieve Diagram" version="" />
+		<node id="30" name="Mosaic Display" position="(1414.0, 418.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owmosaic.OWMosaicDisplay" title="Mosaic Display" version="" />
+		<node id="31" name="Linear Projection" position="(67.0, 535.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owlinearprojection.OWLinearProjection" title="Linear Projection" version="" />
+		<node id="32" name="Heat Map" position="(217.0, 535.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owheatmap.OWHeatMap" title="Heat Map" version="" />
+		<node id="33" name="Venn Diagram" position="(367.0, 535.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owvenndiagram.OWVennDiagram" title="Venn Diagram" version="" />
+		<node id="34" name="Silhouette Plot" position="(517.0, 535.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owsilhouetteplot.OWSilhouettePlot" title="Silhouette Plot" version="" />
+		<node id="35" name="Pythagorean Tree" position="(667.0, 535.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owpythagorastree.OWPythagorasTree" title="Pythagorean Tree" version="" />
+		<node id="36" name="Pythagorean Forest" position="(817.0, 535.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owpythagoreanforest.OWPythagoreanForest" title="Pythagorean Forest" version="" />
+		<node id="37" name="CN2 Rule Viewer" position="(967.0, 535.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owruleviewer.OWRuleViewer" title="CN2 Rule Viewer" version="" />
+		<node id="38" name="Nomogram" position="(1117.0, 535.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.ownomogram.OWNomogram" title="Nomogram" version="" />
+		<node id="39" name="Constant" position="(1417.0, 535.0)" project_name="Orange" qualified_name="Orange.widgets.model.owconstant.OWConstant" title="Constant" version="" />
+		<node id="40" name="CN2 Rule Induction" position="(69.0, 641.0)" project_name="Orange" qualified_name="Orange.widgets.model.owrules.OWRuleLearner" title="CN2 Rule Induction" version="" />
+		<node id="41" name="kNN" position="(219.0, 641.0)" project_name="Orange" qualified_name="Orange.widgets.model.owknn.OWKNNLearner" title="kNN" version="" />
+		<node id="42" name="Tree" position="(369.0, 641.0)" project_name="Orange" qualified_name="Orange.widgets.model.owtree.OWTreeLearner" title="Tree" version="" />
+		<node id="43" name="Random Forest" position="(519.0, 641.0)" project_name="Orange" qualified_name="Orange.widgets.model.owrandomforest.OWRandomForest" title="Random Forest" version="" />
+		<node id="44" name="SVM" position="(669.0, 641.0)" project_name="Orange" qualified_name="Orange.widgets.model.owsvm.OWSVM" title="SVM" version="" />
+		<node id="45" name="Linear Regression" position="(819.0, 641.0)" project_name="Orange" qualified_name="Orange.widgets.model.owlinearregression.OWLinearRegression" title="Linear Regression" version="" />
+		<node id="46" name="Logistic Regression" position="(969.0, 641.0)" project_name="Orange" qualified_name="Orange.widgets.model.owlogisticregression.OWLogisticRegression" title="Logistic Regression" version="" />
+		<node id="47" name="Naive Bayes" position="(1119.0, 641.0)" project_name="Orange" qualified_name="Orange.widgets.model.ownaivebayes.OWNaiveBayes" title="Naive Bayes" version="" />
+		<node id="48" name="AdaBoost" position="(1269.0, 641.0)" project_name="Orange" qualified_name="Orange.widgets.model.owadaboost.OWAdaBoost" title="AdaBoost" version="" />
+		<node id="49" name="Stochastic Gradient Descent" position="(1419.0, 641.0)" project_name="Orange" qualified_name="Orange.widgets.model.owsgd.OWSGD" title="Stochastic Gradient Descent" version="" />
+		<node id="50" name="Save Model" position="(80.0, 752.0)" project_name="Orange" qualified_name="Orange.widgets.model.owsavemodel.OWSaveModel" title="Save Model" version="" />
+		<node id="51" name="Load Model" position="(230.0, 752.0)" project_name="Orange" qualified_name="Orange.widgets.model.owloadmodel.OWLoadModel" title="Load Model" version="" />
+		<node id="52" name="Test &amp; Score" position="(380.0, 752.0)" project_name="Orange" qualified_name="Orange.widgets.evaluate.owtestlearners.OWTestLearners" title="Test &amp; Score" version="" />
+		<node id="53" name="Predictions" position="(530.0, 752.0)" project_name="Orange" qualified_name="Orange.widgets.evaluate.owpredictions.OWPredictions" title="Predictions" version="" />
+		<node id="54" name="Confusion Matrix" position="(680.0, 752.0)" project_name="Orange" qualified_name="Orange.widgets.evaluate.owconfusionmatrix.OWConfusionMatrix" title="Confusion Matrix" version="" />
+		<node id="55" name="ROC Analysis" position="(830.0, 752.0)" project_name="Orange" qualified_name="Orange.widgets.evaluate.owrocanalysis.OWROCAnalysis" title="ROC Analysis" version="" />
+		<node id="56" name="Lift Curve" position="(980.0, 752.0)" project_name="Orange" qualified_name="Orange.widgets.evaluate.owliftcurve.OWLiftCurve" title="Lift Curve" version="" />
+		<node id="57" name="Calibration Plot" position="(1130.0, 752.0)" project_name="Orange" qualified_name="Orange.widgets.evaluate.owcalibrationplot.OWCalibrationPlot" title="Calibration Plot" version="" />
+		<node id="58" name="Distance File" position="(1280.0, 752.0)" project_name="Orange" qualified_name="Orange.widgets.unsupervised.owdistancefile.OWDistanceFile" title="Distance File" version="" />
+		<node id="59" name="Distance Matrix" position="(1430.0, 752.0)" project_name="Orange" qualified_name="Orange.widgets.unsupervised.owdistancematrix.OWDistanceMatrix" title="Distance Matrix" version="" />
+		<node id="60" name="Distance Map" position="(64.0, 847.0)" project_name="Orange" qualified_name="Orange.widgets.unsupervised.owdistancemap.OWDistanceMap" title="Distance Map" version="" />
+		<node id="61" name="Hierarchical Clustering" position="(214.0, 847.0)" project_name="Orange" qualified_name="Orange.widgets.unsupervised.owhierarchicalclustering.OWHierarchicalClustering" title="Hierarchical Clustering" version="" />
+		<node id="62" name="k-Means" position="(364.0, 847.0)" project_name="Orange" qualified_name="Orange.widgets.unsupervised.owkmeans.OWKMeans" title="k-Means" version="" />
+		<node id="63" name="Manifold Learning" position="(514.0, 847.0)" project_name="Orange" qualified_name="Orange.widgets.unsupervised.owmanifoldlearning.OWManifoldLearning" title="Manifold Learning" version="" />
+		<node id="64" name="PCA" position="(664.0, 847.0)" project_name="Orange" qualified_name="Orange.widgets.unsupervised.owpca.OWPCA" title="PCA" version="" />
+		<node id="65" name="Correspondence Analysis" position="(814.0, 847.0)" project_name="Orange" qualified_name="Orange.widgets.unsupervised.owcorrespondence.OWCorrespondenceAnalysis" title="Correspondence Analysis" version="" />
+		<node id="66" name="Distances" position="(964.0, 847.0)" project_name="Orange" qualified_name="Orange.widgets.unsupervised.owdistances.OWDistances" title="Distances" version="" />
+		<node id="67" name="Distance Transformation" position="(1114.0, 847.0)" project_name="Orange" qualified_name="Orange.widgets.unsupervised.owdistancetransformation.OWDistanceTransformation" title="Distance Transformation" version="" />
+		<node id="68" name="MDS" position="(1264.0, 847.0)" project_name="Orange" qualified_name="Orange.widgets.unsupervised.owmds.OWMDS" title="MDS" version="" />
+		<node id="69" name="Save Distance Matrix" position="(1414.0, 847.0)" project_name="Orange" qualified_name="Orange.widgets.unsupervised.owsavedistances.OWSaveDistances" title="Save Distance Matrix" version="" />
 	</nodes>
 	<links>
 		<link enabled="true" id="0" sink_channel="Data" sink_node_id="1" source_channel="Data" source_node_id="0" />

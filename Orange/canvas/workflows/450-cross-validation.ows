@@ -1,14 +1,14 @@
 <?xml version='1.0' encoding='utf-8'?>
 <scheme description="How good are supervised data mining methods on your classification dataset? Here's a workflow that scores various classification techniques on a dataset from medicine. The central widget here is the one for testing and scoring, which is given the data and a set of learners, does cross-validation and scores predictive accuracy, and outputs the scores for further examination." title="Cross-Validation" version="2.0">
 	<nodes>
-		<node id="0" name="File" position="(91.0, 170.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owfile.OWFile" title="File" version="" />
-		<node id="1" name="Test &amp; Score" position="(364.0, 218.0)" project_name="Orange3" qualified_name="Orange.widgets.evaluate.owtestlearners.OWTestLearners" title="Test &amp; Score" version="" />
-		<node id="2" name="Logistic Regression" position="(202.0, 245.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owlogisticregression.OWLogisticRegression" title="Logistic Regression" version="" />
-		<node id="3" name="Random Forest" position="(225.0, 328.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owrandomforest.OWRandomForest" title="Random Forest Classification" version="" />
-		<node id="4" name="SVM" position="(295.0, 395.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owsvm.OWSVM" title="SVM" version="" />
-		<node id="5" name="Data Table" position="(300.0, 93.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owtable.OWDataTable" title="Data Table" version="" />
-		<node id="6" name="Data Table" position="(651.0, 218.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owtable.OWDataTable" title="Data Table (1)" version="" />
-		<node id="7" name="Confusion Matrix" position="(499.0, 218.0)" project_name="Orange3" qualified_name="Orange.widgets.evaluate.owconfusionmatrix.OWConfusionMatrix" title="Confusion Matrix" version="" />
+		<node id="0" name="File" position="(91.0, 170.0)" project_name="Orange" qualified_name="Orange.widgets.data.owfile.OWFile" title="File" version="" />
+		<node id="1" name="Test &amp; Score" position="(364.0, 218.0)" project_name="Orange" qualified_name="Orange.widgets.evaluate.owtestlearners.OWTestLearners" title="Test &amp; Score" version="" />
+		<node id="2" name="Logistic Regression" position="(202.0, 245.0)" project_name="Orange" qualified_name="Orange.widgets.model.owlogisticregression.OWLogisticRegression" title="Logistic Regression" version="" />
+		<node id="3" name="Random Forest" position="(225.0, 328.0)" project_name="Orange" qualified_name="Orange.widgets.model.owrandomforest.OWRandomForest" title="Random Forest Classification" version="" />
+		<node id="4" name="SVM" position="(295.0, 395.0)" project_name="Orange" qualified_name="Orange.widgets.model.owsvm.OWSVM" title="SVM" version="" />
+		<node id="5" name="Data Table" position="(300.0, 93.0)" project_name="Orange" qualified_name="Orange.widgets.data.owtable.OWDataTable" title="Data Table" version="" />
+		<node id="6" name="Data Table" position="(651.0, 218.0)" project_name="Orange" qualified_name="Orange.widgets.data.owtable.OWDataTable" title="Data Table (1)" version="" />
+		<node id="7" name="Confusion Matrix" position="(499.0, 218.0)" project_name="Orange" qualified_name="Orange.widgets.evaluate.owconfusionmatrix.OWConfusionMatrix" title="Confusion Matrix" version="" />
 	</nodes>
 	<links>
 		<link enabled="true" id="0" sink_channel="Data" sink_node_id="1" source_channel="Data" source_node_id="0" />

@@ -1,13 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <scheme description="" title="" version="2.0">
 	<nodes>
-		<node id="0" name="Python Script" position="(373.0, 200.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owpythonscript.OWPythonScript" title="Python Script" version="" />
-		<node id="1" name="File" position="(84.0, 204.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owfile.OWFile" title="File" version="" />
-		<node id="2" name="Data Table" position="(555.0, 76.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owtable.OWDataTable" title="Data Table" version="" />
-		<node id="3" name="Linear Regression" position="(111.0, 72.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owlinearregression.OWLinearRegression" title="Linear Regression" version="" />
-		<node id="4" name="SVM" position="(226.0, 329.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owsvm.OWSVM" title="SVM" version="" />
-		<node id="5" name="Python Script" position="(656.0, 240.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owpythonscript.OWPythonScript" title="Python Script (1)" version="" />
-		<node id="6" name="Paint Data" position="(248.0, 430.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owpaintdata.OWPaintData" title="Paint Data" version="" />
+		<node id="0" name="Python Script" position="(373.0, 200.0)" project_name="Orange" qualified_name="Orange.widgets.data.owpythonscript.OWPythonScript" title="Python Script" version="" />
+		<node id="1" name="File" position="(84.0, 204.0)" project_name="Orange" qualified_name="Orange.widgets.data.owfile.OWFile" title="File" version="" />
+		<node id="2" name="Data Table" position="(555.0, 76.0)" project_name="Orange" qualified_name="Orange.widgets.data.owtable.OWDataTable" title="Data Table" version="" />
+		<node id="3" name="Linear Regression" position="(111.0, 72.0)" project_name="Orange" qualified_name="Orange.widgets.model.owlinearregression.OWLinearRegression" title="Linear Regression" version="" />
+		<node id="4" name="SVM" position="(226.0, 329.0)" project_name="Orange" qualified_name="Orange.widgets.model.owsvm.OWSVM" title="SVM" version="" />
+		<node id="5" name="Python Script" position="(656.0, 240.0)" project_name="Orange" qualified_name="Orange.widgets.data.owpythonscript.OWPythonScript" title="Python Script (1)" version="" />
+		<node id="6" name="Paint Data" position="(248.0, 430.0)" project_name="Orange" qualified_name="Orange.widgets.data.owpaintdata.OWPaintData" title="Paint Data" version="" />
 	</nodes>
 	<links>
 		<link enabled="true" id="0" sink_channel="Data" sink_node_id="0" source_channel="Data" source_node_id="1" />

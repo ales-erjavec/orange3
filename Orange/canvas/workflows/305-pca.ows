@@ -1,10 +1,10 @@
 <?xml version='1.0' encoding='utf-8'?>
 <scheme description="PCA transforms the data into a dataset with uncorrelated variables, also called principal components. PCA widget displays a graph (scree diagram) showing a degree of explained variance by best principal components and allows to interactively set the number of components to be included in the output dataset. In this workflow, we can observe the transformation in the Data Table and visualize the data using the constructed principal components in the Scatter Plot." title="Principal Component Analysis" version="2.0">
 	<nodes>
-		<node id="0" name="File" position="(59.0, 211.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owfile.OWFile" title="File" version="" />
-		<node id="1" name="PCA" position="(225.0, 210.0)" project_name="Orange3" qualified_name="Orange.widgets.unsupervised.owpca.OWPCA" title="PCA" version="" />
-		<node id="2" name="Scatter Plot" position="(409.0, 153.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owscatterplot.OWScatterPlot" title="Scatter Plot" version="" />
-		<node id="3" name="Data Table" position="(369.0, 266.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owtable.OWDataTable" title="Data Table" version="" />
+		<node id="0" name="File" position="(59.0, 211.0)" project_name="Orange" qualified_name="Orange.widgets.data.owfile.OWFile" title="File" version="" />
+		<node id="1" name="PCA" position="(225.0, 210.0)" project_name="Orange" qualified_name="Orange.widgets.unsupervised.owpca.OWPCA" title="PCA" version="" />
+		<node id="2" name="Scatter Plot" position="(409.0, 153.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owscatterplot.OWScatterPlot" title="Scatter Plot" version="" />
+		<node id="3" name="Data Table" position="(369.0, 266.0)" project_name="Orange" qualified_name="Orange.widgets.data.owtable.OWDataTable" title="Data Table" version="" />
 	</nodes>
 	<links>
 		<link enabled="true" id="0" sink_channel="Data" sink_node_id="1" source_channel="Data" source_node_id="0" />

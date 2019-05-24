@@ -1,10 +1,10 @@
 <?xml version='1.0' encoding='utf-8'?>
 <scheme description="" title="" version="2.0">
 	<nodes>
-		<node id="0" name="File" position="(222.0, 131.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owfile.OWFile" title="File" version="" />
-		<node id="1" name="Distances" position="(357.0, 142.0)" project_name="Orange3" qualified_name="Orange.widgets.unsupervised.owdistances.OWDistances" title="Distances" version="" />
-		<node id="2" name="Distance Matrix" position="(511.0, 150.0)" project_name="Orange3" qualified_name="Orange.widgets.unsupervised.owdistancematrix.OWDistanceMatrix" title="Distance Matrix" version="" />
-		<node id="3" name="Scatter Plot" position="(712.0, 144.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owscatterplot.OWScatterPlot" title="Scatter Plot" version="" />
+		<node id="0" name="File" position="(222.0, 131.0)" project_name="Orange" qualified_name="Orange.widgets.data.owfile.OWFile" title="File" version="" />
+		<node id="1" name="Distances" position="(357.0, 142.0)" project_name="Orange" qualified_name="Orange.widgets.unsupervised.owdistances.OWDistances" title="Distances" version="" />
+		<node id="2" name="Distance Matrix" position="(511.0, 150.0)" project_name="Orange" qualified_name="Orange.widgets.unsupervised.owdistancematrix.OWDistanceMatrix" title="Distance Matrix" version="" />
+		<node id="3" name="Scatter Plot" position="(712.0, 144.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owscatterplot.OWScatterPlot" title="Scatter Plot" version="" />
 	</nodes>
 	<links>
 		<link enabled="true" id="0" sink_channel="Data" sink_node_id="1" source_channel="Data" source_node_id="0" />

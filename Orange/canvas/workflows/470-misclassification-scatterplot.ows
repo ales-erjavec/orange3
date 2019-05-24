@@ -1,11 +1,11 @@
 <?xml version='1.0' encoding='utf-8'?>
 <scheme description="Cross-validation of, say, logistic regression can expose the data instances which were misclassified. There are six such instances for Iris Dataset and ridge-regularized logistic regression. We can select different types of misclassification in Confusion Matrix and highlight them in the Scatter Plot. No surprise: the misclassified instances are close to the class-bordering regions in the scatter plot projection." title="Where are Misclassifications?" version="2.0">
 	<nodes>
-		<node id="0" name="File" position="(77.0, 71.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owfile.OWFile" title="File" version="" />
-		<node id="1" name="Test &amp; Score" position="(196.0, 149.0)" project_name="Orange3" qualified_name="Orange.widgets.evaluate.owtestlearners.OWTestLearners" title="Test &amp; Score" version="" />
-		<node id="2" name="Logistic Regression" position="(69.0, 228.0)" project_name="Orange3" qualified_name="Orange.widgets.model.owlogisticregression.OWLogisticRegression" title="Logistic Regression" version="" />
-		<node id="3" name="Confusion Matrix" position="(339.0, 148.0)" project_name="Orange3" qualified_name="Orange.widgets.evaluate.owconfusionmatrix.OWConfusionMatrix" title="Confusion Matrix" version="" />
-		<node id="4" name="Scatter Plot" position="(490.0, 44.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owscatterplot.OWScatterPlot" title="Scatter Plot" version="" />
+		<node id="0" name="File" position="(77.0, 71.0)" project_name="Orange" qualified_name="Orange.widgets.data.owfile.OWFile" title="File" version="" />
+		<node id="1" name="Test &amp; Score" position="(196.0, 149.0)" project_name="Orange" qualified_name="Orange.widgets.evaluate.owtestlearners.OWTestLearners" title="Test &amp; Score" version="" />
+		<node id="2" name="Logistic Regression" position="(69.0, 228.0)" project_name="Orange" qualified_name="Orange.widgets.model.owlogisticregression.OWLogisticRegression" title="Logistic Regression" version="" />
+		<node id="3" name="Confusion Matrix" position="(339.0, 148.0)" project_name="Orange" qualified_name="Orange.widgets.evaluate.owconfusionmatrix.OWConfusionMatrix" title="Confusion Matrix" version="" />
+		<node id="4" name="Scatter Plot" position="(490.0, 44.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owscatterplot.OWScatterPlot" title="Scatter Plot" version="" />
 	</nodes>
 	<links>
 		<link enabled="true" id="0" sink_channel="Data" sink_node_id="1" source_channel="Data" source_node_id="0" />

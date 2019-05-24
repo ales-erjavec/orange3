@@ -1,11 +1,11 @@
 <?xml version='1.0' encoding='utf-8'?>
 <scheme description="This workflow combines the inference and visualization of classification trees with a scatterplot. When both the tree browser and the scatterplot are open, selection of any node of the tree sends the related data instances to scatterplot. In the workflow, the selected data is treated as a subset of the entire dataset and is highlighted in the scatterplot. With simple combination of widgets we have constructed an interactive classification tree browser." title="Classification Tree" version="2.0">
 	<nodes>
-		<node id="0" name="File" position="(98.0, 140.0)" project_name="Orange3" qualified_name="Orange.widgets.data.owfile.OWFile" title="File" version="" />
-		<node id="1" name="Tree Viewer" position="(329.0, 275.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owtreeviewer.OWTreeGraph" title="Classification Tree Viewer" version="" />
-		<node id="2" name="Scatter Plot" position="(465.0, 210.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owscatterplot.OWScatterPlot" title="Scatter Plot" version="" />
-		<node id="3" name="Box Plot" position="(487.0, 322.0)" project_name="Orange3" qualified_name="Orange.widgets.visualize.owboxplot.OWBoxPlot" title="Box Plot" version="" />
-		<node id="4" name="Classification Tree" position="(200.0, 219.0)" project_name="Orange3" qualified_name="Orange.widgets.classify.owclassificationtree.OWTreeLearner" title="Classification Tree" version="" />
+		<node id="0" name="File" position="(98.0, 140.0)" project_name="Orange" qualified_name="Orange.widgets.data.owfile.OWFile" title="File" version="" />
+		<node id="1" name="Tree Viewer" position="(329.0, 275.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owtreeviewer.OWTreeGraph" title="Classification Tree Viewer" version="" />
+		<node id="2" name="Scatter Plot" position="(465.0, 210.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owscatterplot.OWScatterPlot" title="Scatter Plot" version="" />
+		<node id="3" name="Box Plot" position="(487.0, 322.0)" project_name="Orange" qualified_name="Orange.widgets.visualize.owboxplot.OWBoxPlot" title="Box Plot" version="" />
+		<node id="4" name="Classification Tree" position="(200.0, 219.0)" project_name="Orange" qualified_name="Orange.widgets.classify.owclassificationtree.OWTreeLearner" title="Classification Tree" version="" />
 	</nodes>
 	<links>
 		<link enabled="true" id="0" sink_channel="Data" sink_node_id="2" source_channel="Data" source_node_id="0" />
