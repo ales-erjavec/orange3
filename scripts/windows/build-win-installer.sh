@@ -45,7 +45,7 @@ Examples:
 '
 }
 
-NAME=Orange3
+NAME=Orange
 # version is determined at the end when all packages are available
 VERSION=
 

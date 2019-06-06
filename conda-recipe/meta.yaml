@@ -2,7 +2,7 @@ ignore: {% set data = load_setup_py_data() %}
 ignore: {% set version = data['version'] %}
 
 package:
-  name: orange3
+  name: orange
   version: {{ data['version'] }}
 
 source:
@@ -18,7 +18,7 @@ build:
   script:
     - python setup.py build -j1 bdist_wheel
     - if errorlevel 1 exit 1        # [win]
-    - pip install --no-deps --no-cache --no-index -f dist Orange3=={{ version }}
+    - pip install --no-deps --no-cache --no-index -f dist Orange=={{ version }}
     - if errorlevel 1 exit 1        # [win]
 
 requirements:

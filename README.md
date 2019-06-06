@@ -24,21 +24,21 @@ Orange requires Python 3.6 or newer.
 
 First, install [Miniconda] for your OS. Create virtual environment for Orange:
 
-    conda create python=3 --name orange3
+    conda create python=3 --name orange
 
 In your Anaconda Prompt add conda-forge to your channels:
 
     conda config --add channels conda-forge
 
-This will enable access to the latest Orange release. Then install Orange3:
+This will enable access to the latest Orange release. Then install Orange:
 
-    conda install orange3
+    conda install orange
 
 [Miniconda]: https://docs.conda.io/en/latest/miniconda.html
 
 To install the add-ons, follow a similar recipe:
 
-    conda install orange3-<addon name>
+    conda install orange-<addon name>
 
 See specific add-on repositories for details.
 
@@ -68,6 +68,6 @@ To start Orange GUI from the command line, run:
 
     orange-canvas
     # or
-    python3 -m Orange.canvas
+    python -m Orange.canvas
 
 Append `--help` for a list of program options.

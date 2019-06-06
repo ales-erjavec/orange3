@@ -1,5 +1,5 @@
 #
-# A Conda flavored NSIS installer script for Orange3 Windows application
+# A Conda flavored NSIS installer script for Orange Windows application
 #
 
 # Required definitions need to be passed to the makensis call

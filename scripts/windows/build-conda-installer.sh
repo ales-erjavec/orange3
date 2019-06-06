@@ -35,7 +35,7 @@ Examples
 '
 }
 
-NAME=Orange3
+NAME=Orange
 # version is determined from the ENV_SPEC_FILE
 VERSION=
 
@@ -337,7 +337,7 @@ EOF
              -DPYINSTALLER=${pyinstaller} \
              -DINSTALL_REGISTRY_KEY=OrangeCanvas \
              -DINSTALLERICON=scripts/windows/Orange.ico \
-             -DICONDIR="orange3\icons" \
+             -DICONDIR="orange\icons" \
              -DLICENSE_FILE="${BASEDIR}"/license.txt \
              -DLAUNCHERMODULE="Orange.canvas" \
              "${extransisparams[@]}" \
@@ -353,13 +353,13 @@ if [[ "${ONLINE}" == yes ]]; then
     cat > "${BASEDIR}"/conda-spec.txt < "${ENV_SPEC_FILE}"
     # extract the orange version from env spec
     VERSION=$(cat < "${BASEDIR}"/conda-spec.txt |
-              grep -E 'orange3-.*tar.bz2' |
-              sed -e 's@^.*orange3-\([^-]*\)-.*tar.bz2.*@\1@')
+              grep -E 'orange-.*tar.bz2' |
+              sed -e 's@^.*orange-\([^-]*\)-.*tar.bz2.*@\1@')
 else
     conda-fetch-packages "${BASEDIR:?}"/conda-pkgs "${ENV_SPEC_FILE}"
     # extract the orange version from env spec
     VERSION=$(cat < "${BASEDIR:?}"/conda-pkgs/conda-spec.txt |
-              grep -E 'orange3-.*tar.bz2' |
+              grep -E 'orange-.*tar.bz2' |
               cut -d "-" -f 2)
 fi
 

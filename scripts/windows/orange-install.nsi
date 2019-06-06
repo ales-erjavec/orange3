@@ -1,5 +1,5 @@
 #
-# A NSIS installer script for Orange3 Windows application
+# A NSIS installer script for Orange Windows application
 #
 
 # Required definitions need to be passed to the makensis call
@@ -549,11 +549,11 @@ FunctionEnd
 
 Section -Icons
     # Layout icons if necessary (are not present)
-    ${IfNot} ${FileExists} $PythonPrefix\share\orange3\icons\*.ico"
+    ${IfNot} ${FileExists} $PythonPrefix\share\orange\icons\*.ico"
         ${ExtractTempRec} "${BASEDIR}\icons\*.ico" "${TEMPDIR}\icons"
-        CreateDirectory "$PythonPrefix\share\orange3\icons"
+        CreateDirectory "$PythonPrefix\share\orange\icons"
         CopyFiles /SILENT "${TEMPDIR}\icons\*.ico" \
-                          "$PythonPrefix\share\orange3\icons"
+                          "$PythonPrefix\share\orange\icons"
     ${EndIf}
 SectionEnd
 
@@ -566,13 +566,13 @@ Section -Launchers
     CreateShortCut \
         "$InstDir\${LAUNCHER_SHORTCUT_NAME}.lnk" \
         "$PythonExecPrefix\pythonw.exe" "-m Orange.canvas" \
-        "$PythonPrefix\share\orange3\icons\orange.ico" 0
+        "$PythonPrefix\share\orange\icons\orange.ico" 0
     # Utility shortcut to launch the application with max log level attached
     # to the console that remains visible after exit
     CreateShortCut \
         "$InstDir\${LAUNCHER_SHORTCUT_NAME} Debug.lnk" \
         "%COMSPEC%" '/K "$PythonExecPrefix\python.exe" -m Orange.canvas -l4' \
-        "$PythonPrefix\share\orange3\icons\orange.ico" 0
+        "$PythonPrefix\share\orange\icons\orange.ico" 0
 !if ${PYINSTALL_TYPE} == Normal
     # A utility shortcut for activating the environment
     CreateShortCut \
@@ -606,7 +606,7 @@ Section "Start Menu Shortcuts" SectionStartMenu
         CreateShortCut \
             "$SMPROGRAMS\$StartMenuFolder\${LAUNCHER_SHORTCUT_NAME}.lnk" \
             "$PythonExecPrefix\pythonw.exe" "-m Orange.canvas" \
-            "$PythonPrefix\share\orange3\icons\orange.ico" 0
+            "$PythonPrefix\share\orange\icons\orange.ico" 0
 !if ${PYINSTALL_TYPE} == Normal
         # A utility shortcut for activating the environment
         CreateShortCut \
@@ -631,7 +631,7 @@ Section "Desktop Shortcuts" SectionDesktop
     CreateShortCut \
         "$DESKTOP\${LAUNCHER_SHORTCUT_NAME}.lnk" \
         "$PythonExecPrefix\pythonw.exe" "-m Orange.canvas" \
-        "$PythonPrefix\share\orange3\icons\orange.ico" 0
+        "$PythonPrefix\share\orange\icons\orange.ico" 0
 SectionEnd
 
 SectionGroupEnd
@@ -684,7 +684,7 @@ Section -Register SectionRegister
         "Software\Classes\OrangeCanvas" "" "Orange Workflow"
     WriteRegStr SHELL_CONTEXT \
         "Software\Classes\OrangeCanvas\DefaultIcon" "" \
-        "$PythonPrefix\share\orange3\icons\OrangeOWS.ico"
+        "$PythonPrefix\share\orange\icons\OrangeOWS.ico"
     WriteRegStr SHELL_CONTEXT \
         "Software\Classes\OrangeCanvas\Shell\Open\Command\" "" \
         '"$PythonExecPrefix\pythonw.exe" -m Orange.canvas "%1"'

@@ -13,7 +13,7 @@ Options:
     --pip-arg  ARG
         Pip install arguments to populate the python environemnt in the
         application bundle. Can be used multiple times.
-        If not supplied then by default the latest PyPi published Orange3 and
+        If not supplied then by default the latest PyPi published Orange and
         requirements as recorded in scripts/macos/requirements.txt are
         installed.
 
@@ -21,19 +21,16 @@ Options:
         Print this help
 
 Examples
-    build-macos-app.sh ~/Applications/Orange3.app
+    build-macos-app.sh ~/Applications/Orange.app
         Build the application using the latest published version on pypi
 
-    build-macos-app.sh --pip-arg={Orange3==3.3.12,PyQt5} ~/Applications/Orange3.app
+    build-macos-app.sh --pip-arg={Orange==4.0.0,PyQt5==5.9.2} ~/Applications/Orange.app
         Build the application using the specified Orange version
 
-    build-macos-app.sh --pip-arg=path-tolocal-checkout ~/Applications/Orange3-Dev.app
-        Build the application using a local source checkout
-
-    build-macos-app.sh --pip-arg={-e,path-tolocal-checkout}  ~/Applications/Orange3-Dev.app
+    build-macos-app.sh --pip-arg={-e,path-tolocal-checkout}  ~/Applications/Orange-Dev.app
         Build the application and install orange in editable mode
 
-    buils-macos-app.sh --pip-arg={-r,requirements.txt} /Applications/Orange3.app
+    buils-macos-app.sh --pip-arg={-r,requirements.txt} /Applications/Orange.app
         Build the application using a fixed set of locked requirements.
 '
 }
@@ -73,7 +70,7 @@ APPDIR=${1:?"Target APPDIR argument is missing"}
 PYVER=${PYTHON_VERSION%.*}  # Major.Minor
 
 if [[ ${#PIP_REQ_ARGS[@]} -eq 0 ]]; then
-    PIP_REQ_ARGS+=( Orange3 -r "${DIR}"/requirements.txt )
+    PIP_REQ_ARGS+=( Orange -r "${DIR}"/requirements.txt )
 fi
 
 mkdir -p "${APPDIR}"/Contents/MacOS
@@ -95,7 +92,7 @@ ln -fs ../Frameworks/Python.framework/Versions/${PYVER}/bin/python${PYVER} \
     "${APPDIR}"/Contents/MacOS/python
 
 "${APPDIR}"/Contents/MacOS/python -m ensurepip
-"${APPDIR}"/Contents/MacOS/python -m pip install pip~=9.0 wheel
+"${APPDIR}"/Contents/MacOS/python -m pip install pip~=19.0 wheel
 
 # Python 3.6 on macOS no longer links the obsolete system libssl.
 # Instead it builds/ships a it's own which expects a cert.pem in hardcoded
@@ -147,7 +144,7 @@ PYTHON="${APPDIR}"/Contents/MacOS/python
 
 "${PYTHON}" -m pip install "${PIP_REQ_ARGS[@]}"
 
-VERSION=$("${PYTHON}" -m pip show orange3 | grep -E '^Version:' |
+VERSION=$("${PYTHON}" -m pip show orange | grep -E '^Version:' |
           cut -d " " -f 2)
 
 m4 -D__VERSION__="${VERSION:?}" "${APPDIR}"/Contents/Info.plist.in \
@@ -161,6 +158,6 @@ rm "${APPDIR}"/Contents/Info.plist.in
     cleanup() { rm -r "${tempdir}"; }
     trap cleanup EXIT
     cd "${tempdir}"
-    "${PYTHON}" -m pip install --no-cache-dir --no-index orange3 PyQt5
+    "${PYTHON}" -m pip install --no-cache-dir --no-index orange PyQt5
     "${PYTHON}" -m Orange.canvas --help > /dev/null
 )

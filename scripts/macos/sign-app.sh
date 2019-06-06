@@ -34,19 +34,19 @@ done
 
 APPPATH=${1}
 if [ ! "${APPPATH}" ]; then
-    APPPATH=${DIST}/Orange3.app
+    APPPATH=${DIST}/Orange.app
     echo "No path supplied; using default ${APPPATH}"
 fi
 
 VERSION=$(
     "${APPPATH}"/Contents/MacOS/python -c '
 import pkg_resources
-print(pkg_resources.get_distribution("Orange3").version)
+print(pkg_resources.get_distribution("Orange").version)
 '
 )
 
 # Create disk image
 "${SCRIPTS}"/create-dmg-installer.sh --app "${APPPATH}" \
     --sign "${IDENTITY}" \
-    "${DIST}/Orange3-${VERSION}.dmg"
+    "${DIST}/Orange-${VERSION}.dmg"
 

@@ -9,8 +9,8 @@ Create an disk image installer (.dmg) for Orange OSX application.
 
 Options:
     -a --app PATH
-        Path to a build Orange3.app to include in the disk image
-        (default dist/Orange3.app)
+        Path to a build *.app to include in the disk image
+        (default dist/Orange.app)
 
     -s --sign IDENTITY
         Sign the application and the .dmg image using the signing identity
@@ -30,7 +30,7 @@ DIRNAME=$(dirname "$0")
 # Path to dmg resources (volume icon, background, ...)
 RES="${DIRNAME}"/dmg-resources
 
-APP=dist/Orange3.app
+APP=dist/Orange.app
 
 KEEP_TEMP=0
 IDENTITY=
@@ -66,6 +66,8 @@ if [[ ! -d "${APP}" ]]; then
     exit 1
 fi
 
+APP_NAME=$(basename "$(cd "${APP}"; pwd; )")
+
 TMP_DIR=$(mktemp -d -t create-dmg-installer)
 TMP_TEMPLATE="${TMP_DIR}"/template
 TMP_DMG="${TMP_DIR}"/orange.dmg
@@ -86,11 +88,11 @@ cp -a "${RES}"/DS_Store "${TMP_TEMPLATE}"/.DS_Store
 ln -s /Applications/ "${TMP_TEMPLATE}"/Applications
 
 # Copy the .app directory in place
-cp -a "${APP}" "${TMP_TEMPLATE}"/Orange3.app
+cp -a "${APP}" "${TMP_TEMPLATE:?}/${APP_NAME:?}".app
 
 if [[ "${IDENTITY}" ]]; then
     codesign -s "${IDENTITY}" --deep --verbose \
-        "${TMP_TEMPLATE}"/Orange3.app
+        "${TMP_TEMPLATE}/${APP_NAME}".app
 fi
 
 # Create a regular .fseventsd/no_log file
@@ -101,7 +103,7 @@ touch "${TMP_TEMPLATE}"/.fseventsd/no_log
 
 
 echo "Creating a temporary disk image"
-hdiutil create -format UDRW -volname Orange -fs HFS+ \
+hdiutil create -format UDRW -volname "${APP_NAME}" -fs HFS+ \
        -fsargs "-c c=64,a=16,e=16" \
        -srcfolder "${TMP_TEMPLATE}" \
        "${TMP_DMG}"
