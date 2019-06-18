@@ -51,15 +51,22 @@ To install Orange with pip, run the following.
     sudo apt install virtualenv build-essential python3-dev
 
     # Create a separate Python environment for Orange and its dependencies ...
-    virtualenv --python=python3 --system-site-packages orange3venv
+    virtualenv --python=python3 --system-site-packages orangevenv
     # ... and make it the active one
-    source orange3venv/bin/activate
+    source orangevenv/bin/activate
 
     # Install Qt dependencies for the GUI
     pip install PyQt5 PyQtWebEngine
 
     # Install Orange
-    pip install orange3
+    pip install "orange>=4"
+
+#### Upgrading from Orange3 to Orange
+
+If upgrading an exiting environment with orange3; uninstall Orange3 first
+
+    pip uninstall orange3
+    pip install "orange>=4"
 
 Starting Orange GUI
 -------------------
