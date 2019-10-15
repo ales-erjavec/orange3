@@ -17,7 +17,7 @@ from AnyQt.QtWidgets import (
 )
 from AnyQt.QtGui import (
     QTransform, QPainterPath, QPainterPathStroker, QColor, QBrush, QPen,
-    QFont, QFontMetrics, QPolygonF, QKeySequence
+    QFont, QFontMetrics, QPolygonF, QKeySequence, QPalette
 )
 from AnyQt.QtCore import Qt, QSize, QSizeF, QPointF, QRectF, QLineF, QEvent
 from AnyQt.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
@@ -289,10 +289,10 @@ class DendrogramWidget(QGraphicsWidget):
 
         super().__init__(None, **kwargs)
         self.orientation = orientation
-        self._root = None
+        self._root = None  # type: Optional[DendrogramWidget.ClusterGraphicsItem]
         #: A tree with dendrogram geometry
         self._layout = None
-        self._highlighted_item = None
+        self._highlighted_item = None  # type: Optional[DendrogramWidget.ClusterGraphicsItem]
         #: a list of selected items
         self._selection = OrderedDict()
         #: a {node: item} mapping
@@ -342,7 +342,8 @@ class DendrogramWidget(QGraphicsWidget):
         self.clear()
         self._root = root
         if root is not None:
-            pen = make_pen(Qt.blue, width=1, cosmetic=True,
+            color = self.palette().color(QPalette.Foreground)
+            pen = make_pen(color, width=1, cosmetic=False,
                            join_style=Qt.MiterJoin)
             for node in postorder(root):
                 item = DendrogramWidget.ClusterGraphicsItem(self._itemgroup)
@@ -420,13 +421,16 @@ class DendrogramWidget(QGraphicsWidget):
             return [self._items[ch] for ch in item.node.branches]
 
         if self._highlighted_item:
-            pen = make_pen(Qt.blue, width=1, cosmetic=True)
+            color = self.palette().color(QPalette.Foreground)
+
+            pen = make_pen(color, width=1, cosmetic=False)
             for it in postorder(self._highlighted_item, branches):
                 it.setPen(pen)
 
         self._highlighted_item = item
         if item:
-            hpen = make_pen(Qt.blue, width=2, cosmetic=True)
+            color = self.palette().color(QPalette.Highlight)
+            hpen = make_pen(color, width=2, cosmetic=False)
             for it in postorder(item, branches):
                 it.setPen(hpen)
 
@@ -804,10 +808,21 @@ class DendrogramWidget(QGraphicsWidget):
 
         if event.type() == QEvent.FontChange:
             self.updateGeometry()
-
-        # QEvent.ContentsRectChange is missing in PyQt4 <= 4.11.3
-        if event.type() == 178:  # QEvent.ContentsRectChange:
+        elif event.type() == QEvent.ContentsRectChange:
             self._rescale()
+        elif event.type() == QEvent.PaletteChange:
+            color = self.palette().color(QPalette.Foreground)
+            pen = make_pen(color, width=1)
+
+            def branches(item):
+                return [self._items[ch] for ch in item.node.branches]
+
+            for it in self._items.values():
+                it.setPen(pen)
+            pen = make_pen(self.palette().color(QPalette.Highlight), width=1)
+            if self._highlighted_item is not None:
+                for it in postorder(self._highlighted_item, branches):
+                    it.setPen(pen)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
