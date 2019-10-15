@@ -285,6 +285,10 @@ class TextListWidget(QGraphicsWidget):
             font = self.font()
             for item in self.__textitems:
                 item.setFont(font)
+        elif event.type() == QEvent.PaletteChange:
+            palette = self.palette()
+            for item in self.__textitems:
+                item.setPalette(palette)
         super().changeEvent(event)
 
     def __setup(self) -> None:
