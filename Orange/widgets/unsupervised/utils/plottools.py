@@ -702,8 +702,13 @@ class PlotToolBox(QObject):
                         tool = PlotSelectionTool(self)
                         tool.cursor = Qt.ArrowCursor
                         action._menu = menu = QMenu()
-                        menu.addAction("Rectangular")
-                        menu.addAction("Lasso")
+                        a = menu.addAction("Rectangular")
+                        a.setData(PlotSelectionTool.Rect)
+                        a = menu.addAction("Lasso")
+                        a.setData(PlotSelectionTool.Lasso)
+                        def ontrigger(action, tool=tool):
+                            tool.setSelectionMode(action.data())
+                        menu.triggered[QAction].connect(ontrigger)
                         action.setMenu(menu)
                     elif flag == PlotToolBox.ZoomTool:
                         tool = PlotZoomTool(self)
