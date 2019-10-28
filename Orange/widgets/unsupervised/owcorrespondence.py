@@ -19,13 +19,13 @@ from AnyQt.QtWidgets import (
     QListView, QApplication, QComboBox, QGraphicsSceneHelpEvent,
     QToolTip, QGridLayout, QLabel, QCheckBox, QSizePolicy, QStackedWidget,
     QTreeView, QGraphicsObject, QGraphicsScene, QGraphicsView, QSlider,
-    QGroupBox, QHBoxLayout
-)
+    QGroupBox, QHBoxLayout,
+    QGraphicsSceneEvent)
 from AnyQt.QtGui import (
-    QBrush, QColor, QPen, QPalette, QFont, QPainter
-)
+    QBrush, QColor, QPen, QPalette, QFont, QPainter,
+    QTransform)
 from AnyQt.QtCore import (
-    Qt, QRectF, QLineF, QTimer, QPointF
+    Qt, QRectF, QLineF, QTimer, QPointF, QSizeF, QEvent
 )
 import pyqtgraph as pg
 
@@ -230,6 +230,42 @@ class GraphicsScene(pg.GraphicsScene):
 
     def mouseGrabberItem(self):
         return QGraphicsScene.mouseGrabberItem(self)
+
+
+class HelpfulGraphicsScene(QGraphicsScene):
+    def helpEvent(self, event: QGraphicsSceneHelpEvent) -> None:
+        """
+        Reimplemented.
+
+        Send the help event to every graphics item that is under the event's
+        scene position (default QGraphicsScene only dispatches help events to
+        `QGraphicsProxyWidget`s.
+
+        """
+        widget = event.widget()
+        if widget is not None and isinstance(widget.parentWidget(), QGraphicsView):
+            view = widget.parentWidget()
+            deviceTransform = view.viewportTransform()
+        else:
+            deviceTransform = QTransform()
+        items = self.items(
+            event.scenePos(), Qt.IntersectsItemShape, Qt.DescendingOrder,
+            deviceTransform,
+        )
+        tooltiptext = None
+        event.setAccepted(False)
+        for item in items:
+            self.sendEvent(item, event)
+            if event.isAccepted():
+                return
+            elif item.toolTip():
+                tooltiptext = item.toolTip()
+                break
+        QToolTip.showText(event.screenPos(), tooltiptext, event.widget())
+
+
+class GraphicsScene(GraphicsScene, HelpfulGraphicsScene):
+    pass
 
 
 class GraphicsView(pg.GraphicsView):
@@ -1134,8 +1170,6 @@ class _MapType(enum.Enum):
 class CAPlotItem(pg.PlotItem):
     def __init__(self, parent=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # route help events to this item
-        self.__helpDelegate = HelpEventDelegate(self.helpEvent, self)
         self.vb.setAspectLocked(True)
         self.vb.grabGesture(Qt.PinchGesture, )
         self.cadata = None  # type: Optional[CAData]
@@ -1161,19 +1195,6 @@ class CAPlotItem(pg.PlotItem):
         if parent is not None:
             self.setParentItem(parent)
 
-    def itemChange(self, change, value):
-        """Reimplemented."""
-        # Grab help events from the scene.
-        if change == QGraphicsObject.ItemSceneChange:
-            scene = self.scene()
-            if scene is not None:
-                scene.removeEventFilter(self.__helpDelegate)
-        elif change == QGraphicsObject.ItemSceneHasChanged:
-            scene = self.scene()
-            if scene is not None:
-                scene.installEventFilter(self.__helpDelegate)
-        return super().itemChange(change, value)
-
     def rowitem(self):
         return self.__rowitem
 
@@ -1198,8 +1219,15 @@ class CAPlotItem(pg.PlotItem):
     def zoomToFit(self):
         self.autoRange()
 
+    def sceneEvent(self, event: QGraphicsSceneEvent):
+        if event.type() == QGraphicsSceneEvent.GraphicsSceneHelp and \
+                isinstance(event, QGraphicsSceneHelpEvent):
+            self.helpEvent(event)
+            return event.isAccepted()
+        return super().sceneEvent(event)
+
     def helpEvent(self, event):
-        # type: (QGraphicsSceneHelpEvent) -> bool
+        # type: (QGraphicsSceneHelpEvent) -> None
         """
         Parameters
         ----------
@@ -1211,7 +1239,7 @@ class CAPlotItem(pg.PlotItem):
             True if the event was handled and should not propagate.
         """
         if not self.sceneBoundingRect().contains(event.scenePos()):
-            return False
+            return
 
         vb = self.getViewBox()
         group = vb.childGroup
@@ -1234,7 +1262,7 @@ class CAPlotItem(pg.PlotItem):
             if idcs.size:
                 hititems.append((which, item, idcs))
         if not hititems:
-            return False
+            return
         # we possibly have two item types (rows and columns)
         # render  as
         # Row(s)
@@ -1270,9 +1298,7 @@ class CAPlotItem(pg.PlotItem):
         if tooltip:
             style = "<style>table { float: right; }; </style>"
             QToolTip.showText(event.screenPos(), style + tooltip, event.widget())
-            return True
-        else:
-            return False
+            event.setAccepted(True)
 
     def _color_scheme(self):
         base = self.palette().color(QPalette.Base)  # type: QColor
