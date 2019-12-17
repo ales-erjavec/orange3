@@ -405,13 +405,13 @@ class OWPythonScript(OWWidget):
 
     class Inputs:
         data = Input("Data", Table, replaces=["in_data"],
-                     default=True, multiple=True)
+                     default=True, multiple=True, closing_sentinel=Input.Closed)
         learner = Input("Learner", Learner, replaces=["in_learner"],
-                        default=True, multiple=True)
+                        default=True, multiple=True, closing_sentinel=Input.Closed)
         classifier = Input("Classifier", Model, replaces=["in_classifier"],
-                           default=True, multiple=True)
+                           default=True, multiple=True, closing_sentinel=Input.Closed)
         object = Input("Object", object, replaces=["in_object"],
-                       default=False, multiple=True)
+                       default=False, multiple=True, closing_sentinel=Input.Closed)
 
     class Outputs:
         data = Output("Data", Table, replaces=["out_data"])
@@ -591,7 +591,7 @@ class OWPythonScript(OWWidget):
 
     def handle_input(self, obj, sig_id, signal):
         dic = getattr(self, signal)
-        if obj is None:
+        if obj is Input.Closed:
             if sig_id in dic.keys():
                 del dic[sig_id]
         else:
