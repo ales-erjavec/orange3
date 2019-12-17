@@ -4,11 +4,12 @@ import code
 import keyword
 import itertools
 import unicodedata
+
 from functools import reduce
 from collections import defaultdict
 from unittest.mock import patch
 
-from typing import Optional, List, TYPE_CHECKING
+from typing import cast, Optional, List, TYPE_CHECKING
 
 from AnyQt.QtWidgets import (
     QPlainTextEdit, QListView, QSizePolicy, QMenu, QSplitter, QLineEdit,
@@ -19,7 +20,9 @@ from AnyQt.QtGui import (
     QColor, QBrush, QPalette, QFont, QTextDocument,
     QSyntaxHighlighter, QTextCharFormat, QTextCursor, QKeySequence,
 )
-from AnyQt.QtCore import Qt, QRegExp, QByteArray, QItemSelectionModel, QSize
+from AnyQt.QtCore import Qt, QRegExp, QByteArray, QItemSelectionModel, QSize, QEvent
+
+from orangecanvas.scheme import WorkflowEvent, LinkEvent
 
 from Orange.data import Table
 from Orange.base import Learner, Model
@@ -446,6 +449,8 @@ class OWPythonScript(OWWidget):
         super().__init__()
         self.libraryListSource = []
 
+        self._links = {}  # type: Mapping[]
+
         for name in self.signal_names:
             setattr(self, name, {})
 
@@ -589,14 +594,55 @@ class OWPythonScript(OWWidget):
         self.scriptText = self.text.toPlainText()
         self.splitterState = bytes(self.splitCanvas.saveState())
 
+    def customEvent(self, event: QEvent) -> None:
+        def sigid(event: LinkEvent):
+            link = event.link()
+            sm = self.signalManager
+            node_id = sm.node_id(link.source_node)
+            event.sig_id = (node_id, link.source_channel.name, None)
+
+        if event.type() == LinkEvent.InputLinkAdded:
+            event = cast(LinkEvent, event)
+            sigid(event)
+            self.inputLinkAddedEvent(event)
+        elif event.type() == LinkEvent.InputLinkRemoved:
+            event = cast(LinkEvent, event)
+            sigid(event)
+            self.inputLinkRemovedEvent(event)
+        elif event.type() == LinkEvent.OutputLinkAdded:
+            event = cast(LinkEvent, event)
+            self.outputLinkAddedEvent(event)
+        elif event.type() == LinkEvent.OutputLinkRemoved:
+            event = cast(LinkEvent, event)
+            self.outputLinkRemovedEvent(event)
+        super().customEvent(event)
+
+    def outputLinkAddedEvent(self, event: LinkEvent):
+        ...
+
+    def outputLinkRemovedEvent(self, event: LinkEvent):
+        ...
+
+    def inputLinkAddedEvent(self, event: LinkEvent):
+        self._links[event.link().source_channel.name, event.sig_id] = ()
+        print(self._links)
+        ...
+
+    def inputLinkRemovedEvent(self, event: LinkEvent):
+        del self._links[event.link().source_channel.name, event.sig_id]
+        print(self._links)
+        ...
+
     def handle_input(self, obj, sig_id, signal):
-        sig_id = sig_id[0]
+        sig_id = (signal, sig_id)
         dic = getattr(self, signal)
         if obj is None:
             if sig_id in dic.keys():
                 del dic[sig_id]
         else:
             dic[sig_id] = obj
+        self._links[sig_id] = obj
+        print(self._links)
 
     @Inputs.data
     def set_data(self, data, sig_id):
@@ -612,9 +658,11 @@ class OWPythonScript(OWWidget):
 
     @Inputs.object
     def set_object(self, data, sig_id):
+        print(sig_id)
         self.handle_input(data, sig_id, "object")
 
     def handleNewSignals(self):
+        print(self._links)
         self.commit()
 
     def selectedScriptIndex(self):
