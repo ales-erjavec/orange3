@@ -10,6 +10,10 @@ addons:
         packages:
             - libxkbcommon-x11-0  # for PyQt 5.12
 
+env:
+  global:
+    - PYQT_DEPS="PyQt5~=5.12.0 PyQtWebengine~=5.12.0"
+
 matrix:
     include:
         - env: RUN_PYLINT=true
@@ -19,8 +23,11 @@ matrix:
           python: '3.6'
           script: source $TRAVIS_BUILD_DIR/.travis/build_doc.sh
         - python: '3.6'
-          env: UPLOAD_COVERAGE=true
+          env:
+            - UPLOAD_COVERAGE=true
         - python: '3.7'
+          env:
+            - PYQT_DEPS="PyQt5~=5.14.0 PyQtWebengine~=5.14.0"
     fast_finish: true
 
 cache:
