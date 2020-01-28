@@ -244,7 +244,9 @@ class DendrogramWidget(QGraphicsWidget):
 
     #: Emitted when a user clicks on the cluster item.
     itemClicked = Signal(ClusterGraphicsItem)
+    #: Signal emitted when the selection changes.
     selectionChanged = Signal()
+    #: Signal emitted when the selection was changed by the user.
     selectionEdited = Signal()
 
     def __init__(self, parent=None, root=None, orientation=Left,
@@ -277,7 +279,42 @@ class DendrogramWidget(QGraphicsWidget):
         if parent is not None:
             self.setParentItem(parent)
 
+    def setSelectionMode(self, mode):
+        """
+        Set the selection mode.
+        """
+        assert mode in [DendrogramWidget.NoSelection,
+                        DendrogramWidget.SingleSelection,
+                        DendrogramWidget.ExtendedSelection]
+
+        if self.__selectionMode != mode:
+            self.__selectionMode = mode
+            if self.__selectionMode == DendrogramWidget.NoSelection and \
+                    self._selection:
+                self.setSelectedClusters([])
+            elif self.__selectionMode == DendrogramWidget.SingleSelection and \
+                    len(self._selection) > 1:
+                self.setSelectedClusters([self.selected_nodes()[-1]])
+
+    def selectionMode(self):
+        """
+        Return the current selection mode.
+        """
+        return self.__selectionMode
+
+    def setHoverHighlightEnabled(self, enabled):
+        if self.__hoverHighlightEnabled != bool(enabled):
+            self.__hoverHighlightEnabled = bool(enabled)
+            if self._highlighted_item is not None:
+                self._set_hover_item(None)
+
+    def isHoverHighlightEnabled(self):
+        return self.__hoverHighlightEnabled
+
     def clear(self):
+        """
+        Clear the widget.
+        """
         scene = self.scene()
         if scene is not None:
             scene.removeItem(self._itemgroup)
@@ -300,10 +337,15 @@ class DendrogramWidget(QGraphicsWidget):
         self._cluster_parent = {}
         self.updateGeometry()
 
-    def set_root(self, root):
-        """Set the root cluster.
+    def setRoot(self, root):
+        # type: (Tree) -> None
+        """
+        Set the root cluster tree node.
 
-        :param Tree root: Root tree.
+        Parameters
+        ----------
+        root : Tree
+            The tree root node.
         """
         self.clear()
         self._root = root
@@ -323,17 +365,30 @@ class DendrogramWidget(QGraphicsWidget):
             self._relayout()
             self._rescale()
         self.updateGeometry()
+    set_root = setRoot
+
+    def root(self):
+        # type: () -> Tree
+        """
+        Return the cluster tree root node.
+
+        Returns
+        -------
+        root : Tree
+        """
+        return self._root
 
     def item(self, node):
-        """Return the DendrogramNode instance representing the cluster.
-
-        :type cluster: :class:`Tree`
-
+        # type: (Tree) -> DendrogramWidget.ClusterGraphicsItem
+        """
+        Return the ClusterGraphicsItem instance representing the cluster `node`.
         """
         return self._items.get(node)
 
-    def height_at(self, point):
-        """Return the cluster height at the point in widget local coordinates.
+    def heightAt(self, point):
+        # type: (float) -> float
+        """
+        Return the cluster height at the point in widget local coordinates.
         """
         if not self._root:
             return 0
@@ -357,10 +412,12 @@ class DendrogramWidget(QGraphicsWidget):
         if self.orientation in [self.Left, self.Bottom]:
             height = Fr(base) - Fr(height)
         return float(height)
+    height_at = heightAt
 
-    def pos_at_height(self, height):
-        """Return a point in local coordinates for `height` (in cluster
-        height scale).
+    def posAtHeight(self, height):
+        # type: (float) -> float
+        """
+        Return a point in local coordinates for `height` (in cluster
         """
         if not self._root:
             return QPointF()
@@ -375,6 +432,7 @@ class DendrogramWidget(QGraphicsWidget):
         else:
             p = QPointF(0, height)
         return self._transform.map(p)
+    pos_at_height = posAtHeight
 
     def _set_hover_item(self, item):
         """Set the currently highlighted item."""
@@ -395,28 +453,33 @@ class DendrogramWidget(QGraphicsWidget):
             for it in postorder(item, branches):
                 it.setPen(hpen)
 
-    def leaf_items(self):
+    def leafItems(self):
         """Iterate over the dendrogram leaf items (:class:`QGraphicsItem`).
         """
         if self._root:
             return (self._items[leaf] for leaf in leaves(self._root))
         else:
             return iter(())
+    leaf_items = leafItems
 
-    def leaf_anchors(self):
+    def leafAnchors(self):
         """Iterate over the dendrogram leaf anchor points (:class:`QPointF`).
 
         The points are in the widget local coordinates.
         """
-        for item in self.leaf_items():
+        for item in self.leafItems():
             anchor = QPointF(item.element.anchor)
             yield self.mapFromItem(item, anchor)
+    leaf_anchors = leafAnchors
 
-    def selected_nodes(self):
-        """Return the selected clusters."""
+    def selectedNodes(self):
+        """
+        Return the selected cluster nodes.
+        """
         return [item.node for item in self._selection]
+    selected_nodes = selectedNodes
 
-    def set_selected_items(self, items):
+    def setSelectedItems(self, items):
         """Set the item selection.
 
         :param items: List of `GraphicsItems`s to select.
@@ -432,22 +495,28 @@ class DendrogramWidget(QGraphicsWidget):
         if to_add or to_remove:
             self._re_enumerate_selections()
             self.selectionChanged.emit()
+    set_selected_items = setSelectedItems
 
-    def set_selected_clusters(self, clusters):
+    def setSelectedClusters(self, clusters):
         """Set the selected clusters.
 
         :param Tree items: List of cluster nodes to select .
         """
-        self.set_selected_items(list(map(self.item, clusters)))
+        self.setSelectedItems(list(map(self.item, clusters)))
+    set_selected_clusters = setSelectedClusters
 
-    def is_selected(self, item):
+    def isItemSelected(self, item):
+        # type: (DendrogramWidget.ClusterGraphicsItem) -> bool
+        """Is `item` (:class:`ClusterItem`) selected.
+        """
         return item in self._selection
 
     def is_included(self, item):
         return self._selected_super_item(item) is not None
 
-    def select_item(self, item, state):
-        """Set the `item`s selection state to `select_state`
+    def setItemSelected(self, item, state):
+        """
+        Set the `item`s selection state to `select_state`
 
         :param item: QGraphicsItem.
         :param bool state: New selection state for item.
@@ -483,6 +552,7 @@ class DendrogramWidget(QGraphicsWidget):
 
             self._re_enumerate_selections()
             self.selectionChanged.emit()
+    select_item = setItemSelected
 
     @staticmethod
     def _create_path(item, path):
@@ -727,31 +797,31 @@ class DendrogramWidget(QGraphicsWidget):
             elif event.type() == QEvent.GraphicsSceneMousePress and \
                     event.button() == Qt.LeftButton:
 
-                is_selected = self.is_selected(obj)
+                is_selected = self.isItemSelected(obj)
                 is_included = self.is_included(obj)
                 current_selection = list(self._selection)
 
                 if self.__selectionMode == DendrogramWidget.SingleSelection:
                     if event.modifiers() & Qt.ControlModifier:
-                        self.set_selected_items(
+                        self.setSelectedItems(
                             [obj] if not is_selected else [])
                     elif event.modifiers() & Qt.AltModifier:
-                        self.set_selected_items([])
+                        self.setSelectedItems([])
                     elif event.modifiers() & Qt.ShiftModifier:
                         if not is_included:
-                            self.set_selected_items([obj])
+                            self.setSelectedItems([obj])
                     elif current_selection != [obj]:
-                        self.set_selected_items([obj])
+                        self.setSelectedItems([obj])
                 elif self.__selectionMode == DendrogramWidget.ExtendedSelection:
                     if event.modifiers() & Qt.ControlModifier:
-                        self.select_item(obj, not is_selected)
+                        self.setItemSelected(obj, not is_selected)
                     elif event.modifiers() & Qt.AltModifier:
-                        self.select_item(self._selected_super_item(obj), False)
+                        self.setItemSelected(self._selected_super_item(obj), False)
                     elif event.modifiers() & Qt.ShiftModifier:
                         if not is_included:
-                            self.select_item(obj, True)
+                            self.setItemSelected(obj, True)
                     elif current_selection != [obj]:
-                        self.set_selected_items([obj])
+                        self.setSelectedItems([obj])
 
                 if current_selection != self._selection:
                     self.selectionEdited.emit()
@@ -765,6 +835,7 @@ class DendrogramWidget(QGraphicsWidget):
         return super().sceneEventFilter(obj, event)
 
     def changeEvent(self, event):
+        # reimplemented
         super().changeEvent(event)
 
         if event.type() == QEvent.FontChange:
@@ -775,11 +846,13 @@ class DendrogramWidget(QGraphicsWidget):
             self._rescale()
 
     def resizeEvent(self, event):
+        # reimplemented
         super().resizeEvent(event)
         self._rescale()
 
     def mousePressEvent(self, event):
-        QGraphicsWidget.mousePressEvent(self, event)
+        # reimplemented
+        super().mousePressEvent(event)
         # A mouse press on an empty widget part
         if event.modifiers() == Qt.NoModifier and self._selection:
             self.set_selected_clusters([])
