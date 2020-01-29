@@ -12,8 +12,8 @@ from AnyQt.QtGui import (
 )
 from AnyQt.QtWidgets import (
     QGraphicsWidget, QGraphicsPathItem, QGraphicsItemGroup,
-    QGraphicsSimpleTextItem
-)
+    QGraphicsSimpleTextItem,
+    QGraphicsItem, QGraphicsSceneMouseEvent)
 
 from Orange.clustering.hierarchical import Tree, postorder, preorder, leaves
 from Orange.widgets.utils import colorpalette
@@ -787,6 +787,7 @@ class DendrogramWidget(QGraphicsWidget):
             return QSizeF()
 
     def sceneEventFilter(self, obj, event):
+        # type: (QGraphicsItem, QEvent) -> bool
         if isinstance(obj, DendrogramWidget.ClusterGraphicsItem):
             if event.type() == QEvent.GraphicsSceneHoverEnter and \
                     self.__hoverHighlightEnabled:
@@ -795,48 +796,51 @@ class DendrogramWidget(QGraphicsWidget):
                 return True
             elif event.type() == QEvent.GraphicsSceneMousePress and \
                     event.button() == Qt.LeftButton:
-
-                is_selected = self.isItemSelected(obj)
-                is_included = self.is_included(obj)
-                current_selection = list(self._selection)
-
-                if self.__selectionMode == DendrogramWidget.SingleSelection:
-                    if event.modifiers() & Qt.ControlModifier:
-                        self.setSelectedItems(
-                            [obj] if not is_selected else [])
-                    elif event.modifiers() & Qt.AltModifier:
-                        self.setSelectedItems([])
-                    elif event.modifiers() & Qt.ShiftModifier:
-                        if not is_included:
-                            self.setSelectedItems([obj])
-                    elif current_selection != [obj]:
-                        self.setSelectedItems([obj])
-                elif self.__selectionMode == DendrogramWidget.ExtendedSelection:
-                    if event.modifiers() & Qt.ControlModifier:
-                        self.setItemSelected(obj, not is_selected)
-                    elif event.modifiers() & Qt.AltModifier:
-                        self.setItemSelected(self._selected_super_item(obj), False)
-                    elif event.modifiers() & Qt.ShiftModifier:
-                        if not is_included:
-                            self.setItemSelected(obj, True)
-                    elif current_selection != [obj]:
-                        self.setSelectedItems([obj])
-
-                if current_selection != self._selection:
-                    self.selectionEdited.emit()
-                self.itemClicked.emit(obj)
-                event.accept()
-                return True
+                return self._itemMousePressEvent(obj, event)
 
         if event.type() == QEvent.GraphicsSceneHoverLeave:
             self._set_hover_item(None)
 
         return super().sceneEventFilter(obj, event)
 
+    def _itemMousePressEvent(
+            self, item: ClusterGraphicsItem, event: QGraphicsSceneMouseEvent
+    ) -> bool:
+        if event.type() == QEvent.GraphicsSceneMousePress and \
+                event.button() == Qt.LeftButton:
+            is_selected = self.isItemSelected(item)
+            is_included = self.isItemIncludedInSelection(item)
+            current_selection = list(self._selection)
+
+            if self.__selectionMode == DendrogramWidget.SingleSelection:
+                if event.modifiers() & Qt.ControlModifier:
+                    self.setSelectedItems([item] if not is_selected else [])
+                elif event.modifiers() & Qt.AltModifier:
+                    self.setSelectedItems([])
+                elif event.modifiers() & Qt.ShiftModifier:
+                    if not is_included:
+                        self.setSelectedItems([item])
+                elif current_selection != [item]:
+                    self.setSelectedItems([item])
+            elif self.__selectionMode == DendrogramWidget.ExtendedSelection:
+                if event.modifiers() & Qt.ControlModifier:
+                    self.setItemSelected(item, not is_selected)
+                elif event.modifiers() & Qt.AltModifier:
+                    self.setItemSelected(self._selected_super_item(item), False)
+                elif event.modifiers() & Qt.ShiftModifier:
+                    if not is_included:
+                        self.setItemSelected(item, True)
+                elif current_selection != [item]:
+                    self.setSelectedItems([item])
+            if current_selection != self._selection:
+                self.selectionEdited.emit()
+            self.itemClicked.emit(item)
+            event.accept()
+            return True
+
     def changeEvent(self, event):
         # reimplemented
         super().changeEvent(event)
-
         if event.type() == QEvent.FontChange:
             self.updateGeometry()
 
