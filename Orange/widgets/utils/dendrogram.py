@@ -179,11 +179,10 @@ class DendrogramWidget(QGraphicsWidget):
             Set the geometry (path) and the mouse hit area (hitArea) for this
             item.
             """
+            self.prepareGeometryChange()
             self.__boundingRect = self.__shape = None
-            super().setPath(path)
-            assert self.__boundingRect is None, "setPath -> boundingRect"
-            assert self.__shape is None, "setPath -> shape"
             self.mouseAreaShape = hitArea
+            super().setPath(path)
 
         def shape(self):
             # type: () -> QPainterPath
