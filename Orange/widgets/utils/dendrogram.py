@@ -88,13 +88,14 @@ def dendrogram_path(tree, orientation=Left, scaleh=1):
 
     if orientation == Bottom:
         transform = lambda x, y: (x, y)
-    if orientation == Top:
+    elif orientation == Top:
         transform = lambda x, y: (x, base - y)
     elif orientation == Left:
         transform = lambda x, y: (base - y, x)
     elif orientation == Right:
         transform = lambda x, y: (y, x)
-
+    else:
+        raise ValueError(orientation)
     for node, (start, center, end) in layout:
         if node.is_leaf:
             x, y = transform(center, 0)
