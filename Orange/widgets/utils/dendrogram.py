@@ -274,7 +274,7 @@ class DendrogramWidget(QGraphicsWidget):
         self.__hoverHighlightEnabled = hoverHighlightEnabled
         self.__selectionMode = selectionMode
         self.setContentsMargins(0, 0, 0, 0)
-        self.set_root(root)
+        self.setRoot(root)
         if parent is not None:
             self.setParentItem(parent)
 
@@ -510,8 +510,9 @@ class DendrogramWidget(QGraphicsWidget):
         """
         return item in self._selection
 
-    def is_included(self, item):
+    def isItemIncludedInSelection(self, item):
         return self._selected_super_item(item) is not None
+    is_included = isItemIncludedInSelection
 
     def setItemSelected(self, item, state):
         """
