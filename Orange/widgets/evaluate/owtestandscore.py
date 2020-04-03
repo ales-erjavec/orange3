@@ -1094,7 +1094,7 @@ class OWTestAndScore(OWWidget):
 
     def onDeleteWidget(self):
         self.cancel()
-        self.__executor.shutdown(True)
+        self.__executor.shutdown(wait=False)
         super().onDeleteWidget()
 
 
