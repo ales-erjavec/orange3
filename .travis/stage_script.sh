@@ -28,6 +28,12 @@ export PYTHONWARNINGS=module
 catchsegv xvfb-run -a -s "$XVFBARGS" \
     python -m unittest Orange.widgets.tests.test_workflows -v
 
+catchsegv xvfb-run -a -s "$XVFBARGS" \
+    python -m unittest -v Orange.widgets.evaluate.tests.test_owtestandscore{,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,}
+
+catchsegv xvfb-run -a -s "$XVFBARGS" \
+    python -m unittest -v Orange.widgets.data.tests.test_owcsvimport{,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,}
+
 # Skip loading of example workflows as that inflates coverage
 export SKIP_EXAMPLE_WORKFLOWS=True
 catchsegv xvfb-run -a -s "$XVFBARGS" \
