@@ -22,6 +22,8 @@ environment:
 
   matrix:
     - PYTHON: C:\Python36-x64
+    - PYTHON: C:\Python37-x64
+      TEST_ENV: PyQt5~=5.12.0 PyQtWebengine~=5.12.0 "pymssql<3.0"
 
 cache:
   - '%LOCALAPPDATA%\pip\cache -> appveyor.yml'
@@ -55,9 +57,9 @@ test_script:
   - build\.test\Scripts\activate
   - cd build\.test
   # Pre-populate the test environment
-  - python -m pip install pip~=19.0 wheel~=0.29.0
+  - python -m pip install pip~=19.0 wheel
 
-  - python -m pip install %TEST_ENV_INDEX% %TEST_ENV%
+  - python -m pip install --prefer-binary %TEST_ENV_INDEX% %TEST_ENV%
   - python -m pip install -f ..\..\dist orange3==%VERSION%
   - python -m pip list --format=freeze
 
