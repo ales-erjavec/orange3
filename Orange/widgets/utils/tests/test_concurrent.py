@@ -1,11 +1,15 @@
+# pylint: disable=all
+import threading
 import unittest.mock
 import warnings
-
+import weakref
+from types import SimpleNamespace
 from concurrent.futures import Future
 
-from AnyQt.QtCore import Qt, QCoreApplication, QThread
+from AnyQt.QtCore import Qt, QCoreApplication, QThread, QObject, QEventLoop, \
+    QTimer
 
-from Orange.widgets.utils.concurrent import ThreadExecutor,  Task
+from Orange.widgets.utils.concurrent import ThreadExecutor, Task, PyOwned
 
 
 class CoreAppTestCase(unittest.TestCase):
@@ -86,3 +90,26 @@ class TestTask(CoreAppTestCase):
         self.assertIsNot(f.result(3), QThread.currentThread())
 
         executor.shutdown()
+
+    def test_py_owned(self):
+        class Obj(QObject, PyOwned):
+            pass
+
+        executor = ThreadExecutor()
+        ref = SimpleNamespace(obj=Obj())
+        wref = weakref.ref(ref.obj)
+        event = threading.Event()
+        event.clear()
+
+        def clear_ref():
+            del ref.obj
+            event.set()
+
+        executor.submit(clear_ref)
+        event.wait()
+        self.assertIsNotNone(wref())
+        self.assertIn(wref(), PyOwned._PyOwned__delete_later_set)
+        loop = QEventLoop()
+        QTimer.singleShot(0, loop.quit)
+        loop.exec()
+        self.assertIsNone(wref())

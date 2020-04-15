@@ -3,6 +3,7 @@ General helper functions and classes for PyQt concurrent programming
 """
 # TODO: Rename the module to something that does not conflict with stdlib
 # concurrent
+import weakref
 from typing import Callable, Any
 import os
 import threading
@@ -19,6 +20,8 @@ from AnyQt.QtCore import (
     QEventLoop, QCoreApplication, QEvent, Q_ARG,
     pyqtSignal as Signal, pyqtSlot as Slot
 )
+
+import sip
 
 from orangewidget.utils.concurrent import (
     FutureWatcher, FutureSetWatcher, methodinvoke
@@ -384,7 +387,44 @@ class Task(QObject):
             super().customEvent(event)
 
 
-class TaskState(QObject):
+class PyOwned:
+    """
+    A mixin for python owned QObject's used as queued cross thread
+    communication channels.
+
+    When this object is released from a thread that is not self.thread()
+    it is resurrected and scheduled for deferred deletion from its own
+    thread with self.deleteLater()
+
+    See Also
+    --------
+    https://www.riverbankcomputing.com/pipermail/pyqt/2020-April/042734.html
+    """
+    __delete_later_set = set()
+
+    def __del__(self: QObject):
+        if sip.ispyowned(self):
+            try:
+                own_thread = self.thread() is QThread.currentThread()
+            except RuntimeError:
+                return
+            if not own_thread:
+                # object resurrection; keep python wrapper alive and schedule
+                # deletion from the object's own thread.
+                PyOwned.__delete_later_set.add(self)
+                ref = weakref.ref(self)
+
+                def clear():
+                    self = ref()
+                    try:
+                        PyOwned.__delete_later_set.remove(self)
+                    except KeyError:
+                        pass
+                self.destroyed.connect(clear, Qt.DirectConnection)
+                self.deleteLater()
+
+
+class TaskState(QObject, PyOwned):
 
     status_changed = Signal(str)
     _p_status_changed = Signal(str)
