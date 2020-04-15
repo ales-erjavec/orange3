@@ -24,7 +24,7 @@ from Orange.widgets import widget, gui, report
 from Orange.widgets.settings import Setting
 from Orange.widgets.utils.annotated_data import add_columns, \
     ANNOTATED_DATA_SIGNAL_NAME
-from Orange.widgets.utils.concurrent import FutureWatcher
+from Orange.widgets.utils.concurrent import FutureWatcher, TaskState
 from Orange.widgets.utils.signals import Input, Output
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.widget import Msg
@@ -294,8 +294,6 @@ class OWLouvainClustering(widget.OWWidget):
         assert self.__task.future is future
         assert self.__task.watcher.future() is future
         self.__task, task = None, self.__task
-        task.deleteLater()
-
         self.__set_state_ready()
 
         result = future.result()
@@ -483,73 +481,6 @@ class OWLouvainClustering(widget.OWWidget):
                 del settings["context_settings"]
 
 
-class TaskState(QObject):
-
-    status_changed = Signal(str)
-    _p_status_changed = Signal(str)
-
-    progress_changed = Signal(float)
-    _p_progress_changed = Signal(float)
-
-    partial_result_ready = Signal(object)
-    _p_partial_result_ready = Signal(object)
-
-    def __init__(self, *args):
-        super().__init__(*args)
-        self.__future = None
-        self.watcher = FutureWatcher()
-        self.__interuption_requested = False
-        self.__progress = 0
-        # Helpers to route the signal emits via a this object's queue.
-        # This ensures 'atomic' disconnect from signals for targets/slots
-        # in the same thread. Requires that the event loop is running in this
-        # object's thread.
-        self._p_status_changed.connect(
-            self.status_changed, Qt.QueuedConnection)
-        self._p_progress_changed.connect(
-            self.progress_changed, Qt.QueuedConnection)
-        self._p_partial_result_ready.connect(
-            self.partial_result_ready, Qt.QueuedConnection)
-
-    @property
-    def future(self):
-        # type: () -> Future
-        return self.__future
-
-    def set_status(self, text):
-        self._p_status_changed.emit(text)
-
-    def set_progress_value(self, value):
-        if round(value, 1) > round(self.__progress, 1):
-            # Only emit progress when it has changed sufficiently
-            self._p_progress_changed.emit(value)
-            self.__progress = value
-
-    def set_partial_results(self, value):
-        self._p_partial_result_ready.emit(value)
-
-    def is_interuption_requested(self):
-        return self.__interuption_requested
-
-    def start(self, executor, func=None):
-        # type: (futures.Executor, Callable[[], Any]) -> Future
-        assert self.future is None
-        assert not self.__interuption_requested
-        self.__future = executor.submit(func)
-        self.watcher.setFuture(self.future)
-        return self.future
-
-    def cancel(self):
-        assert not self.__interuption_requested
-        self.__interuption_requested = True
-        if self.future is not None:
-            rval = self.future.cancel()
-        else:
-            # not even scheduled yet
-            rval = True
-        return rval
-
-
 class InteruptRequested(BaseException):
     pass
 
@@ -571,7 +502,7 @@ def run_on_data(data, normalize, pca_components, k_neighbors, metric, resolution
     Run the louvain clustering on `data`.
 
     state is used to report progress and partial results. Returns early if
-    `task.is_interuption_requested()` returns true.
+    `task.is_interruption_requested()` returns true.
 
     Parameters
     ----------
@@ -600,7 +531,7 @@ def run_on_data(data, normalize, pca_components, k_neighbors, metric, resolution
         k_neighbors=k_neighbors, metric=metric, resolution=resolution,
     )
     step = 0
-    if state.is_interuption_requested():
+    if state.is_interruption_requested():
         return res
 
     if pca_components is not None:
@@ -610,12 +541,12 @@ def run_on_data(data, normalize, pca_components, k_neighbors, metric, resolution
 
         data = res.pca_projection = pca(data)(data)
         assert isinstance(data, Table)
-        state.set_partial_results(("pca_projection", res.pca_projection))
+        state.set_partial_result(("pca_projection", res.pca_projection))
         step += 1
     else:
         steps = 2
 
-    if state.is_interuption_requested():
+    if state.is_interruption_requested():
         return res
 
     state.set_progress_value(100. * step / steps)
@@ -625,12 +556,12 @@ def run_on_data(data, normalize, pca_components, k_neighbors, metric, resolution
     louvain = Louvain(resolution=resolution, random_state=0)
     data = louvain.preprocess(data)
 
-    if state.is_interuption_requested():
+    if state.is_interruption_requested():
         return res
 
     def pcallback(val):
         state.set_progress_value((100. * step + 100 * val) / steps)
-        if state.is_interuption_requested():
+        if state.is_interruption_requested():
             raise InteruptRequested()
 
     try:
@@ -640,16 +571,16 @@ def run_on_data(data, normalize, pca_components, k_neighbors, metric, resolution
     except InteruptRequested:
         return res
 
-    state.set_partial_results(("graph", res.graph))
+    state.set_partial_result(("graph", res.graph))
 
     step += 1
     state.set_progress_value(100 * step / steps)
     state.set_status("Detecting communities...")
-    if state.is_interuption_requested():
+    if state.is_interruption_requested():
         return res
 
     res.partition = louvain(graph)
-    state.set_partial_results(("partition", res.partition))
+    state.set_partial_result(("partition", res.partition))
     return res
 
 
@@ -662,11 +593,11 @@ def run_on_graph(graph, resolution, state):
     res = Results(resolution=resolution)
     louvain = Louvain(resolution=resolution, random_state=0)
     state.set_status("Detecting communities...")
-    if state.is_interuption_requested():
+    if state.is_interruption_requested():
         return res
     partition = louvain(graph)
     res.partition = partition
-    state.set_partial_results(("partition", res.partition))
+    state.set_partial_result(("partition", res.partition))
     return res
 
 
