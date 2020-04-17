@@ -567,10 +567,6 @@ class ConcurrentMixin:
             self._disconnect_signals(state)
             if wait:
                 concurrent.futures.wait([state.future])
-                state.deleteLater()
-            else:
-                w = FutureWatcher(state.future, parent=state)
-                w.done.connect(state.deleteLater)
 
     def _connect_signals(self, state: TaskState):
         state.partial_result_ready.connect(self.on_partial_result)
@@ -586,7 +582,6 @@ class ConcurrentMixin:
         assert self.__task.future is future
         assert self.__task.watcher.future() is future
         self.__task, task = None, self.__task
-        task.deleteLater()
         ex = future.exception()
         if ex is not None:
             self.on_exception(ex)
