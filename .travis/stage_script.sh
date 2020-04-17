@@ -28,16 +28,21 @@ export PYTHONWARNINGS=module
 catchsegv xvfb-run -a -s "$XVFBARGS" \
     python -m unittest Orange.widgets.tests.test_workflows -v
 
-catchsegv xvfb-run -a -s "$XVFBARGS" \
-    python -m unittest -v Orange.widgets.evaluate.tests.test_owtestandscore{,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,}
+export PYTHONMALLOC=debug
 
 catchsegv xvfb-run -a -s "$XVFBARGS" \
-    python -m unittest -v Orange.widgets.data.tests.test_owcsvimport{,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,}
+    python -X dev -m unittest -v Orange.widgets.evaluate.tests.test_owtestandscore{,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,}
 
-# Skip loading of example workflows as that inflates coverage
-export SKIP_EXAMPLE_WORKFLOWS=True
 catchsegv xvfb-run -a -s "$XVFBARGS" \
-    coverage run -m unittest -v \
-        Orange.tests \
-        Orange.widgets.tests
-coverage combine
+    python -X dev -m unittest -v Orange.widgets.data.tests.test_owcsvimport{,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,}
+
+catchsegv xvfb-run -a -s "$XVFBARGS" \
+    python -X dev -m unittest -v Orange.widgets.data.tests.test_owoutliers{,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,}
+
+## Skip loading of example workflows as that inflates coverage
+#export SKIP_EXAMPLE_WORKFLOWS=True
+#catchsegv xvfb-run -a -s "$XVFBARGS" \
+#    coverage run -m unittest -v \
+#        Orange.tests \
+#        Orange.widgets.tests
+#coverage combine
