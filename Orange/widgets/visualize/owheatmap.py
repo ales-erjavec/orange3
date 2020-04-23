@@ -143,6 +143,19 @@ def create_list_model(
     return model
 
 
+def list_model_append(
+        model: QStandardItemModel,
+        items: Iterable[Mapping[Qt.ItemDataRole, Any]]
+):
+    sitems = []
+    for item in items:
+        sitem = QStandardItem()
+        for role, value in item.items():
+            sitem.setData(value, role)
+        sitems.append(sitem)
+    model.invisibleRootItem().appendRows(sitems)
+
+
 E = TypeVar("E", bound=enum.Enum)  # pylint: disable=invalid-name
 
 
@@ -334,6 +347,11 @@ class OWHeatMap(widget.OWWidget):
         form.addRow("Columns:", self.col_cluster_cb)
         cluster_box.layout().addLayout(form)
         box = gui.vBox(self.controlArea, "Split By")
+        form = QFormLayout(
+            formAlignment=Qt.AlignLeft, labelAlignment=Qt.AlignLeft,
+            fieldGrowthPolicy=QFormLayout.AllNonFixedFieldsGrow,
+        )
+        box.layout().addLayout(form)
 
         self.row_split_model = DomainModel(
             placeholder="(None)",
@@ -358,18 +376,26 @@ class OWHeatMap(widget.OWWidget):
         self.row_split_cb.activated.connect(
             self.__on_split_rows_activated
         )
-        self.col_split_model = PyListModel(parent=self, list_item_role=Qt.UserRole+1)
-        self.col_split_cb = ComboBoxSearch(
+        # self.col_split_model = PyListModel(parent=self, list_item_role=Qt.UserRole+1)
+        self.col_split_model = create_list_model([
+            {Qt.DisplayRole: "(None)", Qt.UserRole: None},
+            {Qt.AccessibleDescriptionRole: "separator", Qt.UserRole - 1: Qt.NoItemFlags}
+        ], parent=self)
+        self.col_split_cb = cb = ComboBoxSearch(
             sizeAdjustPolicy=ComboBox.AdjustToMinimumContentsLength,
             minimumContentsLength=14,
             toolTip="Split the heatmap horizontally by a variable label"
         )
         self.col_split_cb.setModel(self.col_split_model)
-        self.col_split_cb.activated.connect(
-            self.__on_split_cols_activated
+        self.connect_control(
+            "split_columns_key", lambda value, cb=cb: cbselect(cb, value)
         )
-        box.layout().addWidget(self.row_split_cb)
-        box.layout().addWidget(self.col_split_cb)
+        self.split_columns_key = None
+        self.col_split_cb.activated.connect(self.__on_split_cols_activated)
+        form.addRow("Rows:", self.row_split_cb)
+        form.addRow("Columns:", self.col_split_cb)
+        # box.layout().addWidget(self.row_split_cb)
+        # box.layout().addWidget(self.col_split_cb)
 
         box = gui.vBox(self.controlArea, 'Annotation && Legends')
 
@@ -508,7 +534,8 @@ class OWHeatMap(widget.OWWidget):
         self.row_side_color_model.set_domain(None)
         self.annotation_color_var = None
         self.row_split_model.set_domain(None)
-        self.col_split_model.clear()
+        # self.col_split_model.clear()
+        self.col_split_model.setRowCount(2)
         self.split_by_var = None
         self.parts = None
         self.clear_scene()
@@ -593,19 +620,31 @@ class OWHeatMap(widget.OWWidget):
             self.annotation_var = None
             self.annotation_color_var = None
             self.row_split_model.set_domain(data.domain)
-            self.col_split_model.wrap([None, PyListModel.Separator] + candidate_split_labels(data))
-            self.col_split_model.setData(self.col_split_model.index(0), "(None)", Qt.DisplayRole)
-            self.col_split_model[2:] = candidate_split_labels(data)
-            self.col_split_model[1:] = [PyListModel.Separator, *candidate_split_labels(data)]
+            # self.col_split_model.wrap([None, PyListModel.Separator] + candidate_split_labels(data))
+            # self.col_split_model.setData(self.col_split_model.index(0), "(None)", Qt.DisplayRole)
+            # self.col_split_model[2:] = candidate_split_labels(data)
+            # self.col_split_model[1:] = [PyListModel.Separator, *candidate_split_labels(data)]
+            self.col_split_model.setRowCount(2)
+            list_model_append(self.col_split_model, [
+                {Qt.DisplayRole: str(c), Qt.UserRole: c, Qt.EditRole: c}
+                for c in candidate_split_labels(data)
+            ])
+
             if data.domain.has_discrete_class:
                 self.split_by_var = data.domain.class_var
             else:
                 self.split_by_var = None
+            self.split_columns_key = None
             self.openContext(self.input_data)
             if self.split_by_var not in self.row_split_model:
                 self.split_by_var = None
-            if self.split_columns_key not in self.col_split_model:
+
+            idx = self.col_split_cb.findData(self.split_columns_key, Qt.UserRole)
+            if idx == -1:
                 self.split_columns_key = None
+
+            # if self.split_columns_key not in self.col_split_model:
+            #     self.split_columns_key = None
 
         self.update_heatmaps()
         if data is not None and self.__pending_selection is not None:
@@ -630,7 +669,7 @@ class OWHeatMap(widget.OWWidget):
             self.update_heatmaps()
 
     def __on_split_cols_activated(self):
-        self.set_column_split_key(self.col_split_cb.currentData(Qt.EditRole))
+        self.set_column_split_key(self.col_split_cb.currentData(Qt.UserRole))
 
     def set_column_split_key(self, key):
         if key != self.split_columns_key:
@@ -749,24 +788,25 @@ class OWHeatMap(widget.OWWidget):
                 cluster_ord = col.cluster_ordered
             else:
                 cluster_ord = None
-            need_dist = cluster is None or (ordered and cluster_ord is None)
-            matrix = None
-            if need_dist:
-                subset = data.transform(Domain(col.domain))
-                subset = Orange.distance._preprocess(subset)
-                matrix = np.asarray(Orange.distance.PearsonR(subset, axis=0))
-                # nan values break clustering below
-                matrix = np.nan_to_num(matrix)
+            if col.can_cluster:
+                need_dist = cluster is None or (ordered and cluster_ord is None)
+                matrix = None
+                if need_dist:
+                    subset = data.transform(Domain(col.domain))
+                    subset = Orange.distance._preprocess(subset)
+                    matrix = np.asarray(Orange.distance.PearsonR(subset, axis=0))
+                    # nan values break clustering below
+                    matrix = np.nan_to_num(matrix)
 
-            if cluster is None:
-                assert matrix is not None
-                assert len(matrix) < self.MaxClustering
-                cluster = hierarchical.dist_matrix_clustering(
-                    matrix, linkage=hierarchical.WARD
-                )
-            if ordered and cluster_ord is None:
-                assert len(matrix) < self.MaxOrderedClustering
-                cluster_ord = hierarchical.optimal_leaf_ordering(cluster, matrix)
+                if cluster is None:
+                    assert matrix is not None
+                    assert len(matrix) < self.MaxClustering
+                    cluster = hierarchical.dist_matrix_clustering(
+                        matrix, linkage=hierarchical.WARD
+                    )
+                if ordered and cluster_ord is None:
+                    assert len(matrix) < self.MaxOrderedClustering
+                    cluster_ord = hierarchical.optimal_leaf_ordering(cluster, matrix)
 
             col_groups.append(col._replace(cluster=cluster, cluster_ordered=cluster_ord))
         return parts._replace(columns=col_groups)
@@ -1256,6 +1296,13 @@ class ColumnPart(NamedTuple):
     domain: Sequence[int]
     cluster: Optional[hierarchical.Tree] = None
     cluster_ordered: Optional[hierarchical.Tree] = None
+
+    @property
+    def can_cluster(self) -> bool:
+        if isinstance(self.indices, slice):
+            return (self.indices.stop - self.indices.start) > 1
+        else:
+            return len(self.indices) > 1
 
 
 class Parts(NamedTuple):
