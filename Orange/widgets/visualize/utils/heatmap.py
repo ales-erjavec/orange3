@@ -564,6 +564,16 @@ class HeatmapGridWidget(QGraphicsWidget):
             self.TopLabelsRow, RightLabelColumn - 1,
         )
 
+        col_color_annotation_header = QGraphicsSimpleTextItem("", self)
+        grid.addItem(SimpleLayoutItem(
+            col_color_annotation_header, anchor=(1, 1), anchorItem=(1, 1),
+            resizeContents=True,
+            aspectMode=Qt.KeepAspectRatio,
+            sizePolicy=QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred),
+        ),
+            TopAnnotationRow, 0, 1, Col0, alignment=Qt.AlignRight
+        )
+
         legend = GradientLegendWidget(
             parts.span[0], parts.span[1],
             colormap,
