@@ -1,7 +1,8 @@
+import enum
 import inspect
 import sys
 from collections import deque
-from typing import TypeVar, Deque, Callable, Any, Iterable
+from typing import TypeVar, Deque, Callable, Any, Iterable, Type
 
 from AnyQt.QtCore import QObject
 
@@ -90,3 +91,18 @@ def apply_all(seq, op):
     """Apply `op` on all elements of `seq`."""
     # from itertools recipes `consume`
     deque(map(op, seq), maxlen=0)
+
+
+
+_E = TypeVar("_E", bound=enum.Enum)
+
+
+def enum_get(etype: Type[_E], name: str, default: _E) -> _E:
+    """
+    Return an Enum member by `name`. If no such member exists in `etype`
+    return `default`.
+    """
+    try:
+        return etype[name]
+    except LookupError:
+        return default

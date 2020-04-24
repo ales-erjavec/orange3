@@ -2,7 +2,7 @@ import enum
 from collections import defaultdict
 from itertools import islice
 from typing import (
-    Iterable, Mapping, Any, TypeVar, Type, NamedTuple, Sequence, Optional,
+    Iterable, Mapping, Any, TypeVar, NamedTuple, Sequence, Optional,
     Union, Tuple, List, Callable
 )
 
@@ -24,7 +24,7 @@ from Orange.data.sql.table import SqlTable
 import Orange.distance
 
 from Orange.clustering import hierarchical, kmeans
-from Orange.widgets.utils import colorpalettes, apply_all
+from Orange.widgets.utils import colorpalettes, apply_all, enum_get
 from Orange.widgets.utils.itemmodels import DomainModel
 from Orange.widgets.utils.stickygraphicsview import StickyGraphicsView
 from Orange.widgets.utils.graphicsview import GraphicsWidgetView
@@ -155,20 +155,6 @@ def list_model_append(
             sitem.setData(value, role)
         sitems.append(sitem)
     model.invisibleRootItem().appendRows(sitems)
-
-
-E = TypeVar("E", bound=enum.Enum)  # pylint: disable=invalid-name
-
-
-def enum_get(etype: Type[E], name: str, default: E) -> E:
-    """
-    Return an Enum member by `name`. If no such member exists in `etype`
-    return `default`.
-    """
-    try:
-        return etype[name]
-    except LookupError:
-        return default
 
 
 class OWHeatMap(widget.OWWidget):
