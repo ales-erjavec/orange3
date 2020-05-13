@@ -32,6 +32,7 @@ from Orange.widgets.utils import itemmodels
 from Orange.widgets.settings import Setting
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.widget import OWWidget, Input, Output
+from orangewidget.widget import Closed
 
 if TYPE_CHECKING:
     from typing_extensions import TypedDict
@@ -406,6 +407,8 @@ class OWPythonScript(OWWidget):
     priority = 3150
     keywords = ["file", "program"]
 
+    supports_explicit_close_event = True
+
     class Inputs:
         data = Input("Data", Table, replaces=["in_data"],
                      default=True, multiple=True)
@@ -636,7 +639,7 @@ class OWPythonScript(OWWidget):
     def handle_input(self, obj, sig_id, signal):
         sig_id = (signal, sig_id)
         dic = getattr(self, signal)
-        if obj is None:
+        if obj is Closed:
             if sig_id in dic.keys():
                 del dic[sig_id]
         else:

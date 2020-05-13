@@ -42,6 +42,7 @@ from Orange.widgets.utils.concurrent import ThreadExecutor, TaskState
 from Orange.widgets.utils.state_summary import (format_multiple_summaries,
                                                 format_summary_details)
 from Orange.widgets.widget import OWWidget, Msg, Input, Output
+from orangewidget.widget import Closed
 
 log = logging.getLogger(__name__)
 
@@ -136,6 +137,7 @@ class OWTestAndScore(OWWidget):
     priority = 100
     keywords = ['Cross Validation', 'CV']
     replaces = ["Orange.widgets.evaluate.owtestlearners.OWTestLearners"]
+    supports_explicit_close_event = True
 
     class Inputs:
         train_data = Input("Data", Table, default=True)
@@ -365,7 +367,7 @@ class OWTestAndScore(OWWidget):
         learner : Optional[Orange.base.Learner]
         key : Any
         """
-        if key in self.learners and learner is None:
+        if key in self.learners and learner is Closed:
             # Removed
             self._invalidate([key])
             del self.learners[key]
