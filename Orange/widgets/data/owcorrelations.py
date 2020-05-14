@@ -10,7 +10,7 @@ from itertools import combinations, groupby, chain
 from typing import Optional
 
 import numpy as np
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, distributions
 from scipy import special
 
 from sklearn.cluster import KMeans
@@ -22,6 +22,7 @@ from AnyQt.QtWidgets import QHeaderView, QTableView, QLineEdit, QPushButton, \
     QStyleOptionViewItem
 
 from Orange.data import Table, Domain, ContinuousVariable, StringVariable
+from Orange.distance.distance import _corrcoef2, _spearmanr2
 from Orange.preprocess import SklImpute, Normalize, Remove
 from Orange.statistics.util import FDR
 from Orange.widgets import gui
@@ -34,7 +35,6 @@ from Orange.widgets.utils.signals import Input, Output
 from Orange.widgets.utils.tablemodeladapter import TableModelDispatcher
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.utils.state_summary import format_summary_details
-from Orange.widgets.visualize.utils import VizRankDialogAttrPair
 from Orange.widgets.widget import OWWidget, AttributeList, Msg
 
 NAN = 2
@@ -58,34 +58,65 @@ class CorrelationType(IntEnum):
 def pearsonr(x: np.ndarray):
     n, p = x.shape
     r = np.corrcoef(x, rowvar=False)
+    return pearsonr_pval(r, n - 2)
+
+
+def pearsonr_pval(r, df):
     # from stats.pearsonr
-    df = n - 2
     r1_mask = np.abs(r) < 1.0
     with np.errstate(divide="ignore"):
-        t_squared = r**2 * (df / ((1.0 - r) * (1.0 + r)))
+        t_squared = r ** 2 * (df / ((1.0 - r) * (1.0 + r)))
     prob = special.betainc(0.5 * df, 0.5, df / (df + t_squared), where=r1_mask)
     prob[~r1_mask] = 0.0
     return r, prob
 
 
+def pearsonr2(x: np.ndarray, y: np.ndarray):
+    x_n, p1 = x.shape
+    y_n, p2 = y.shape
+    if x_n != y_n:
+        raise ValueError(f"{x.shape[0]} != {y.shape[0]}")
+    n = x_n
+    r = _corrcoef2(x, y)
+    return pearsonr_pval(r, n - 2)
+
+
+def spearman2(x: np.ndarray, y: np.ndarray):
+    x_n, p1 = x.shape
+    y_n, p2 = y.shape
+    if x_n != y_n:
+        raise ValueError(f"{x.shape[0]} != {y.shape[0]}")
+    n = x_n
+    r = _spearmanr2(x, y)
+    return spearman_pval(r, n - 2)
+
+
+def spearman_pval(r, df):
+    # from stats.spearmanr
+    r1_mask = np.abs(r) < 1.0
+    with np.errstate(divide="ignore"):
+        t = r * np.sqrt(df / ((r + 1.0) * (1.0 - r)), where=r1_mask)
+    prob = np.full_like(r, np.nan)
+    prob[~r1_mask] = 0.0
+    prob[r1_mask] = 2 * distributions.t.sf(np.abs(t[r1_mask]), df)
+    return prob
+
+
+def spearman_pval_1(r, df):
+    # from stats.spearmanr
+    r1_mask = np.abs(r) < 1.0
+    with np.errstate(divide="ignore"):
+        t_squared = r ** 2 * (df / ((r + 1.0) * (1.0 - r)))
+    prob = special.betainc(0.5 * df, 0.5, df / (df + t_squared), where=r1_mask)
+    prob[~r1_mask] = 0.0
+    return prob
+
+
 NEGATIVE_COLOR = QColor(70, 190, 250)
 POSITIVE_COLOR = QColor(170, 242, 43)
 
-
-# class CorrelationItemDelegate(gui.TableBarItem):
-#     fmt = "{:+.3f}"
-#
-#     def displayText(self, value, locale) -> str:
-#         if isinstance(value, numbers.Real):
-#             return self.format.format(value)
-#         else:
-#             return super().displayText(value, locale)
-#
-#     def initStyleOption(self, option: QStyleOptionViewItem, index: QModelIndex) -> None:
-#         super().initStyleOption(option, index)
-#         value = index.data(Qt.DisplayRole)
-#         if isinstance(value, numbers.Real):
-#             option.displayAlignment = Qt.AlignRight | Qt.AlignCenter
+CorrelationVarPair = Qt.UserRole + 2
+CorrelationPValRole = Qt.UserRole + 3
 
 
 class OWCorrelations(OWWidget):
@@ -127,6 +158,7 @@ class OWCorrelations(OWWidget):
 
         self.proxy_model = QSortFilterProxyModel(
             self, filterCaseSensitivity=False)
+
         # GUI
         box = gui.vBox(self.mainArea)
         self.correlation_combo = gui.comboBox(
@@ -156,7 +188,7 @@ class OWCorrelations(OWWidget):
         )
         header = self.rank_table.horizontalHeader()
         header.setStretchLastSection(True)
-        # header.hide()
+        header.hide()
         self.rank_table.setItemDelegateForColumn(0, TableBarItem(self.rank_table))
         self.rank_table.setModel(self.proxy_model)
         self.rank_table.selectionModel().selectionChanged.connect(
@@ -182,15 +214,22 @@ class OWCorrelations(OWWidget):
 
     def _selection_changed(self, *args):
         selmodel = self.rank_table.selectionModel()
-        selmodel.selection()
+        indices = [idx.row() for idx in selmodel.selectedRows(0)]
+        model = self.proxy_model
 
-        # self.selection = list(args)
+        def vpair(row):
+            idx1 = model.index(row, 1)
+            idx2 = model.index(row, 2)
+            v1, v2 = idx1.data(Qt.UserRole), idx2.data(Qt.UserRole)
+            return [v1, v2]
+
+        if indices:
+            self.selection = vpair(indices[0])
+        else:
+            self.selection = []
         self.commit()
 
-    # def _vizrank_stopped(self):
-    #     self._vizrank_select()
-
-    def _vizrank_select(self):
+    def _select(self):
         model = self.vizrank.rank_table.model()
         if not model.rowCount():
             return
@@ -204,7 +243,7 @@ class OWCorrelations(OWWidget):
             for i in range(model.rowCount()):
                 # pylint: disable=protected-access
                 names = sorted(x.name for x in model.data(
-                    model.index(i, 0), CorrelationRank._AttrRole))
+                    model.index(i, 0), CorrelationVarPair))
                 if names == sel_names:
                     selection.select(model.index(i, 0),
                                      model.index(i, model.columnCount() - 1))
@@ -263,10 +302,11 @@ class OWCorrelations(OWWidget):
 
     def run(self):
         data = self.cont_data
-        if self.correlation_type == CorrelationType.PEARSON:
-            r, pval = pearsonr(data.X)
-        else:
-            r, pval = spearmanr(data.X)
+        if self.feature is None:
+            if self.correlation_type == CorrelationType.PEARSON:
+                r, pval = pearsonr(data.X)
+            else:
+                r, pval = spearmanr(data.X)
 
         # take upper triangular part of r and pval
         indices = np.triu_indices_from(r, 1)
@@ -301,6 +341,8 @@ class OWCorrelations(OWWidget):
                 gui.TableBarItem.BarRole: lambda row, col: abs(r[row]),
                 gui.TableBarItem.BarColorRole:
                     lambda row, col: POSITIVE_COLOR if r[row] > 0 else NEGATIVE_COLOR,
+                CorrelationPValRole: lambda row, col: pval[row],
+                CorrelationVarPair: lambda row, col: list(pairs[row]),
             },
         )
         self.proxy_model.setSourceModel(model)
@@ -322,12 +364,12 @@ class OWCorrelations(OWWidget):
         domain = Domain(attrs, metas=metas)
         model = self.model
         x = np.array([[float(model.data(model.index(row, 0), role))
-                       for role in (Qt.DisplayRole, CorrelationRank.PValRole)]
+                       for role in (Qt.DisplayRole, CorrelationPValRole)]
                       for row in range(model.rowCount())])
         x[:, 1] = FDR(list(x[:, 1]))
         # pylint: disable=protected-access
         m = np.array([[a.name for a in model.data(model.index(row, 0),
-                                                  CorrelationRank._AttrRole)]
+                                                  CorrelationVarPair)]
                       for row in range(model.rowCount())], dtype=object)
         corr_table = Table(domain, x, metas=m)
         corr_table.name = "Correlations"
