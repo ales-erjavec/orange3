@@ -21,12 +21,19 @@ class _FlowLayoutItem(SimpleNamespace):
 
 
 class GraphicsFlowLayout(QGraphicsLayout):
-    def __init__(self, parent: Optional[QGraphicsLayoutItem] = None):
+    def __init__(
+            self, parent: Optional[QGraphicsLayoutItem] = None,
+            orientation=Qt.Horizontal
+    ):
         self.__items: List[QGraphicsLayoutItem] = []
         self.__spacing: Tuple[float, float] = (1., 1.)
+        self.__orientation = orientation
         super().__init__(parent)
         sp = self.sizePolicy()
-        sp.setHeightForWidth(True)
+        if orientation == Qt.Horizontal:
+            sp.setHeightForWidth(True)
+        else:
+            sp.setWidthForHeight(True)
         self.setSizePolicy(sp)
 
     def setVerticalSpacing(self, spacing: float) -> None:
@@ -63,16 +70,39 @@ class GraphicsFlowLayout(QGraphicsLayout):
         rowheight = 0
         width = rect.width()
         spacing_x, spacing_y = self.__spacing
+        orientation = self.__orientation
         first_in_row = True
         rows: List[List[QRectF]] = [[]]
 
-        def break_():
+        def break_(sh: QSizeF):
             nonlocal x, y, rowheight, first_in_row
-            y += rowheight + spacing_y
-            x = 0
+            if first_in_row:
+                return
+            if orientation == Qt.Horizontal:
+                if x + sh.width() <= rect.width():
+                    return
+            else:
+                if y + sh.height() <= rect.height():
+                    return
+            if orientation == Qt.Horizontal:
+                y += rowheight + spacing_y
+                x = 0
+            else:
+                x += rowheight + spacing_x
+                y = 0
             rowheight = 0
             first_in_row = True
             rows.append([])
+
+        def advance():
+            nonlocal x, y, rowheight, first_in_row
+            if orientation == Qt.Horizontal:
+                rowheight = max(rowheight, sh.height())
+                x += sh.width() + spacing_x
+            else:
+                rowheight = max(rowheight, sh.width())
+                y += sh.height() + spacing_y
+            first_in_row = False
 
         items = [_FlowLayoutItem(item=item, geom=QRectF(), size=QSizeF())
                  for item in self.__items]
@@ -80,25 +110,25 @@ class GraphicsFlowLayout(QGraphicsLayout):
         for flitem in items:
             item = flitem.item
             sh = item.effectiveSizeHint(Qt.PreferredSize)
-            if x + sh.width() > width and not first_in_row:
-                break_()
-            r = QRectF(rect.x() + x, rect.y() + y, sh.width(), sh.height())
-            flitem.geom = r
+            break_(sh)
+            flitem.geom = QRectF(rect.x() + x, rect.y() + y, sh.width(), sh.height())
             flitem.size = sh
             flitem.row = len(rows) - 1
-            rowheight = max(rowheight, sh.height())
-            x += sh.width() + spacing_x
-            first_in_row = False
+            advance()
             rows[-1].append(flitem.geom)
 
         alignment = Qt.AlignVCenter | Qt.AlignLeft
+        if orientation == Qt.Horizontal:
+            align_mask = Qt.AlignVertical_Mask
+        else:
+            align_mask = Qt.AlignHorizontal_Mask
         for flitem in items:
             row = rows[flitem.row]
             row_rect = reduce(QRectF.united, row, QRectF())
             if row_rect.isEmpty():
                 continue
             flitem.geom = qrect_aligned_to(
-                flitem.geom, row_rect, alignment & Qt.AlignVertical_Mask)
+                flitem.geom, row_rect, alignment & align_mask)
         return [fli.geom for fli in items]
 
     def sizeHint(self, which: Qt.SizeHint, constraint=QSizeF(-1, -1)) -> QSizeF:
@@ -108,9 +138,14 @@ class GraphicsFlowLayout(QGraphicsLayout):
             constraint.setWidth(
                 max(constraint.width() - extra_margins.width(), 0.0))
 
+        if constraint.height() >= 0:
+            constraint.setHeight(
+                max(constraint.height() - extra_margins.height(), 0.0))
         if which == Qt.PreferredSize:
             if constraint.width() >= 0:
                 rect = QRectF(0, 0, constraint.width(), FLT_MAX)
+            elif constraint.height() >=0:
+                rect = QRectF(0, 0, FLT_MAX, constraint.height())
             else:
                 rect = QRectF(0, 0, FLT_MAX, FLT_MAX)
             res = self.__doLayout(rect)
@@ -128,14 +163,14 @@ class GraphicsFlowLayout(QGraphicsLayout):
     def itemAt(self, i: int) -> QGraphicsLayoutItem:
         try:
             return self.__items[i]
-        except IndexError:
+        except IndexError:  # pragma: no cover
             return None  # type: ignore
 
     def removeAt(self, index: int) -> None:
         try:
             item = self.__items.pop(index)
         except IndexError:
-            pass
+            pass  # pragma: no cover
         else:
             item.setParentLayoutItem(None)
             self.invalidate()
@@ -144,7 +179,7 @@ class GraphicsFlowLayout(QGraphicsLayout):
         try:
             self.__items.remove(item)
         except ValueError:
-            pass
+            pass  # pragma: no cover
         else:
             item.setParentLayoutItem(None)
             self.invalidate()
