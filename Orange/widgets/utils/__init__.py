@@ -1,8 +1,8 @@
 import enum
 import inspect
 import sys
-from collections import deque
-from typing import TypeVar, Deque, Callable, Any, Iterable, Type, Union
+from collections import deque, Hashable
+from typing import TypeVar, Callable, Any, Iterable, Type, Union, Optional
 
 from AnyQt.QtCore import QObject
 
@@ -102,3 +102,30 @@ def enum_get(etype: Type[_E], name: str, default: _T1) -> Union[_E, _T1]:
         return etype[name]
     except LookupError:
         return default
+
+
+def unique_everseen(iterable, key=None):
+    # type: (Iterable[_T1], Optional[Callable[[_T1], Hashable]]) -> Iterable[_T1]
+    """
+    Return an iterator over unique elements of `iterable` preserving order.
+
+    If `key` is supplied it is used as a substitute for determining
+    'uniqueness' of elements.
+
+    Parameters
+    ----------
+    iterable : Iterable[T]
+    key : Callable[[T], Hashable]
+
+    Returns
+    -------
+    unique : Iterable[T]
+    """
+    seen = set()
+    if key is None:
+        key = lambda t: t
+    for el in iterable:
+        el_k = key(el)
+        if el_k not in seen:
+            seen.add(el_k)
+            yield el
