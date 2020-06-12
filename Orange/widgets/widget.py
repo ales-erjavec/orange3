@@ -5,7 +5,7 @@ from orangewidget.utils.signals import (
     Default, NonDefault, Single, Multiple, Dynamic, Explicit
 )
 from orangewidget.widget import (
-    OWBaseWidget, Message, Msg, StateInfo, Input, Output,
+    OWBaseWidget, Message, Msg, StateInfo, Input, Output, Closed,
 )
 
 from Orange.widgets.utils.progressbar import ProgressBarMixin
@@ -14,7 +14,7 @@ from Orange.widgets.utils.signals import AttributeList
 
 
 __all__ = [
-    "OWWidget", "Input", "Output", "AttributeList", "Message", "Msg",
+    "OWWidget", "Input", "Output", "Closed", "AttributeList", "Message", "Msg",
     "StateInfo",
 
     # these are re-exported here for legacy reasons. Use Input/Output instead.

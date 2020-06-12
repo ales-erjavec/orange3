@@ -25,7 +25,7 @@ from Orange.widgets.utils.sql import check_sql_input
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.utils.state_summary import format_summary_details, \
     format_multiple_summaries
-from Orange.widgets.widget import Input, Output, Msg
+from Orange.widgets.widget import Input, Output, Msg, Closed
 
 
 class OWConcatenate(widget.OWWidget):
@@ -40,7 +40,9 @@ class OWConcatenate(widget.OWWidget):
         additional_data = Input("Additional Data",
                                 Orange.data.Table,
                                 multiple=True,
-                                default=True)
+                                default=True,
+                                closing_sentinel=Closed
+                                )
 
     class Outputs:
         data = Output("Data", Orange.data.Table)
