@@ -10,6 +10,7 @@ from collections import namedtuple, defaultdict
 from itertools import compress, count
 from functools import reduce
 from operator import attrgetter
+from typing import Dict, Any, Optional
 from xml.sax.saxutils import escape
 
 import numpy as np
@@ -24,6 +25,7 @@ from AnyQt.QtGui import (
 from AnyQt.QtCore import Qt, QPointF, QRectF, QLineF
 from AnyQt.QtCore import pyqtSignal as Signal
 
+from orangewidget.widget import Closed
 from Orange.data import Table, Domain, StringVariable, RowInstance
 from Orange.data.util import get_unique_names_duplicates
 from Orange.widgets import widget, gui, settings
@@ -50,7 +52,7 @@ class OWVennDiagram(widget.OWWidget):
     settings_version = 2
 
     class Inputs:
-        data = Input("Data", Table, multiple=True)
+        data = Input("Data", Table, multiple=True, closing_sentinel=Closed)
 
     class Outputs:
         selected_data = Output("Selected Data", Table, default=True)
@@ -87,7 +89,9 @@ class OWVennDiagram(widget.OWWidget):
 
         # Diagram update is in progress
         self._updating = False
-        # Input datasets in the order they were 'connected'.
+        #: Connected input dataset signals.
+        self._data_inputs: Dict[Any, Optional[Table]] = {}
+        # Input non-none datasets in the order they were 'connected'.
         self.data = {}
         # Extracted input item sets in the order they were 'connected'
         self.itemsets = {}
@@ -155,9 +159,14 @@ class OWVennDiagram(widget.OWWidget):
     @Inputs.data
     @check_sql_input
     def setData(self, data, key=None):
+        if data is Closed:
+            self._data_inputs.pop(key)
+        else:
+            self._data_inputs[key] = data
+
         self.Error.too_many_inputs.clear()
         if key in self.data:
-            if data is None:
+            if data is None or data is Closed:
                 # Remove the input
                 # Clear possible warnings.
                 self.Warning.clear()
@@ -174,6 +183,11 @@ class OWVennDiagram(widget.OWWidget):
                 return
             # Add a new input
             self.data[key] = _InputData(key, data.name, data)
+        self.data = {
+            key: self.data[key] for key, val in self._data_inputs.items()
+            if val is not None
+        }
+        print(self.data)
         self._setInterAttributes()
 
     def data_equality(self):
