@@ -87,8 +87,6 @@ class OWVennDiagram(widget.OWWidget):
 
         # Diagram update is in progress
         self._updating = False
-        # Input update is in progress
-        self._inputUpdate = False
         # Input datasets in the order they were 'connected'.
         self.data = {}
         # Extracted input item sets in the order they were 'connected'
@@ -158,8 +156,6 @@ class OWVennDiagram(widget.OWWidget):
     @check_sql_input
     def setData(self, data, key=None):
         self.Error.too_many_inputs.clear()
-        if not self._inputUpdate:
-            self._inputUpdate = True
         if key in self.data:
             if data is None:
                 # Remove the input
@@ -201,7 +197,6 @@ class OWVennDiagram(widget.OWWidget):
         return True
 
     def handleNewSignals(self):
-        self._inputUpdate = False
         self.set_input_summary()
         self.vennwidget.clear()
         if not self.settings_compatible():
