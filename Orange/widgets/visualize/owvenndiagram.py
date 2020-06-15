@@ -10,6 +10,7 @@ from collections import namedtuple, defaultdict
 from itertools import compress, count
 from functools import reduce
 from operator import attrgetter
+from typing import Dict, Any, Optional
 from xml.sax.saxutils import escape
 
 import numpy as np
@@ -50,7 +51,7 @@ class OWVennDiagram(widget.OWWidget):
     settings_version = 2
 
     class Inputs:
-        data = Input("Data", Table, multiple=True)
+        data = Input("Data", Table, multiple=True, closing_sentinel=Input.Closed)
 
     class Outputs:
         selected_data = Output("Selected Data", Table, default=True)
@@ -87,7 +88,9 @@ class OWVennDiagram(widget.OWWidget):
 
         # Diagram update is in progress
         self._updating = False
-        # Input datasets in the order they were 'connected'.
+        #: Connected input dataset signals.
+        self._data_inputs: Dict[Any, Optional[Table]] = {}
+        # Input non-none datasets in the order they were 'connected'.
         self.data = {}
         # Extracted input item sets in the order they were 'connected'
         self.itemsets = {}
@@ -155,6 +158,12 @@ class OWVennDiagram(widget.OWWidget):
     @Inputs.data
     @check_sql_input
     def setData(self, data, key=None):
+        if data is Input.Closed:
+            self._data_inputs.pop(key, None)
+            data = None
+        else:
+            self._data_inputs[key] = data
+
         self.Error.too_many_inputs.clear()
         if key in self.data:
             if data is None:
@@ -174,6 +183,10 @@ class OWVennDiagram(widget.OWWidget):
                 return
             # Add a new input
             self.data[key] = _InputData(key, data.name, data)
+        self.data = {
+            key: self.data[key] for key, val in self._data_inputs.items()
+            if val is not None
+        }
         self._setInterAttributes()
 
     def data_equality(self):
