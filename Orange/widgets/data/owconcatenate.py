@@ -9,7 +9,7 @@ Concatenate (append) two or more datasets.
 from collections import OrderedDict, namedtuple, defaultdict
 from functools import reduce
 from itertools import chain, count
-from typing import List
+from typing import List, Optional, Any, Dict
 
 import numpy as np
 from AnyQt.QtWidgets import QFormLayout
@@ -90,7 +90,7 @@ class OWConcatenate(widget.OWWidget):
         super().__init__()
 
         self.primary_data = None
-        self.more_data = OrderedDict()
+        self._more_data_input: Dict[Any, Optional[Orange.data.Table]] = {}
 
         self.mergebox = gui.vBox(self.controlArea, "Variable Merging")
         box = gui.radioButtons(
@@ -169,10 +169,16 @@ class OWConcatenate(widget.OWWidget):
     @Inputs.additional_data
     @check_sql_input
     def set_more_data(self, data=None, sig_id=None):
-        if data is not None:
-            self.more_data[sig_id] = data
-        elif sig_id in self.more_data:
-            del self.more_data[sig_id]
+        if data is Closed:
+            self._more_data_input.pop(sig_id)
+        else:
+            self._more_data_input[sig_id] = data
+        print(self._more_data_input)
+
+    @property
+    def more_data(self):
+        return {key: val for key, val in self._more_data_input.items()
+                if val is not None}
 
     def _set_input_summary(self):
         more_data = list(self.more_data.values()) if self.more_data else [None]
