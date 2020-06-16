@@ -11,7 +11,7 @@ from functools import partial, reduce
 from concurrent.futures import Future
 from collections import OrderedDict, namedtuple
 from itertools import count
-from typing import Any, Optional, List, Dict, Callable
+from typing import Any, Optional, List, Dict, Callable, NamedTuple, Sequence
 
 import numpy as np
 import baycomp
@@ -46,11 +46,12 @@ from orangewidget.widget import Closed
 
 log = logging.getLogger(__name__)
 
-InputLearner = namedtuple(
-    "InputLearner",
-    ["learner",  # :: Orange.base.Learner
-     "results",  # :: Option[Try[Orange.evaluation.Results]]
-     "stats"]    # :: Option[Sequence[Try[float]]]
+InputLearner = NamedTuple(
+    "InputLearner", [
+        ("learner", Learner),
+        ("results", Optional['Try[Orange.evaluation.Results]']),
+        ("stats",  Optional[Sequence['Try[float]']]),
+    ]
 )
 
 
