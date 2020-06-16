@@ -1,7 +1,7 @@
-from collections import namedtuple
 from functools import partial
 from operator import itemgetter
 from itertools import chain
+from typing import Dict, Optional, Any, List, NamedTuple
 
 import numpy
 from AnyQt.QtWidgets import (
@@ -31,12 +31,12 @@ from Orange.widgets.utils.sql import check_sql_input
 
 
 # Input slot for the Predictors channel
-PredictorSlot = namedtuple(
-    "PredictorSlot",
-    ["predictor",  # The `Model` instance
-     "name",       # Predictor name
-     "results"]    # Computed prediction results or None.
-)
+PredictorSlot = NamedTuple(
+    "PredictorSlot", [
+        ("predictor", Model),  # The `Model` instance
+        ("name", str),       # Predictor name
+        ("results", Optional[Results]),    # Computed prediction results or None.
+])
 
 
 class OWPredictions(OWWidget):
