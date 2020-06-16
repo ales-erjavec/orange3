@@ -42,7 +42,6 @@ from Orange.widgets.utils.concurrent import ThreadExecutor, TaskState
 from Orange.widgets.utils.state_summary import (format_multiple_summaries,
                                                 format_summary_details)
 from Orange.widgets.widget import OWWidget, Msg, Input, Output
-from orangewidget.widget import Closed
 
 log = logging.getLogger(__name__)
 
@@ -143,7 +142,9 @@ class OWTestAndScore(OWWidget):
     class Inputs:
         train_data = Input("Data", Table, default=True)
         test_data = Input("Test Data", Table)
-        learner = Input("Learner", Learner, multiple=True)
+        learner = Input(
+            "Learner", Learner, multiple=True, closing_sentinel=Input.Closed
+        )
         preprocessor = Input("Preprocessor", Preprocess)
 
     class Outputs:
@@ -228,6 +229,7 @@ class OWTestAndScore(OWWidget):
         self.scorers = []
         self.__pending_comparison_criterion = self.comparison_criterion
 
+        self._learner_inputs = {}  # type: Dict[Any, Optional[Learner]]
         #: An Ordered dictionary with current inputs and their testing results.
         self.learners = OrderedDict()  # type: Dict[Any, Input]
 
@@ -368,13 +370,21 @@ class OWTestAndScore(OWWidget):
         learner : Optional[Orange.base.Learner]
         key : Any
         """
-        if key in self.learners and learner is Closed:
+        if learner is Input.Closed:
+            self._learner_inputs.pop(key)
+            learner = None
+        else:
+            self._learner_inputs[key] = learner
+
+        if key in self.learners and learner is None:
             # Removed
             self._invalidate([key])
             del self.learners[key]
         elif learner is not None:
             self.learners[key] = InputLearner(learner, None, None)
             self._invalidate([key])
+        self.learners = {key: self.learners[key] for key, value in
+                         self._learner_inputs.items() if value is not None}
 
     @Inputs.train_data
     def set_train_data(self, data):
