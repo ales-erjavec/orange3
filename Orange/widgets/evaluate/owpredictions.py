@@ -48,7 +48,8 @@ class OWPredictions(OWWidget):
 
     class Inputs:
         data = Input("Data", Orange.data.Table)
-        predictors = Input("Predictors", Model, multiple=True)
+        predictors = Input("Predictors", Model, multiple=True,
+                           closing_sentinel=Input.Closed)
 
     class Outputs:
         predictions = Output("Predictions", Orange.data.Table)
@@ -74,6 +75,7 @@ class OWPredictions(OWWidget):
 
         self.data = None  # type: Optional[Orange.data.Table]
         self.predictors = {}  # type: Dict[object, PredictorSlot]
+        self._predictors_inputs = {}  # type: Dict[Any, Optional[Model]]
         self.class_values = []  # type: List[str]
         self._delegates = []
         self.left_width = 10
@@ -152,17 +154,24 @@ class OWPredictions(OWWidget):
     def class_var(self):
         return self.data and self.data.domain.class_var
 
-    # pylint: disable=redefined-builtin
     @Inputs.predictors
-    def set_predictor(self, predictor=None, id=None):
-        if id in self.predictors:
-            if predictor is not None:
-                self.predictors[id] = self.predictors[id]._replace(
+    def set_predictor(self, predictor=None, id_=None):
+        if predictor is Input.Closed:
+            self._predictors_inputs.pop(id_)
+            predictor = None
+        else:
+            self._predictors_inputs[id_] = predictor
+
+        if id_ in self.predictors:
+            if predictor is not None and predictor:
+                self.predictors[id_] = self.predictors[id_]._replace(
                     predictor=predictor, name=predictor.name, results=None)
             else:
-                del self.predictors[id]
+                del self.predictors[id_]
         elif predictor is not None:
-            self.predictors[id] = PredictorSlot(predictor, predictor.name, None)
+            self.predictors[id_] = PredictorSlot(predictor, predictor.name, None)
+        self.predictors = {key: self.predictors[key] for key, value in
+                           self._predictors_inputs.items() if value is not None}
 
     def _set_class_values(self):
         class_values = []
