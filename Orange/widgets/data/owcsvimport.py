@@ -56,7 +56,7 @@ import Orange.data
 from Orange.widgets import widget, gui, settings
 from Orange.widgets.utils.concurrent import PyOwned
 from Orange.widgets.utils import (
-    textimport, concurrent as qconcurrent, enum_get, unique_everseen
+    textimport, concurrent as qconcurrent, enum_get, unique_everseen, qname
 )
 from Orange.widgets.utils.combobox import ItemStyledComboBox
 from Orange.widgets.utils.pathutils import (
@@ -530,11 +530,6 @@ class VarPathItemModel(QStandardItemModel):
 
     def resolve(self, vpath: PathItem) -> Optional[str]:
         return vpath.resolve(self.replacementEnv())
-
-
-def qname(type_: type) -> str:
-    """Return the fully qualified name for a `type_`."""
-    return "{0.__module__}.{0.__qualname__}".format(type_)
 
 
 class OWCSVFileImport(widget.OWWidget):
