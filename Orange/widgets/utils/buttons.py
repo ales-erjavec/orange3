@@ -1,3 +1,5 @@
+from typing import Optional
+
 from AnyQt.QtCore import Qt, QSize, QEvent
 from AnyQt.QtGui import QKeySequence
 from AnyQt.QtWidgets import QToolButton, QSizePolicy, QStyle, QToolTip
@@ -11,19 +13,29 @@ __all__ = [
 
 
 class FixedSizeButton(QToolButton):
+    """
+    A simple square tool button intended to have a single glyph text.
 
+    If the button has an associated `defaultAction` its keyboard shortcut is
+    added to the button's tool tip.
+    """
     def __init__(self, *args, defaultAction=None, **kwargs):
+        sizePolicy: Optional[QSizePolicy] = kwargs.pop("sizePolicy", None)
         super().__init__(*args, **kwargs)
-        sh = self.sizePolicy()
-        sh.setHorizontalPolicy(QSizePolicy.Fixed)
-        sh.setVerticalPolicy(QSizePolicy.Fixed)
-        self.setSizePolicy(sh)
-        self.setAttribute(Qt.WA_WState_OwnSizePolicy, True)
+        if sizePolicy is None:
+            sizePolicy = self.sizePolicy()
+            sizePolicy.setHorizontalPolicy(QSizePolicy.Fixed)
+            sizePolicy.setVerticalPolicy(QSizePolicy.Fixed)
+            ownpolicy = True
+        else:
+            ownpolicy = False
+        self.setSizePolicy(sizePolicy)
+        self.setAttribute(Qt.WA_WState_OwnSizePolicy, ownpolicy)
 
         if defaultAction is not None:
             self.setDefaultAction(defaultAction)
 
-    def sizeHint(self):
+    def sizeHint(self) -> QSize:
         style = self.style()
         size = (style.pixelMetric(QStyle.PM_SmallIconSize) +
                 style.pixelMetric(QStyle.PM_ButtonMargin))

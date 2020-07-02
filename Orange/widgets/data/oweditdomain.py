@@ -5,7 +5,10 @@ Edit Domain
 A widget for manual editing of a domain's attributes.
 
 """
+import re
 import warnings
+
+from types import SimpleNamespace
 from xml.sax.saxutils import escape
 from itertools import zip_longest, repeat, chain
 from contextlib import contextmanager
@@ -40,7 +43,7 @@ import Orange.data
 
 from Orange.preprocess.transformation import Transformation, Identity, Lookup
 from Orange.widgets import widget, gui, settings
-from Orange.widgets.utils import itemmodels, ftry
+from Orange.widgets.utils import itemmodels, unique_everseen, ftry
 from Orange.widgets.utils.buttons import FixedSizeButton
 from Orange.widgets.utils.itemmodels import signal_blocking
 from Orange.widgets.utils.widgetpreview import WidgetPreview
@@ -51,15 +54,6 @@ MArray = np.ma.MaskedArray
 DType = Union[np.dtype, type]
 
 V = TypeVar("V", bound=Orange.data.Variable)  # pylint: disable=invalid-name
-H = TypeVar("H", bound=Hashable)  # pylint: disable=invalid-name
-
-
-def unique(sequence: Iterable[H]) -> Iterable[H]:
-    """
-    Return unique elements in `sequence`, preserving their (first seen) order.
-    """
-    # depending on Python >= 3.6 'ordered' dict implementation detail.
-    return iter(dict.fromkeys(sequence))
 
 
 class _DataType:
@@ -74,20 +68,6 @@ class _DataType:
 
     def __hash__(self):
         return hash((type(self), super().__hash__()))
-
-    def name_type(self):
-        """
-        Returns a tuple with name and type of the variable.
-        It is used since it is forbidden to use names of variables in settings.
-        """
-        type_number = {
-            "Categorical": 0,
-            "Real": 2,
-            "Time": 3,
-            "String": 4
-        }
-        return self.name, type_number[type(self).__name__]
-
 
 #: An ordered sequence of key, value pairs (variable annotations)
 AnnotationsType = Tuple[Tuple[str, str], ...]
@@ -172,7 +152,7 @@ class CategoriesMapping(_DataType, namedtuple("CategoriesMapping", ["mapping"]))
     """
     def __call__(self, var):
         # type: (Categorical) -> Categorical
-        cat = tuple(unique(cj for _, cj in self.mapping if cj is not None))
+        cat = tuple(unique_everseen(cj for _, cj in self.mapping if cj is not None))
         return var._replace(categories=cat)
 
 
@@ -1060,7 +1040,7 @@ class CategoriesEditDelegate(QStyledItemDelegate):
             editable=True, insertPolicy=QComboBox.InsertAtBottom)
         cb.setParent(view, Qt.Popup)
         cb.addItems(
-            list(unique(str(row.data(Qt.EditRole)) for row in rows)))
+            list(unique_everseen(str(row.data(Qt.EditRole)) for row in rows)))
         prows = [QPersistentModelIndex(row) for row in rows]
         cb.prows = prows
         return cb
@@ -1870,6 +1850,777 @@ class ReinterpretVariableEditor(VariableEditor):
         return self.disc_edit.merge_dialog_settings
 
 
+class CategoriesEditor(QWidget):
+    changed = Signal()
+    edited = Signal()
+
+    _data: Optional[CategoricalVector] = None
+    _transform: Optional[CategoriesMapping] = None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        layout = QGridLayout(margin=0, spacing=1)
+        self.merge_dialog_settings = {}
+        self.setLayout(layout)
+        self.categories_edit = QListView(
+            editTriggers=QListView.DoubleClicked | QListView.EditKeyPressed,
+            selectionMode=QListView.ExtendedSelection,
+            uniformItemSizes=True,
+        )
+        self.categories_edit.setItemDelegate(CategoriesEditDelegate(self))
+        self.categories_model = CountedStateModel(
+            flags=Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable
+        )
+        self.categories_edit.setModel(self.categories_model)
+        self.categories_model.dataChanged.connect(self.changed)
+
+        self.categories_edit.selectionModel().selectionChanged.connect(
+            self._on_selection_changed
+        )
+        self.categories_model.layoutChanged.connect(self._on_selection_changed)
+        self.categories_model.rowsMoved.connect(self._on_selection_changed)
+
+        layout.addWidget(self.categories_edit, 0, 0, 1, 2)
+        hlayout = QHBoxLayout(spacing=1, margin=0)
+        layout.addLayout(hlayout, 1, 0, 1, 2)
+
+        self.categories_action_group = group = QActionGroup(
+            self, objectName="action-group-categories", enabled=False
+        )
+        self.move_value_up = QAction(
+            "\N{UPWARDS ARROW}", group,
+            toolTip="Move the selected item up.",
+            shortcut=QKeySequence(Qt.ControlModifier | Qt.AltModifier |
+                                  Qt.Key_BracketLeft),
+            shortcutContext=Qt.WidgetShortcut,
+        )
+        self.move_value_up.triggered.connect(self._move_up)
+
+        self.move_value_down = QAction(
+            "\N{DOWNWARDS ARROW}", group,
+            toolTip="Move the selected item down.",
+            shortcut=QKeySequence(Qt.ControlModifier | Qt.AltModifier |
+                                  Qt.Key_BracketRight),
+            shortcutContext=Qt.WidgetShortcut,
+        )
+        self.move_value_down.triggered.connect(self._move_down)
+
+        self.add_new_item = QAction(
+            "+", group,
+            objectName="action-add-item",
+            toolTip="Append a new item.",
+            shortcut=QKeySequence(QKeySequence.New),
+            shortcutContext=Qt.WidgetShortcut,
+        )
+        self.remove_item = QAction(
+            "\N{MINUS SIGN}", group,
+            objectName="action-remove-item",
+            toolTip="Delete the selected item.",
+            shortcut=QKeySequence(QKeySequence.Delete),
+            shortcutContext=Qt.WidgetShortcut,
+        )
+        self.merge_items = QAction(
+            "M", group,
+            objectName="action-merge-item",
+            toolTip="Merge selected items.",
+            shortcut=QKeySequence(Qt.ControlModifier | Qt.Key_Equal),
+            shortcutContext=Qt.WidgetShortcut
+        )
+
+        self.add_new_item.triggered.connect(self._add_category)
+        self.remove_item.triggered.connect(self._remove_category)
+        self.merge_items.triggered.connect(self._merge_categories)
+
+        button1 = FixedSizeButton(
+            self, defaultAction=self.move_value_up,
+            accessibleName="Move up"
+        )
+        button2 = FixedSizeButton(
+            self, defaultAction=self.move_value_down,
+            accessibleName="Move down"
+        )
+        button3 = FixedSizeButton(
+            self, defaultAction=self.add_new_item,
+            accessibleName="Add"
+        )
+        button4 = FixedSizeButton(
+            self, defaultAction=self.remove_item,
+            accessibleName="Remove"
+        )
+        button5 = FixedSizeButton(
+            self, defaultAction=self.merge_items,
+            accessibleName="Merge",
+        )
+        self.categories_edit.addActions([
+            self.move_value_up, self.move_value_down,
+            self.add_new_item, self.remove_item
+        ])
+        hlayout.addWidget(button1)
+        hlayout.addWidget(button2)
+        hlayout.addSpacing(3)
+        hlayout.addWidget(button3)
+        hlayout.addWidget(button4)
+        hlayout.addSpacing(3)
+        hlayout.addWidget(button5)
+        hlayout.addStretch(10)
+
+    @Slot()
+    def _on_selection_changed(self):
+        rows = self.categories_edit.selectionModel().selectedRows()
+        if len(rows) == 1:
+            i = rows[0].row()
+            self.move_value_up.setEnabled(i != 0)
+            self.move_value_down.setEnabled(
+                i != self.categories_model.rowCount() - 1)
+        else:
+            self.move_value_up.setEnabled(False)
+            self.move_value_down.setEnabled(False)
+
+    def _move_rows(self, rows, offset):
+        if not rows:
+            return
+        assert len(rows) == 1
+        i = rows[0].row()
+        if offset > 0:
+            offset += 1
+        self.categories_model.moveRows(QModelIndex(), i, 1, QModelIndex(), i + offset)
+        self.edited.emit()
+        self.changed.emit()
+
+    def _move_up(self):
+        rows = self.categories_edit.selectionModel().selectedRows()
+        self._move_rows(rows, -1)
+
+    def _move_down(self):
+        rows = self.categories_edit.selectionModel().selectedRows()
+        self._move_rows(rows, 1)
+
+    def _add_category(self):
+        """
+        Add a new category
+        """
+        view = self.categories_edit
+        model = view.model()
+        with disconnected(model.dataChanged, self.changed,
+                          Qt.UniqueConnection):
+            row = model.rowCount()
+            if not model.insertRow(model.rowCount()):
+                return
+            index = model.index(row, 0)
+            model.setItemData(
+                index, {
+                    Qt.EditRole: "",
+                    EditStateRole: ItemEditState.Added
+                }
+            )
+            view.setCurrentIndex(index)
+            view.edit(index)
+        self.edited.emit()
+        self.changed.emit()
+
+    def _remove_category(self):
+        """
+        Remove the current selected category.
+
+        If the item is an existing category present in the source variable it
+        is marked as removed in the view. But if it was added in the set
+        transformation it is removed entirely from the model and view.
+        """
+        view = self.categories_edit
+        rows = view.selectionModel().selectedRows(0)
+        if not rows:
+            return  # pragma: no cover
+        for index in rows:
+            model = index.model()
+            state = index.data(EditStateRole)
+            pos = index.data(SourcePosRole)
+            if pos is not None and pos >= 0:
+                # existing level -> only mark/toggle its dropped state,
+                model.setData(
+                    index,
+                    ItemEditState.Dropped if state != ItemEditState.Dropped
+                    else ItemEditState.NoState,
+                    EditStateRole)
+            elif state == ItemEditState.Added:
+                # new level -> remove it
+                model.removeRow(index.row())
+            else:
+                assert False, "invalid state '{}' for {}" \
+                    .format(state, index.row())
+
+    def setData(self, data: CategoricalVector, transform: CategoriesMapping):
+        self._data = data
+        self.setTransform(transform)
+
+    def setTransform(self, transform: CategoriesMapping):
+        vtype = self._data.vtype if self._data is not None else None
+        if transform is None and vtype is not None:
+            transform = CategoriesMapping([(v, v) for v in vtype.categories])
+
+        if self._transform == transform:
+            return
+
+        items = []
+        if transform is not None:
+            ci_index = {c: i for i, c in enumerate(vtype.categories)}
+            for ci, cj in transform.mapping:
+                if ci is None and cj is not None:
+                    # level added
+                    item = {
+                        Qt.EditRole: cj,
+                        EditStateRole: ItemEditState.Added,
+                        SourcePosRole: None
+                    }
+                elif ci is not None and cj is None:
+                    # ci level dropped
+                    item = {
+                        Qt.EditRole: ci,
+                        EditStateRole: ItemEditState.Dropped,
+                        SourcePosRole: ci_index[ci],
+                        SourceNameRole: ci
+                    }
+                elif ci is not None and cj is not None:
+                    # rename or reorder
+                    item = {
+                        Qt.EditRole: cj,
+                        EditStateRole: ItemEditState.NoState,
+                        SourcePosRole: ci_index[ci],
+                        SourceNameRole: ci
+                    }
+                else:
+                    assert False, "invalid mapping: {!r}".format(transform.mapping)
+                items.append(item)
+        else:
+            items = []
+        model = self.categories_model
+        with disconnected(model.dataChanged, self.changed):
+            model.clear()
+            model.insertRows(0, len(items))
+            for i, item in enumerate(items):
+                model.setItemData(model.index(i, 0), item)
+        self.add_new_item.actionGroup().setEnabled(vtype is not None)
+        self.changed.emit()
+
+    def clear(self):
+        self._data = None
+        self._transform = None
+        self.categories_model.clear()
+
+    def __categories_mapping(self):
+        # type: () -> CategoriesMappingType
+        """
+        Encode and return the current state as a CategoriesMappingType
+        """
+        model = self.categories_model
+        source = self._data.vtype.categories
+
+        res = []  # type: CategoriesMappingType
+        for i in range(model.rowCount()):
+            midx = model.index(i, 0)
+            category = midx.data(Qt.EditRole)
+            source_pos = midx.data(SourcePosRole)  # type: Optional[int]
+            if source_pos is not None:
+                source_name = source[source_pos]
+            else:
+                source_name = None
+            state = midx.data(EditStateRole)
+            if state == ItemEditState.Dropped:
+                res.append((source_name, None))
+            elif state == ItemEditState.Added:
+                res.append((None, category))
+            else:
+                res.append((source_name, category))
+        return res
+
+    def transform(self) -> CategoriesMapping:
+        return CategoriesMapping(self.__categories_mapping())
+
+    def _reset_name_merge(self) -> None:
+        """Reset renamed and merged variables in the model."""
+        view = self.categories_edit
+        model = view.model()  # type: QAbstractItemModel
+        with disconnected(model.dataChanged, self.changed):
+            for index in map(model.index, range(model.rowCount())):
+                model.setData(
+                    index, model.data(index, SourceNameRole), Qt.EditRole
+                )
+
+    def _merge_categories(self) -> None:
+        """
+        Merge less common categories into one with the dialog for merge
+        selection.
+        """
+        data = self._data
+        if data is None:
+            return
+        # settings =
+        view = self.categories_edit
+        model = view.model()  # type: QAbstractItemModel
+        selected_attributes = [ind.data(Qt.EditRole)
+                               for ind in view.selectedIndexes()]
+        dlg = GroupItemsDialog(
+            data.vtype, data.data(), selected_attributes,
+            # self.merge_dialog_settings.get(self.var, {}),
+            {},
+            self,
+            windowTitle="Import Options",
+            sizeGripEnabled=True,
+        )
+        dlg.setWindowModality(Qt.WindowModal)
+        status = dlg.exec_()
+        dlg.deleteLater()
+        self.merge_dialog_settings[data.vtype] = dlg.get_dialog_settings()
+
+        def complete_merge(text, merge_attributes):
+            # write the new text for edit role in all rows
+            self._reset_name_merge()
+            with disconnected(model.dataChanged, self.changed):
+                for index in map(model.index, range(model.rowCount())):
+                    if index.data(SourceNameRole) in merge_attributes:
+                        model.setData(index, text, Qt.EditRole)
+            self.changed.emit()
+            self.edited.emit()
+
+        if status == QDialog.Accepted:
+            complete_merge(
+                dlg.get_merged_value_name(), dlg.get_merge_attributes()
+            )
+
+
+class KeyValueEditor(QWidget):
+    changed = Signal()
+    edited = Signal()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        layout = QGridLayout(margin=0, spacing=1)
+        self.setLayout(layout)
+        hlayout = QHBoxLayout(margin=0)
+
+        self.labels_edit = view = QTreeView(
+            objectName="annotation-pairs-edit",
+            rootIsDecorated=False,
+            editTriggers=QTreeView.DoubleClicked | QTreeView.EditKeyPressed,
+        )
+        self.labels_model = model = DictItemsModel()
+        view.setModel(model)
+
+        view.selectionModel().selectionChanged.connect(
+            self.on_label_selection_changed)
+
+        agrp = QActionGroup(view, objectName="annotate-action-group")
+        action_add = QAction(
+            "+", self, objectName="action-add-label",
+            toolTip="Add a new label.",
+            shortcut=QKeySequence(QKeySequence.New),
+            shortcutContext=Qt.WidgetShortcut
+        )
+        action_delete = QAction(
+            "\N{MINUS SIGN}", self, objectName="action-delete-label",
+            toolTip="Remove selected label.",
+            shortcut=QKeySequence(QKeySequence.Delete),
+            shortcutContext=Qt.WidgetShortcut
+        )
+        agrp.addAction(action_add)
+        agrp.addAction(action_delete)
+        view.addActions([action_add, action_delete])
+
+        def add_label():
+            row = [QStandardItem(), QStandardItem()]
+            model.appendRow(row)
+            idx = model.index(model.rowCount() - 1, 0)
+            view.setCurrentIndex(idx)
+            view.edit(idx)
+
+        def remove_label():
+            rows = view.selectionModel().selectedRows(0)
+            if rows:
+                assert len(rows) == 1
+                idx = rows[0].row()
+                model.removeRow(idx)
+
+        action_add.triggered.connect(add_label)
+        action_delete.triggered.connect(remove_label)
+        agrp.setEnabled(False)
+
+        self.add_label_action = action_add
+        self.remove_label_action = action_delete
+
+        # Necessary signals to know when the labels change
+        model.dataChanged.connect(self.changed, Qt.UniqueConnection)
+        model.rowsInserted.connect(self.changed, Qt.UniqueConnection)
+        model.rowsRemoved.connect(self.changed, Qt.UniqueConnection)
+
+        layout.addWidget(view, 0, 0, 1, 2)
+        layout.addLayout(hlayout, 1, 0, 1, 2)
+        hlayout.setContentsMargins(0, 0, 0, 0)
+        button = FixedSizeButton(
+            self, defaultAction=self.add_label_action,
+            accessibleName="Add",
+        )
+        hlayout.addWidget(button)
+
+        button = FixedSizeButton(
+            self, defaultAction=self.remove_label_action,
+            accessibleName="Remove",
+        )
+        hlayout.addWidget(button)
+        hlayout.addStretch(10)
+
+    @Slot()
+    def on_label_selection_changed(self):
+        selected = self.labels_edit.selectionModel().selectedRows()
+        self.remove_label_action.setEnabled(bool(len(selected)))
+
+    def setData(self, mapping: Mapping) -> None:
+        """
+        Set the mapping to edit.
+        """
+        # self.clear()
+        self.labels_model.set_dict(dict(mapping))
+        self.mapping = mapping
+
+        if mapping:
+            self.add_label_action.actionGroup().setEnabled(True)
+        else:
+            self.add_label_action.actionGroup().setEnabled(False)
+
+    def getData(self):
+        """Retrieve the modified mapping.
+        """
+        return tuple(sorted(self.labels_model.get_dict().items()))
+
+
+TypeTransforms = {
+    Real: AsContinuous,
+    Categorical: AsCategorical,
+    Time: AsTime,
+    String: AsString,
+}
+
+
+class MassVariablesEditor(QWidget):
+    changed = Signal()
+    edited = Signal()
+
+    def setNamePattern(self, pattern: str):
+        cpos = self.name_edit.cursorPosition()
+        self.name_edit.setText(pattern)
+        self.name_edit.setCursorPosition(cpos)
+
+    def namePattern(self) -> str:
+        return self.name_edit.text()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__history: Dict[Variable, Sequence[Transform]] = {}
+        layout = QFormLayout(
+            fieldGrowthPolicy=QFormLayout.AllNonFixedFieldsGrow,
+            objectName="editor-form-layout"
+        )
+        self.name_edit = QLineEdit(
+            objectName="name-pattern-edit", placeholderText="name...",
+        )
+
+        self.name_edit.editingFinished.connect(self.edited)
+        self.name_edit.textChanged.connect(self.changed)
+
+        layout.addRow("Name", self.name_edit)
+        self.type_combo = typecb = QComboBox(objectName="type-combo")
+        typecb.addItem("Keep", VariableTypes)
+        typecb.insertSeparator(1)
+        typecb.addItem(variable_icon(Categorical), "Categorical", Categorical)
+        typecb.addItem(variable_icon(Real), "Numeric", Real)
+        typecb.addItem(variable_icon(String), "Text", String)
+        typecb.addItem(variable_icon(Time), "Time", Time)
+        typecb.activated[int].connect(self.__reinterpret_activated)
+        layout.addRow("Type", typecb)
+        self.unlink_check = QCheckBox("Unlink", objectName="unlink-edit")
+        self.unlink_check.toggled.connect(self.changed)
+        self.unlink_check.toggled.connect(self.edited)
+
+        layout.addRow("", self.unlink_check)
+        self.categories_editor = CategoriesEditor(objectName="categories-editor")
+
+        self.categories_editor.changed.connect(self.changed)
+        self.categories_editor.edited.connect(self.edited)
+
+        layout.addRow("Values", self.categories_editor)
+        self.annotations_edit = KeyValueEditor(objectName="annotations-editor")
+        self.annotations_edit.edited.connect(self.edited)
+        self.annotations_edit.changed.connect(self.changed)
+        layout.addRow("Labels", self.annotations_edit)
+        self.setLayout(layout)
+
+        class RowItem(SimpleNamespace):
+            label: QWidget
+            field: QWidget
+            row: int
+
+            def setVisible(self, visible: bool) -> None:
+                if visible and not self.field.isVisibleTo(self.field.parent()):
+                    layout.insertRow(self.row, self.label, self.field)
+                elif not visible and self.field.isVisibleTo(self.field.parent()):
+                    layout.takeRow(self.row)
+                self.label.setVisible(visible)
+                self.field.setVisible(visible)
+
+        self.__categories_edit_row = RowItem(
+            label=layout.itemAt(3, QFormLayout.LabelRole).widget(),
+            field=self.categories_editor,
+            row=3
+        )
+        self.__categories_edit_row.setVisible(False)
+
+    class ItemData(SimpleNamespace):
+        # The source data vector
+        data: DataVector = None
+        type_transform: ReinterpretTransform = None
+        # Data after applied type_transform
+        reinterpret_data: DataVector = None
+        # The transforms effecting the variable (after applied type_transform)
+        transforms: Sequence[Transform] = None
+        # The transformed variable
+        transformed_vtype: Variable = None
+
+        @property
+        def vtype(self) -> Variable:
+            return self.data.vtype
+
+        @staticmethod
+        def create(
+                data: DataVector,
+                reinterpret_transform: Optional[ReinterpretTransform],
+                transforms: Sequence[Transform]
+        ):
+            if reinterpret_transform is not None:
+                reinterpret_data = reinterpret_transform(data)
+                var_t = reinterpret_data.vtype
+            else:
+                reinterpret_data = data
+                var_t = data.vtype
+
+            for tr in transforms:
+                var_t = tr(var_t)
+            return MassVariablesEditor.ItemData(
+                data=data, type_transform=reinterpret_transform,
+                reinterpret_data=reinterpret_data,
+                transforms=transforms, transformed_vtype=var_t,
+            )
+
+    __items: List[ItemData] = []
+
+    def setData(self, items: Sequence[Tuple[DataVector, Sequence[Transform]]]):
+        """
+        Set the editor data.
+
+        Note
+        ----
+        This must be a `DataVector` as the vector's values are needed for type
+        reinterpretation/casts.
+
+        If the `transform` sequence contains ReinterpretTransform then it
+        must be in the first position.
+        """
+        ItemData = MassVariablesEditor.ItemData
+        items_ = []
+        for dvec, transform in items:
+            type_transform, transform = take_first_if(
+                transform, lambda t: isinstance(t, ReinterpretTransformTypes)
+            )
+            assert not any(isinstance(t, ReinterpretTransformTypes)
+                           for t in transform)
+
+            # self.__history[dvec.vtype] = tuple(transform)
+            items_.append(ItemData.create(dvec, type_transform, transform))
+        self.__setItemData(items_)
+
+    def __setItemData(self, items: Sequence[ItemData]):
+        self.__items = list(items)
+        types = set(type(it.reinterpret_data.vtype) for it in items)
+        typecombo = self.type_combo
+
+        if len(types) == 1:
+            type_index = typecombo.findData(next(iter(types), Qt.UserRole))
+            if type_index != -1:
+                typecombo.setCurrentIndex(type_index)
+        else:
+            typecombo.setCurrentIndex(0)  # Keep
+
+        names = [it.transformed_vtype.name for it in items]
+
+        self.setNamePattern(make_pattern(names))
+
+        annots = [it.transformed_vtype.annotations for it in items]
+        self.annotations_edit.setData(dict(chain.from_iterable(annots)))
+        can_edit_categories = len(items) == 1 and \
+                              isinstance(items[0].transformed_vtype, Categorical)
+        if can_edit_categories:
+            item = items[0]
+            mapping = find(item.transforms,
+                           lambda el: isinstance(el, CategoriesMapping))
+            self.categories_editor.setData(
+                item.reinterpret_data if item.reinterpret_data is not None else item.data,
+                mapping
+            )
+        else:
+            self.categories_editor.clear()
+        if can_edit_categories and not self.categories_editor.isVisibleTo(self):
+            self.__categories_edit_row.setVisible(True)
+        elif not can_edit_categories and self.categories_editor.isVisibleTo(self):
+            self.__categories_edit_row.setVisible(False)
+        self.categories_editor.setEnabled(can_edit_categories)
+
+    def data(self) -> Sequence[Tuple[DataVector, Sequence[Transform]]]:
+        ItemData = MassVariablesEditor.ItemData
+        items = self.__items
+        N = len(items)
+        nameptr = self.namePattern()
+        target_type: Type[Variable] = self.type_combo.currentData(Qt.UserRole)
+        unlink = self.unlink_check.isChecked
+        annots = self.annotations_edit.getData()
+        items_t = [ItemData.create(it.data, None, []) for it in items]
+        for item, item_t in zip(items, items_t):
+            trs = []
+            vtype = item.vtype
+            if not isinstance(vtype, target_type):
+                reinterpret_transform = TypeTransforms[target_type]()
+                item_t.type_transform = reinterpret_transform
+                item_t.reinterpret_data = reinterpret_transform(item.data)
+                vtype = item_t.reinterpret_data.vtype
+                trs += [reinterpret_transform]
+
+            if nameptr:
+                if nameptr != vtype.name:
+                    trs.append(Rename(nameptr))
+            if annots != item.data.vtype.annotations:
+                trs.append(Annotate(annots))
+            if vtype.linked and unlink:
+                trs.append(Unlink())
+            if isinstance(vtype, Categorical):
+                if self.categories_editor.isEnabled():
+                    assert len(items) == 1
+                    mapping = self.categories_editor.transform()
+                    if any(_1 != _2 or _2 != _3
+                           for (_1, _2), _3 in
+                           zip_longest(mapping.mapping, vtype.categories)):
+                        trs.append(mapping)
+                else:
+                    mapping = find(item.transforms, lambda t: isinstance(t, CategoriesMapping))
+                    if mapping is not None:
+                        trs.append(mapping)
+            item_t.transforms = trs
+        return [(it.data, it.transforms) for it in items_t]
+
+    def clear(self):
+        self.__setItemData([])
+        self.changed.emit()
+
+    def __reinterpret_activated(self, index):
+        Specific = {
+            Categorical: CategoricalTransformTypes
+        }
+        target_type = self.type_combo.itemData(index, Qt.UserRole)
+        items_t = []
+        for item in self.__items:
+            data = item.data
+            var = data.vtype
+            type_transform = item.type_transform
+            tr = item.transforms
+
+            if item.reinterpret_data is not None:
+                self.__history[item.reinterpret_data.vtype] = tr
+            else:
+                self.__history[var] = tr
+
+            # take/preserve the general transforms that apply to all types
+            specific = Specific.get(type(var), ())
+            tr = [t for t in tr if not isinstance(t, specific)]
+
+            if isinstance(var, target_type):
+                if type_transform is not None:
+                    type_transform = None
+            else:
+                type_transform = TypeTransforms[target_type]()
+
+            item_ = MassVariablesEditor.ItemData.create(
+                data, type_transform, tr
+            )
+
+            if item_.reinterpret_data is not None:
+                var_ = item_.reinterpret_data.vtype
+            else:
+                var_ = item_.data.vtype
+
+            # restore type specific transforms from history
+            if var_ in self.__history:
+                tr_ = self.__history[var]
+            else:
+                tr_ = []
+            # merge tr and _tr
+            tr = tr + [t for t in tr_ if isinstance(t, specific)]
+            for t in tr:
+                var_ = t(var_)
+            item_.transforms = tr
+            item_.transformed_vtype = var_
+            items_t.append(item_)
+        changed = any(it.type_transform != it_t.type_transform or
+                      it.transforms != it_t.transforms
+                      for it, it_t in zip(self.__items, items_t))
+        self.__setItemData(items_t)
+
+        if changed:
+            self.changed.emit()
+            self.edited.emit()
+
+
+def make_pattern(strings: Sequence[str]) -> str:
+    parts = list(map(lambda n: re.split(r"(\W)", n), strings))
+    N = max(map(len, parts), default=0)
+    # pad to equal len
+    parts = [part + ([""] * (N - len(part))) for part in parts]
+    pattern = []
+    for els in zip(*parts):
+        if len(set(els)) == 1:
+            pattern.append(els[0])
+        else:
+            pattern.append("{" + (",".join(p.replace(",", r"\,") for p in els)) + "}")
+    return "".join(pattern)
+
+
+def parse_bracepattern(pattern: str):
+    pos = 0
+    open_re = re.compile(r"(?<!\\){")
+    closing_re = re.compile(r"(?<!\\)}")
+    while pos < len(pattern):
+        match = open_re.match(pattern, pos)
+
+
+def expand_pattern(pattern):
+    import shlex, glob
+
+
+A = TypeVar("A")
+
+
+def take_first_if(
+        seq: Sequence[A], predicate: Callable[[A], bool]
+) -> Tuple[Optional[A], Sequence[A]]:
+    if len(seq) == 0:
+        return None, seq
+    el0 = seq[0]
+    if predicate(el0):
+        return el0, seq[1:]
+    else:
+        return None, seq
+
+
+def find(seq: Iterable[A], predicate: Callable[[A], bool]) -> Optional[A]:
+    for el in seq:
+        if predicate(el):
+            return el
+
+
 class OWEditDomain(widget.OWWidget):
     name = "Edit Domain"
     description = "Rename variables, edit categories and variable annotations."
@@ -1899,17 +2650,14 @@ class OWEditDomain(widget.OWWidget):
     def __init__(self):
         super().__init__()
         self.data = None  # type: Optional[Orange.data.Table]
-        #: The current selected variable index
-        self.selected_index = -1
         self._invalidated = False
-        self.typeindex = 0
 
         main = gui.hBox(self.controlArea, spacing=6)
         box = gui.vBox(main, "Variables")
 
         self.variables_model = VariableListModel(parent=self)
         self.variables_view = self.domain_view = QListView(
-            selectionMode=QListView.SingleSelection,
+            selectionMode=QListView.ExtendedSelection,
             uniformItemSizes=True,
         )
         self.variables_view.setItemDelegate(VariableEditDelegate(self))
@@ -1919,8 +2667,12 @@ class OWEditDomain(widget.OWWidget):
         )
         box.layout().addWidget(self.variables_view)
 
-        box = gui.vBox(main, "Edit")
-        self._editor = ReinterpretVariableEditor()
+        box = QGroupBox("Edit", )
+        box.setLayout(QVBoxLayout())
+        box.layout().setContentsMargins(4, 4, 4, 4)
+        main.layout().addWidget(box)
+        self._editor = MassVariablesEditor()
+
         box.layout().addWidget(self._editor)
 
         self.le_output_name = gui.lineEdit(
@@ -1966,7 +2718,6 @@ class OWEditDomain(widget.OWWidget):
             self.setup_model(data)
             self.le_output_name.setPlaceholderText(data.name)
             self.openContext(self.data)
-            self._editor.set_merge_context(self._merge_dialog_settings)
             self._restore()
         else:
             self.le_output_name.setPlaceholderText("")
@@ -1978,28 +2729,24 @@ class OWEditDomain(widget.OWWidget):
         self.data = None
         self.variables_model.clear()
         self.clear_editor()
-        assert self.selected_index == -1
-        self.selected_index = -1
-
         self._selected_item = None
         self._domain_change_store = {}
         self._merge_dialog_settings = {}
 
     def reset_selected(self):
-        """Reset the currently selected variable to its original state."""
-        ind = self.selected_var_index()
-        if ind >= 0:
-            model = self.variables_model
-            midx = model.index(ind)
-            var = midx.data(Qt.EditRole)
-            tr = midx.data(TransformRole)
-            if not tr:
-                return  # nothing to reset
-            editor = self._editor
-            with disconnected(editor.variable_changed,
-                              self._on_variable_changed):
+        """Reset the currently selected variables to their original state."""
+        selected = self.variables_view.selectedIndexes()
+        model = self.variables_model
+        editor = self._editor
+        with disconnected(editor.changed,
+                          self._on_variable_changed):
+            for midx in selected:
+                tr = midx.data(TransformRole)
+                if not tr:
+                    continue  # nothing to reset
                 model.setData(midx, [], TransformRole)
-                editor.set_data(var, transform=[])
+
+            self.open_editor(selected)
             self._invalidate()
 
     def reset_all(self):
@@ -2010,15 +2757,13 @@ class OWEditDomain(widget.OWWidget):
             for i in range(model.rowCount()):
                 midx = model.index(i)
                 model.setData(midx, [], TransformRole)
-            index = self.selected_var_index()
-            if index >= 0:
-                self.open_editor(index)
+            selected = self.variables_view.selectedIndexes()
+            self.open_editor(selected)
             self._invalidate()
 
     def selected_var_index(self):
         """Return the current selected variable index."""
         rows = self.variables_view.selectedIndexes()
-        assert len(rows) <= 1
         return rows[0].row() if rows else -1
 
     def setup_model(self, data: Orange.data.Table):
@@ -2058,7 +2803,7 @@ class OWEditDomain(widget.OWWidget):
         i = -1
         if self._selected_item is not None:
             for i, vec in enumerate(model):
-                if vec.vtype.name_type() == self._selected_item:
+                if vec.vtype.name == self._selected_item:
                     break
         if i == -1 and model.rowCount():
             i = 0
@@ -2067,53 +2812,40 @@ class OWEditDomain(widget.OWWidget):
             itemmodels.select_row(self.variables_view, i)
 
     def _on_selection_changed(self):
-        self.selected_index = self.selected_var_index()
-        if self.selected_index != -1:
-            self._selected_item = self.variables_model[self.selected_index].vtype.name_type()
-        else:
-            self._selected_item = None
-        self.open_editor(self.selected_index)
+        indexes = self.variables_view.selectionModel().selectedRows()
+        self.open_editor(indexes)
 
-    def open_editor(self, index):
-        # type: (int) -> None
+    def open_editor(self, indexes: List[QModelIndex]):
         self.clear_editor()
-        model = self.variables_model
-        if not 0 <= index < model.rowCount():
-            return
-        idx = model.index(index, 0)
-        vector = model.data(idx, Qt.EditRole)
-        tr = model.data(idx, TransformRole)
-        if tr is None:
-            tr = []
-        editor = self._editor
-        editor.set_data(vector, transform=tr)
-        editor.variable_changed.connect(
+        editdata = [(index.data(Qt.EditRole), index.data(TransformRole) or [])
+                    for index in indexes]
+        self._editor.setData(editdata)
+        self._editor.changed.connect(
             self._on_variable_changed, Qt.UniqueConnection
         )
 
     def clear_editor(self):
-        current = self._editor
         try:
-            current.variable_changed.disconnect(self._on_variable_changed)
+            self._editor.changed.disconnect(self._on_variable_changed)
         except TypeError:
             pass
-        current.set_data(None)
-        current.layout().currentWidget().clear()
+        self._editor.clear()
 
     @Slot()
     def _on_variable_changed(self):
-        """User edited the current variable in editor."""
-        assert 0 <= self.selected_index <= len(self.variables_model)
+        """User edited the current variable(s) in editor."""
         editor = self._editor
-        var, transform = editor.get_data()
+        editdata = editor.data()
+        indexes = self.variables_view.selectionModel().selectedIndexes()
         model = self.variables_model
-        midx = model.index(self.selected_index, 0)
-        model.setData(midx, transform, TransformRole)
-        self._store_transform(var, transform)
+        for index, (var, tr) in zip(indexes, editdata):
+            assert index.data(Qt.EditRole) == var
+            model.setData(index, tr, TransformRole)
+            self._store_transform(var, tr)
         self._invalidate()
 
     def _store_transform(self, var, transform):
-        # type: (Variable, List[Transform]) -> None
+        # type: (Variable, Sequence[Transform]) -> None
         self._domain_change_store[deconstruct(var)] = [deconstruct(t) for t in transform]
 
     def _restore_transform(self, var):
@@ -2225,7 +2957,7 @@ class OWEditDomain(widget.OWWidget):
         """
         Update setting before context closes - also when widget closes.
         """
-        self._merge_dialog_settings = self._editor.get_merge_context()
+        # self._merge_dialog_settings = self._editor.saveState()
 
     def send_report(self):
 
@@ -2548,7 +3280,7 @@ def apply_transform_discete(var, trs):
 
     source_values = var.values
     if mapping is not None:
-        dest_values = list(unique(cj for ci, cj in mapping if cj is not None))
+        dest_values = list(unique_everseen(cj for ci, cj in mapping if cj is not None))
     else:
         dest_values = var.values
 
