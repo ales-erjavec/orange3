@@ -324,8 +324,8 @@ def deconstruct(obj):
     return cname, args
 
 
-def reconstruct(tname, args):
-    # type: (str, Tuple[Any, ...]) -> Tuple[Any, ...]
+def reconstruct(tname, args, types=None):
+    # type: (str, Tuple[Any, ...], Mapping[str, type]) -> Tuple[Any, ...]
     """
     Reconstruct a tuple subclass (inverse of deconstruct).
 
@@ -339,8 +339,10 @@ def reconstruct(tname, args):
     -------
     rval: Tuple[Any, ...]
     """
+    if types is None:
+        types = globals()
     try:
-        constructor = globals()[tname]
+        constructor = types[tname]
     except KeyError:
         raise NameError(tname)
     return constructor(*args)
@@ -2162,8 +2164,8 @@ class OWEditDomain(widget.OWWidget):
                 trs = []
                 key_mapped = f(*rest)
                 item_mapped = f(*target[2:])
-                src = reconstruct(*key_mapped)   # type: Variable
-                dst = reconstruct(*item_mapped)  # type: Variable
+                src = reconstruct(*key_mapped, globals())   # type: Variable
+                dst = reconstruct(*item_mapped, globals())  # type: Variable
                 if src.name != dst.name:
                     trs.append(Rename(dst.name))
                 if src.annotations != dst.annotations:
