@@ -5,7 +5,6 @@ Edit Domain
 A widget for manual editing of a domain's attributes.
 
 """
-import re
 import warnings
 
 from types import SimpleNamespace
@@ -48,6 +47,7 @@ from Orange.widgets.utils.buttons import FixedSizeButton
 from Orange.widgets.utils.itemmodels import signal_blocking
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.widget import Input, Output
+from Orange.widgets.data.utils.bracepattern import expand_pattern, infer_pattern
 
 ndarray = np.ndarray  # pylint: disable=invalid-name
 MArray = np.ma.MaskedArray
@@ -2449,7 +2449,7 @@ class MassVariablesEditor(QWidget):
 
         names = [it.transformed_vtype.name for it in items]
 
-        self.setNamePattern(make_pattern(names))
+        self.setNamePattern(infer_pattern(names))
 
         annots = [it.transformed_vtype.annotations for it in items]
         self.annotations_edit.setData(dict(chain.from_iterable(annots)))
@@ -2477,10 +2477,15 @@ class MassVariablesEditor(QWidget):
         N = len(items)
         nameptr = self.namePattern()
         target_type: Type[Variable] = self.type_combo.currentData(Qt.UserRole)
+        if len(items) > 1:
+            names = expand_pattern(nameptr, len(items))
+        else:
+            names = [nameptr]
+
         unlink = self.unlink_check.isChecked
         annots = self.annotations_edit.getData()
         items_t = [ItemData.create(it.data, None, []) for it in items]
-        for item, item_t in zip(items, items_t):
+        for name, item, item_t in zip(names, items, items_t):
             trs = []
             vtype = item.vtype
             if not isinstance(vtype, target_type):
@@ -2490,9 +2495,8 @@ class MassVariablesEditor(QWidget):
                 vtype = item_t.reinterpret_data.vtype
                 trs += [reinterpret_transform]
 
-            if nameptr:
-                if nameptr != vtype.name:
-                    trs.append(Rename(nameptr))
+            if name is not None and name != vtype.name:
+                trs.append(Rename(name))
             if annots != item.data.vtype.annotations:
                 trs.append(Annotate(annots))
             if vtype.linked and unlink:
@@ -2572,33 +2576,6 @@ class MassVariablesEditor(QWidget):
         if changed:
             self.changed.emit()
             self.edited.emit()
-
-
-def make_pattern(strings: Sequence[str]) -> str:
-    parts = list(map(lambda n: re.split(r"(\W)", n), strings))
-    N = max(map(len, parts), default=0)
-    # pad to equal len
-    parts = [part + ([""] * (N - len(part))) for part in parts]
-    pattern = []
-    for els in zip(*parts):
-        if len(set(els)) == 1:
-            pattern.append(els[0])
-        else:
-            pattern.append("{" + (",".join(p.replace(",", r"\,") for p in els)) + "}")
-    return "".join(pattern)
-
-
-def parse_bracepattern(pattern: str):
-    pos = 0
-    open_re = re.compile(r"(?<!\\){")
-    closing_re = re.compile(r"(?<!\\)}")
-    while pos < len(pattern):
-        match = open_re.match(pattern, pos)
-
-
-def expand_pattern(pattern):
-    import shlex, glob
-
 
 A = TypeVar("A")
 
