@@ -6,6 +6,7 @@ A widget for manual editing of a domain's attributes.
 
 """
 import warnings
+from operator import itemgetter
 
 from types import SimpleNamespace
 from xml.sax.saxutils import escape
@@ -15,7 +16,8 @@ from collections import namedtuple, Counter
 from functools import singledispatch, partial
 from typing import (
     Tuple, List, Any, Optional, Union, Dict, Sequence, Iterable, NamedTuple,
-    FrozenSet, Type, Callable, TypeVar, Mapping, cast
+    FrozenSet, Type, Callable, TypeVar, Mapping, MutableMapping, Hashable,
+    cast
 )
 
 import numpy as np
@@ -29,7 +31,7 @@ from AnyQt.QtWidgets import (
     QAbstractItemView, QMenu
 )
 from AnyQt.QtGui import (
-    QStandardItemModel, QStandardItem, QKeySequence, QIcon, QHelpEvent
+    QStandardItemModel, QStandardItem, QKeySequence, QIcon, QPalette
 )
 from AnyQt.QtCore import (
     Qt, QSize, QModelIndex, QAbstractItemModel, QPersistentModelIndex, QRect,
@@ -43,7 +45,7 @@ from Orange.preprocess.transformation import Transformation, Identity, Lookup
 from Orange.widgets import widget, gui, settings
 from Orange.widgets.utils import itemmodels, unique_everseen, ftry
 from Orange.widgets.utils.buttons import FixedSizeButton
-from Orange.widgets.utils.itemmodels import signal_blocking
+from Orange.widgets.utils.itemmodels import signal_blockingq
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.widget import Input, Output
 from Orange.widgets.data.utils.bracepattern import expand_pattern, infer_pattern
@@ -53,6 +55,7 @@ MArray = np.ma.MaskedArray
 DType = Union[np.dtype, type]
 
 V = TypeVar("V", bound=Orange.data.Variable)  # pylint: disable=invalid-name
+H = TypeVar("H", bound=Hashable)
 
 
 class _DataType:
@@ -161,6 +164,15 @@ class Annotate(_DataType, namedtuple("Annotate", ["annotations"])):
     """
     def __call__(self, var):
         return var._replace(annotations=self.annotations)
+
+
+class ModifyAnnotations(_DataType, NamedTuple("ModifyAnnotations", [
+    ("transform", Sequence['MappingTransform']),
+])):
+    def __call__(self, var: Variable) -> Variable:
+        return var._replace(annotations=tuple(
+            apply_mapping_transform(dict(var.annotations), self.transform)
+        ))
 
 
 class Unlink(_DataType, namedtuple("Unlink", [])):
@@ -415,44 +427,6 @@ def categorical_to_string_vector(data: MArray, values: Tuple[str, ...]) -> MArra
     mask_ = ~data.mask
     out[mask_] = lookup[data.data[mask_]]
     return MArray(out, mask=data.mask, fill_value="")
-
-
-# Item models
-
-
-class DictItemsModel(QStandardItemModel):
-    """A Qt Item Model class displaying the contents of a python
-    dictionary.
-
-    """
-    # Implement a proper model with in-place editing.
-    # (Maybe it should be a TableModel with 2 columns)
-    def __init__(self, parent=None, a_dict=None):
-        super().__init__(parent)
-        self._dict = {}
-        self.setHorizontalHeaderLabels(["Key", "Value"])
-        if a_dict is not None:
-            self.set_dict(a_dict)
-
-    def set_dict(self, a_dict):
-        # type: (Dict[str, str]) -> None
-        self._dict = a_dict
-        self.setRowCount(0)
-        for key, value in sorted(a_dict.items()):
-            key_item = QStandardItem(key)
-            value_item = QStandardItem(value)
-            key_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-            value_item.setFlags(value_item.flags() | Qt.ItemIsEditable)
-            self.appendRow([key_item, value_item])
-
-    def get_dict(self):
-        # type: () -> Dict[str, str]
-        rval = {}
-        for row in range(self.rowCount()):
-            key_item = self.item(row, 0)
-            value_item = self.item(row, 1)
-            rval[key_item.text()] = value_item.text()
-        return rval
 
 
 class GroupItemsDialog(QDialog):
@@ -1276,36 +1250,228 @@ class CategoriesEditor(QWidget):
         view.edit(index)
 
 
+SourceKeyRole = SourceNameRole
+SourceValueRole = SourceNameRole + 1
+EditHintOptionList = Qt.UserRole + 56
+ModifiedStateRole = EditStateRole + 1346
+
+
+# Transforms that operate on a MutableMapping
+class DeleteKey(_DataType, NamedTuple("DeleteKey", [
+    ("key", str),
+])):
+    def __call__(self, mapping: MutableMapping) -> MutableMapping:
+        try:
+            del mapping[self.key]
+        except KeyError:
+            pass
+        return mapping
+
+
+class AddItem(_DataType, NamedTuple("AddItem", [
+    ("key", str),
+    ("value", str)
+])):
+    def __call__(self, mapping: MutableMapping) -> MutableMapping:
+        mapping[self.key] = self.value
+        return mapping
+
+
+class RenameKey(_DataType, NamedTuple("RenameKey", [
+    ("key", str),
+    ("target", str)
+])):
+    def __call__(self, mapping: MutableMapping) -> MutableMapping:
+        try:
+            v = mapping[self.key]
+        except KeyError:
+            return mapping
+        else:
+            mapping[self.target] = v
+            del mapping[self.key]
+        return mapping
+
+
+class SetValue(_DataType, NamedTuple("SetValue", [
+    ("key", str),
+    ("value", str)
+])):
+    def __call__(self, mapping: MutableMapping) -> MutableMapping:
+        mapping[self.key] = self.value
+        return mapping
+
+
+MappingTransform = Union[DeleteKey, AddItem, RenameKey, SetValue]
+MappingTransform_ = Union[DeleteKey, AddItem, SetValue]
+
+
+def mapping_diff(a: Mapping, b: Mapping) -> Sequence[MappingTransform_]:
+    res = []
+    for ak, av in a.items():
+        if ak not in b:
+            res.append(DeleteKey(ak))
+        elif av != b[ak]:
+            res.append(SetValue(ak, b[ak]))
+    for bk, bv in b.items():
+        if bk not in a:
+            res.append(AddItem(bk, b[bk]))
+    return res
+
+
+def apply_mapping_transform(mapping: MutableMapping, tr: Sequence[MappingTransform]):
+    mapping = dict(mapping)
+    for t in tr:
+        mapping = t(mapping)
+    return mapping
+
+
+def trace_tr_for_key(
+        tr: Sequence[MappingTransform], key, value=None
+) -> Tuple[Tuple[Optional[str], Optional[str]], Sequence[MappingTransform]]:
+    res = []
+    kv = (key, value)
+    for t in tr:
+        if t.key == key:
+            res.append(t)
+            if isinstance(t, RenameKey):
+                key = t.target
+                kv = (key, kv[1])
+            elif isinstance(t, DeleteKey):
+                return (None, None), res
+            elif isinstance(t, SetValue):
+                kv = (kv[0], t.value)
+            elif isinstance(t, AddItem):
+                kv = (kv[0], t.value)
+    return kv, res
+
+
+class OptionsEditItemDelegate(QStyledItemDelegate):
+    def createEditor(
+            self, parent: QWidget, option: QStyleOptionViewItem,
+            index: QModelIndex
+    ) -> QWidget:
+        data = index.data(Qt.EditRole)
+        options = index.data(EditHintOptionList)
+        if not isinstance(options, Sequence):
+            options = None
+        else:
+            options = [str(opt) for opt in options]
+        if options is not None and len(set(options)) > 1:
+            w = QComboBox(parent, editable=True)
+            w.lineEdit().setPlaceholderText("...")
+            w.addItems(options)
+            if isinstance(data, str):
+                w.setCurrentText(data)
+            w.setParent(parent)
+            return w
+        return super().createEditor(parent, option, index)
+
+
 class KeyValueEditor(QWidget):
     changed = Signal()
     edited = Signal()
+
+    class KeyEditDelegate(OptionsEditItemDelegate):
+        def initStyleOption(self, option: QStyleOptionViewItem, index: QModelIndex) -> None:
+            super().initStyleOption(option, index)
+            state = index.data(EditStateRole)
+            modified = index.data(ModifiedStateRole) or state != ItemEditState.NoState
+            multi = index.data(MultiplicityRole)  # Is key present in all mappings
+            if state == ItemEditState.Added:
+                option.text += " (added)"
+            elif state == ItemEditState.Dropped:
+                option.font.setStrikeOut(True)
+            elif multi:
+                original_key = index.data(SourceKeyRole)
+                if option.text != original_key:
+                    option.text = f"{original_key} \N{RIGHTWARDS ARROW} {option.text}"
+                    modified = True
+            option.font.setItalic(modified)
+            if not multi:
+                color = option.palette.color(QPalette.Text)
+                color.setAlpha(100)
+                option.palette.setColor(QPalette.Text, color)
+
+        def setModelData(self, editor: QWidget, model: QAbstractItemModel, index: QModelIndex) -> None:
+            mp = editor.metaObject().userProperty()
+            if mp is not None:
+                value = mp.read(editor)
+                changed = model.data(index, Qt.EditRole) != value
+            else:
+                changed = True
+            super().setModelData(editor, model, index)
+            model.setData(index, model.data(index, ModifiedStateRole) or changed,
+                          ModifiedStateRole)
+
+    class ValueEditDelegate(OptionsEditItemDelegate):
+        def displayText(self, value: Any, locale: 'QLocale') -> str:
+            s = super().displayText(value, locale)
+            if s:
+                return s
+            return str(s)
+
+        def initStyleOption(self, option: QStyleOptionViewItem, index: QModelIndex) -> None:
+            super().initStyleOption(option, index)
+            state = index.data(EditStateRole)
+            modified = index.data(ModifiedStateRole) or state != ItemEditState.NoState
+            if state == ItemEditState.Added:
+                option.text += " (added)"
+            elif state == ItemEditState.Dropped:
+                option.font.setStrikeOut(True)
+            else:
+                source_value = index.data(SourceValueRole)
+                if option.text != source_value:
+                    option.text = f"{source_value} \N{RIGHTWARDS ARROW} {option.text}"
+                modified = True
+            option.font.setItalic(modified)
+            data = index.data(Qt.EditRole)
+            if data is ...:
+                option.text = "..."
+
+            multi = index.data(MultiplicityRole)  # Is key present in all items
+            if not multi:
+                color = option.palette.color(QPalette.Text)
+                color.setAlpha(100)
+                option.palette.setColor(QPalette.Text, color)
+
+        def setModelData(self, editor: QWidget, model: QAbstractItemModel, index: QModelIndex) -> None:
+            super().setModelData(editor, model, index)
+            mp = editor.metaObject().userProperty()
+            if mp is not None:
+                value = mp.read(editor)
+                changed = model.data(index, Qt.EditRole) != value
+            else:
+                changed = True
+            model.setData(index, model.data(index, ModifiedStateRole) or changed,
+                          ModifiedStateRole)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         layout = QGridLayout(margin=0, spacing=1)
         self.setLayout(layout)
-        hlayout = QHBoxLayout(margin=0)
+        hlayout = QHBoxLayout(margin=0, spacing=1)
 
         self.labels_edit = view = QTreeView(
             objectName="annotation-pairs-edit",
             rootIsDecorated=False,
             editTriggers=QTreeView.DoubleClicked | QTreeView.EditKeyPressed,
         )
-        self.labels_model = model = DictItemsModel()
+        self.labels_model = model = QStandardItemModel()
         view.setModel(model)
 
         view.selectionModel().selectionChanged.connect(
-            self.on_label_selection_changed)
-
+            self.__on_selection_changed)
+        view.setItemDelegateForColumn(0, self.KeyEditDelegate(self))
+        view.setItemDelegateForColumn(1, self.ValueEditDelegate(self))
         agrp = QActionGroup(view, objectName="annotate-action-group")
         action_add = QAction(
-            "+", self, objectName="action-add-label",
+            "+", self, objectName="action-add-item",
             toolTip="Add a new label.",
             shortcut=QKeySequence(QKeySequence.New),
             shortcutContext=Qt.WidgetShortcut
         )
         action_delete = QAction(
-            "\N{MINUS SIGN}", self, objectName="action-delete-label",
+            "\N{MINUS SIGN}", self, objectName="action-delete-item",
             toolTip="Remove selected label.",
             shortcut=QKeySequence(QKeySequence.Delete),
             shortcutContext=Qt.WidgetShortcut
@@ -1314,23 +1480,13 @@ class KeyValueEditor(QWidget):
         agrp.addAction(action_delete)
         view.addActions([action_add, action_delete])
 
-        def add_label():
-            row = [QStandardItem(), QStandardItem()]
-            model.appendRow(row)
-            idx = model.index(model.rowCount() - 1, 0)
-            view.setCurrentIndex(idx)
-            view.edit(idx)
+        action_add.triggered.connect(self.addItem)
 
         def remove_label():
             rows = view.selectionModel().selectedRows(0)
-            if rows:
-                assert len(rows) == 1
-                idx = rows[0].row()
-                model.removeRow(idx)
-
-        action_add.triggered.connect(add_label)
+            for row in sorted((i.row() for i in rows), reverse=True):
+                self.removeItem(row)
         action_delete.triggered.connect(remove_label)
-        agrp.setEnabled(False)
 
         self.add_label_action = action_add
         self.remove_label_action = action_delete
@@ -1357,27 +1513,266 @@ class KeyValueEditor(QWidget):
         hlayout.addStretch(10)
 
     @Slot()
-    def on_label_selection_changed(self):
+    def __on_selection_changed(self):
         selected = self.labels_edit.selectionModel().selectedRows()
         self.remove_label_action.setEnabled(bool(len(selected)))
+
+    @Slot(int)
+    def removeItem(self, row: int):
+        model = self.view().model()
+        idx = model.index(row, 0)
+        if idx.data(EditStateRole) == ItemEditState.Added:
+            model.removeRows(row, 1, QModelIndex())
+        else:
+            state = model.data(idx, EditStateRole)
+            if state == ItemEditState.Dropped:
+                state = ItemEditState.NoState
+            else:
+                state = ItemEditState.Dropped
+            model.setData(idx, state, EditStateRole)
+            model.setData(idx.sibling(idx.row(), 1), state, EditStateRole)
+
+    @Slot()
+    def addItem(self):
+        model = self.model()
+        view = self.view()
+
+        model.insertRows(model.rowCount(), 1, QModelIndex())
+        row = model.rowCount() - 1
+        idx1 = model.index(row, 0)
+        idx2 = model.index(row, 1)
+        model.setData(idx1, ItemEditState.Added, EditStateRole)
+        model.setData(idx2, ItemEditState.Added, EditStateRole)
+        view.setCurrentIndex(idx1)
+        view.edit(idx1)
 
     def setData(self, mapping: Mapping) -> None:
         """
         Set the mapping to edit.
         """
         # self.clear()
-        self.labels_model.set_dict(dict(mapping))
-        self.mapping = mapping
+        mass_key_value_model(self.labels_model, [list(mapping.items())], [])
 
-        if mapping:
-            self.add_label_action.actionGroup().setEnabled(True)
-        else:
-            self.add_label_action.actionGroup().setEnabled(False)
+    __mappings: Sequence[Sequence[Tuple[str, str]]] = ()
+
+    def setMappings(self, mappings: Sequence[Mapping[str, str]], trs):
+        self.labels_model.setRowCount(0)
+        self.__mappings = [tuple(m.items()) for m in mappings]
+        mass_key_value_model(self.labels_model, self.__mappings, trs)
+
+    def mappings(self,):
+        trs = mass_key_value_transforms(self.labels_model, )
+        trs = chain(trs, repeat([]))
+        return [(dict(m), tr) for m, tr in zip(self.__mappings, trs)]
 
     def getData(self):
         """Retrieve the modified mapping.
         """
-        return tuple(sorted(self.labels_model.get_dict().items()))
+        model = self.model()
+        index = model.index
+        items = []
+        for ki, vi in ((index(i, 0), index(i, 1)) for i in range(model.rowCount())):
+            key = ki.data(Qt.EditRole)
+            value = vi.data(Qt.EditRole)
+            if key:
+                items.append((key, value))
+        return tuple(reversed(tuple(unique_everseen(items, key=itemgetter(0)))))
+
+    def setTransform(self, transform: Sequence[MappingTransform]): ...
+
+    def transform(self) -> Sequence[MappingTransform]:
+        model = self.model()
+        index = model.index
+        transform = []
+        for ki, vi in ((index(i, 0), index(i, 1)) for i in
+                       range(model.rowCount())):
+            state = ki.data(EditStateRole)
+            key = ki.data(Qt.EditRole)
+            key_ = ki.data(SourceKeyRole)
+            value = vi.data(Qt.EditRole)
+            value_ = vi.data(SourceValueRole)
+            if state == ItemEditState.Added:
+                transform.append(AddItem(key_, value))
+            elif state == ItemEditState.Dropped:
+                transform.append(DeleteKey(key_))
+            else:
+                if key != key_:
+                    transform.append(RenameKey(key_, key))
+                if key == key_ and key_ is ...:
+                    print("not touching keys ...")
+                if isinstance(value, str) and value != value_:
+                    transform.append(SetValue(key, value))
+                if value is ...:
+                    print("not touching values ...")
+        return transform
+
+    def setModel(self, model: QAbstractItemModel):
+        self.labels_edit.setModel(model)
+        self.labels_edit.selectionModel().selectionChanged.connect(
+            self.__on_selection_changed)
+
+    def model(self):
+        return self.labels_edit.model()
+
+    def view(self):
+        return self.labels_edit
+
+
+def same_value(values: Iterable[H]) -> Optional[H]:
+    values = set(values)
+    if len(values) == 1:
+        return values.pop()
+    else:
+        return None
+
+
+def mass_key_value_model(
+        model: QStandardItemModel,
+        mappings: Sequence[Sequence[Tuple[str, str]]],
+        transforms: Sequence[Sequence[MappingTransform]]
+) -> QAbstractItemModel:
+    mappings = [dict(m) for m in mappings]
+    keys_added = list(unique_everseen(
+        t.key for t in chain.from_iterable(transforms) if isinstance(t, AddItem)
+    ))
+    keys_ = list(unique_everseen(chain.from_iterable(mappings)))
+    keys = keys_ + [k for k in keys_added if k not in keys_]
+
+    # every key could be added removed or subject to SetValue in different
+    # transforms
+    transforms_for_key = [
+        (key, [trace_tr_for_key(tr, key, None)[1] for tr in transforms])
+        for key in keys
+    ]
+    model.setRowCount(0)
+    model.setColumnCount(2)
+    model.setHorizontalHeaderLabels(["Key", "Value"])
+    model.setRowCount(len(keys))
+
+    def key_in_all_mappings(key):  # is key present in all mappings
+        return all(key in m for m in mappings)
+
+    def item(i: int, j: int) -> QStandardItem:
+        return model.itemFromIndex(model.index(i, j))
+
+    for i, ki, vi in ((i, item(i, 0), item(i, 1))
+                      for i in range(model.rowCount())):
+        key = keys[i]
+        # all transforms acting on key for every mapping
+        trs = transforms_for_key[i][1]
+        kvs = [trace_tr_for_key(t, key, m.get(key))[0]
+               for t, m in zip(trs, mappings)]
+
+        values_ = [v for k, v in kvs]
+        keys_ = [k if v is not None else None for k, v in kvs]
+        key_in_all = key_in_all_mappings(key)
+        state = ItemEditState.NoState
+        effective_key = key
+        if all(t == [DeleteKey(key)] for t in trs):
+            # all keys are deleted.
+            state = ItemEditState.Dropped
+        elif all(len(t) == 1 and isinstance(t[0], AddItem) for t in trs):
+            # all add items same key (might have different values)
+            state = ItemEditState.Added
+        else:
+            effective_key = same_value(keys_)
+            if effective_key is None:
+                effective_key = ...
+        ki.setData(trs, Qt.UserRole)
+        ki.setData(effective_key, Qt.EditRole)
+        ki.setData(key_in_all, MultiplicityRole)
+
+        model.setItemData(ki.index(), {
+            EditStateRole: state,
+            MultiplicityRole: key_in_all,
+            EditHintOptionList: [k for k, _ in kvs if k is not None],  # keys if renamed
+            SourceKeyRole: key,
+            TransformRole: list(zip(mappings, trs))
+        })
+        values = [m.get(keys[i]) for m in mappings]
+        print(key, values_, trs, kvs)
+        effective_value = same_value(values_)
+        if effective_value is None:
+            effective_value = ...
+
+        effective_source_value = same_value(values_)
+        if effective_source_value is None:
+            effective_source_value = ...
+        vi.setData(effective_value, Qt.EditRole)
+        model.setItemData(vi.index(), {
+            EditStateRole: state,
+            Qt.EditRole: effective_value,
+            Qt.DisplayRole: effective_value,
+            SourceValueRole: effective_source_value,
+            EditHintOptionList: [v for v in values_ if v is not None],
+            MultiplicityRole: key_in_all and same_value(values),
+            TransformRole: list(zip(mappings, trs))
+        })
+    return model
+
+
+def mass_key_value_transforms(model: QAbstractItemModel):
+    index = model.index
+    trs: Sequence[Tuple[Mapping, MappingTransform]]
+    trs = model.index(0, 0).data(TransformRole)
+    if trs is None:
+        return []
+    mappings = [m for m, ts in trs]
+    transforms = [[] for _ in trs]
+
+    for ki, vi in ((index(i, 0), index(i, 1)) for i in range(model.rowCount())):
+        state = ki.data(EditStateRole)
+        key: str = ki.data(SourceKeyRole)
+        key_ = ki.data(Qt.EditRole)
+
+        value_ = vi.data(Qt.EditRole)
+        value = vi.data(SourceValueRole)
+        trs = ki.data(TransformRole)  # source
+        if trs is None:
+            trs = [(m, []) for m in mappings]
+        if state == ItemEditState.Added:
+            assert key_ is not ...
+            if key_ is not None and value_ is not None:
+                for t, (m, tr_) in zip(transforms, trs):
+                    (k, v), _ = trace_tr_for_key(tr_, key, m.get(key))
+                    if value_ is not ...:
+                        v = value_
+                    if v is not None:
+                        t.append(AddItem(key_, v))
+        elif state == ItemEditState.Dropped:
+            for t, (m, _) in zip(transforms, trs):
+                if key in m:
+                    t.append(DeleteKey(key))
+        else:
+            for t, (m, tr_) in zip(transforms, trs):
+                # original transformed k, v pairs
+                (k, v), _ = trace_tr_for_key(tr_, key, m.get(key))
+                if key not in m:
+                    if key is not ... and value_ is not ...:
+                        t.append(AddItem(key_, value_))
+                    elif k is not None and v is not None:  # preserve existing AddItems
+                        t.append(AddItem(k, v if value_ is ... else value_))
+                    continue
+                if key in m and k is None and (key_ is ... or value_ is ...):
+                    t.append(DeleteKey(key))  # preserve DeleteKey when
+                    continue
+
+                effective_key = key
+                if key_ is ...:
+                    if k != key:  # preserve existing renames
+                        t.append(RenameKey(key, k))
+                        effective_key = k
+                elif key_ != key:
+                    t.append(RenameKey(key, key_))
+                    effective_key = key_
+
+                if value_ is ...:
+                    if v != m.get(key):  # preserve existing value set
+                        t.append(SetValue(effective_key, v))
+                else:
+                    if m.get(key) != value_:
+                        t.append(SetValue(effective_key, value_))
+    return transforms
 
 
 TypeTransforms = {
@@ -1526,28 +1921,37 @@ class MassVariablesEditor(QWidget):
 
     def __setItemData(self, items: Sequence[ItemData]):
         self.__items = list(items)
-        types = set(type(it.reinterpret_data.vtype) for it in items)
+        type_ = same_value(type(it.reinterpret_data.vtype) for it in items)
         typecombo = self.type_combo
 
-        if len(types) == 1:
-            type_index = typecombo.findData(next(iter(types), Qt.UserRole))
-            if type_index != -1:
-                typecombo.setCurrentIndex(type_index)
+        if type_ is not None:
+            type_index = typecombo.findData(type_, Qt.UserRole)
+            typecombo.setCurrentIndex(type_index if type_index != -1 else 0)
         else:
             typecombo.setCurrentIndex(0)  # Keep
 
         names = [it.transformed_vtype.name for it in items]
-
         self.setNamePattern(infer_pattern(names))
 
-        annots = [it.transformed_vtype.annotations for it in items]
-        self.annotations_edit.setData(dict(chain.from_iterable(annots)))
+        annots = [it.vtype.annotations for it in items]
+        annots_map_trs = []
+        for it in items:
+            mat = find_instance(it.transforms, ModifyAnnotations)
+            if mat is not None:
+                annots_map_trs.append(mat.transform)
+            else:
+                annots_map_trs.append(
+                    mapping_diff(dict(it.vtype.annotations),
+                    dict(it.transformed_vtype.annotations))
+                )
+        self.annotations_edit.setMappings(list(map(dict, annots)), annots_map_trs)
+        # mass_key_value_model(self.annotations_edit.labels_model, annots, annots_map_trs)
+
         can_edit_categories = len(items) == 1 and \
                               isinstance(items[0].transformed_vtype, Categorical)
         if can_edit_categories:
             item = items[0]
-            mapping = find(item.transforms,
-                           lambda el: isinstance(el, CategoriesMapping))
+            mapping = find_instance(item.transforms, CategoriesMapping)
             self.categories_editor.setData(
                 item.reinterpret_data if item.reinterpret_data is not None else item.data,
                 mapping
@@ -1559,11 +1963,11 @@ class MassVariablesEditor(QWidget):
         elif not can_edit_categories and self.categories_editor.isVisibleTo(self):
             self.__categories_edit_row.setVisible(False)
         self.categories_editor.setEnabled(can_edit_categories)
+        self.annotations_edit.setEnabled(bool(items))
 
     def data(self) -> Sequence[Tuple[DataVector, Sequence[Transform]]]:
         ItemData = MassVariablesEditor.ItemData
         items = self.__items
-        N = len(items)
         nameptr = self.namePattern()
         target_type: Type[Variable] = self.type_combo.currentData(Qt.UserRole)
         if len(items) > 1:
@@ -1571,10 +1975,10 @@ class MassVariablesEditor(QWidget):
         else:
             names = [nameptr]
 
-        unlink = self.unlink_check.isChecked
-        annots = self.annotations_edit.getData()
+        unlink = self.unlink_check.isChecked()
+        annot_trs = self.annotations_edit.mappings()
         items_t = [ItemData.create(it.data, None, []) for it in items]
-        for name, item, item_t in zip(names, items, items_t):
+        for name, item, item_t, (_, annot_tr) in zip_longest(names, items, items_t, annot_trs):
             trs = []
             vtype = item.vtype
             if not isinstance(vtype, target_type):
@@ -1586,8 +1990,13 @@ class MassVariablesEditor(QWidget):
 
             if name is not None and name != vtype.name:
                 trs.append(Rename(name))
-            if annots != item.data.vtype.annotations:
-                trs.append(Annotate(annots))
+
+            if annot_tr is not None:
+                annots = apply_mapping_transform(
+                    dict(item.data.vtype.annotations), annot_tr)
+                annots = tuple(annots.items())
+                if set(annots) != set(item.data.vtype.annotations):
+                    trs.append(ModifyAnnotations(annot_tr))
             if vtype.linked and unlink:
                 trs.append(Unlink())
             if isinstance(vtype, Categorical):
@@ -1599,10 +2008,11 @@ class MassVariablesEditor(QWidget):
                            zip_longest(mapping.mapping, vtype.categories)):
                         trs.append(mapping)
                 else:
-                    mapping = find(item.transforms, lambda t: isinstance(t, CategoriesMapping))
+                    mapping = find_instance(item.transforms, CategoriesMapping)
                     if mapping is not None:
                         trs.append(mapping)
             item_t.transforms = trs
+            print(trs)
         return [(it.data, it.transforms) for it in items_t]
 
     def clear(self):
@@ -1685,6 +2095,14 @@ def find(seq: Iterable[A], predicate: Callable[[A], bool]) -> Optional[A]:
     for el in seq:
         if predicate(el):
             return el
+
+
+def find_instance(seq: Iterable[A], type_: Type[B]) -> Optional[B]:
+    res = find(seq, lambda t: isinstance(t, type_))
+    if res is not None:
+        return cast('B', res)
+    else:
+        return None
 
 
 def variable_icon(var):
@@ -1809,7 +2227,7 @@ class OWEditDomain(widget.OWWidget):
         box = gui.vBox(main, "Variables")
 
         self.variables_model = VariableListModel(parent=self)
-        self.variables_view = self.domain_view = QListView(
+        self.variables_view = QListView(
             selectionMode=QListView.ExtendedSelection,
             uniformItemSizes=True,
         )
@@ -2430,6 +2848,11 @@ def apply_transform_discete(var, trs):
             mapping = tr.mapping
         elif isinstance(tr, Annotate):
             annotations = _parse_attributes(tr.annotations)
+        elif isinstance(tr, ModifyAnnotations):
+            annotations = _parse_attributes(
+                apply_mapping_transform(
+                    {str(k): str(v) for k, v in annotations.items()},
+                    tr.transform).items())
 
     source_values = var.values
     if mapping is not None:
@@ -2469,6 +2892,10 @@ def apply_transform_continuous(var, trs):
             name = tr.name
         elif isinstance(tr, Annotate):
             annotations = _parse_attributes(tr.annotations)
+        elif isinstance(tr, ModifyAnnotations):
+            annotations = _parse_attributes(
+                apply_mapping_transform({str(k): str(v) for k, v in annotations.items()}, tr.transform).items())
+
     variable = Orange.data.ContinuousVariable(
         name=name, compute_value=Identity(var)
     )
@@ -2485,6 +2912,11 @@ def apply_transform_time(var, trs):
             name = tr.name
         elif isinstance(tr, Annotate):
             annotations = _parse_attributes(tr.annotations)
+        elif isinstance(tr, ModifyAnnotations):
+            annotations = _parse_attributes(
+                apply_mapping_transform(
+                    {str(k): str(v) for k, v in annotations.items()},
+                    tr.transform).items())
     variable = Orange.data.TimeVariable(
         name=name, have_date=var.have_date, have_time=var.have_time,
         compute_value=Identity(var)
@@ -2509,6 +2941,11 @@ def apply_transform_string(var, trs):
                 Orange.data.TimeVariable, have_date=tr.have_date, have_time=tr.have_time
             )
             compute_value = partial(ReparseTimeTransform, tr=tr)
+        elif isinstance(tr, ModifyAnnotations):
+            annotations = _parse_attributes(
+                apply_mapping_transform(
+                    {str(k): str(v) for k, v in annotations.items()},
+                    tr.transform).items())
     variable = out_type(name=name, compute_value=compute_value(var))
     variable.attributes.update(annotations)
     return variable
@@ -2820,4 +3257,8 @@ def column_str_repr_string(
 
 
 if __name__ == "__main__":  # pragma: no cover
-    WidgetPreview(OWEditDomain).run(Orange.data.Table("iris"))
+    import os
+    WidgetPreview(OWEditDomain).run(
+        Orange.data.Table(
+            os.path.expanduser("~/Documents/brown-selected-annot.tab"))
+    )

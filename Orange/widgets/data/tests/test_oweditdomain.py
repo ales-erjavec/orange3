@@ -10,10 +10,12 @@ from unittest.mock import Mock, patch
 import numpy as np
 from numpy.testing import assert_array_equal
 
-from AnyQt.QtCore import QItemSelectionModel, Qt, QItemSelection, QPoint
 from AnyQt.QtGui import QPalette, QColor, QHelpEvent
+from AnyQt.QtCore import QItemSelectionModel, Qt, QItemSelection, QPoint, \
+    QModelIndex
 from AnyQt.QtWidgets import QAction, QComboBox, QLineEdit, \
-    QStyleOptionViewItem, QDialog, QMenu, QToolTip, QListView
+    QStyleOptionViewItem, QDialog, QMenu, QToolTip, QListView, \
+    QAbstractItemView, QWidget
 from AnyQt.QtTest import QTest, QSignalSpy
 
 from orangewidget.tests.utils import simulate
@@ -24,18 +26,19 @@ from Orange.data import (
 )
 from Orange.preprocess.transformation import Identity, Lookup
 from Orange.widgets.data.oweditdomain import (
-    OWEditDomain,
-    ContinuousVariableEditor, DiscreteVariableEditor, VariableEditor,
-    TimeVariableEditor, Categorical, Real, Time, String,
+    OWEditDomain, Categorical, Real, Time, String,
     Rename, Annotate, Unlink, CategoriesMapping, report_transform,
     apply_transform, apply_transform_var, apply_reinterpret, MultiplicityRole,
     AsString, AsCategorical, AsContinuous, AsTime,
-    table_column_data, ReinterpretVariableEditor, CategoricalVector,
+    table_column_data, CategoricalVector,
     VariableEditDelegate, TransformRole,
     RealVector, TimeVector, StringVector, make_dict_mapper, DictMissingConst,
     LookupMappingTransform, as_float_or_nan, column_str_repr,
-    GroupItemsDialog, VariableListModel, StrpTime
+    GroupItemsDialog, VariableListModel, StrpTime, MassVariablesEditor,
+    KeyValueEditor, DeleteKey, AddItem, SetValue, RenameKey,
+    mass_key_value_transforms
 )
+
 from Orange.widgets.data.owcolor import OWColor, ColorRole
 from Orange.widgets.tests.base import WidgetTest, GuiTest
 from Orange.widgets.tests.utils import contextMenu
@@ -736,6 +739,223 @@ class TestDelegates(GuiTest):
             )
             p.assert_called_once()
 
+
+def select_all(widget: QWidget):
+    if isinstance(widget, QComboBox):
+        if widget.isEditable():
+            widget.lineEdit().selectAll()
+    elif isinstance(widget, QLineEdit):
+        widget.selectAll()
+    else:
+        QTest.keyClicks(widget, Qt.Key_A, Qt.ControlModifier)
+
+
+def view_edit_text(view: QAbstractItemView, index: QModelIndex, text: str):
+    view.setCurrentIndex(index)
+    view.edit(index)
+    widget = view.focusWidget()
+    select_all(widget)
+    QTest.keyClick(widget, Qt.Key_Delete)
+    QTest.keyClicks(widget, text, )
+    QTest.keyClick(widget, Qt.Key_Return)
+    view.commitData(widget)
+    view.closeEditor(widget, 0)
+
+
+class TestKeyValueEditor(GuiTest):
+    def test_editor(self):
+        editor = KeyValueEditor()
+        model = editor.labels_model
+        view = editor.view()
+
+        def transforms(): return mass_key_value_transforms(model)
+        def data(i, j, role=Qt.DisplayRole): return model.index(i, j).data(role)
+        editor.setMappings([{"a": "b"}], [[]])
+        self.assertEqual(transforms(), [[]])
+
+        editor.setMappings([{"a": "b"}], [[DeleteKey("a")]])
+        self.assertEqual(transforms(), [[DeleteKey("a")]])
+        self.assertEqual(model.rowCount(), 1)
+        self.assertEqual(data(0, 0), "a")
+
+        editor.setMappings([{"a": "b"}], [[AddItem("c", "1")]])
+        self.assertEqual(transforms(), [[AddItem("c", "1")]])
+        self.assertEqual(model.rowCount(), 2)
+        self.assertEqual(data(1, 0), "c")
+        self.assertEqual(data(1, 1), "1")
+
+        editor.setMappings([{"a": "b"}], [[SetValue("a", "1")]])
+        self.assertEqual(transforms(), [[SetValue("a", "1")]])
+        self.assertEqual(model.rowCount(), 1)
+        self.assertEqual(data(0, 0), "a")
+        self.assertEqual(data(0, 1), "1")
+
+        editor.setMappings([{"a": "b"}], [[RenameKey("a", "b")]])
+        self.assertEqual(transforms(), [[RenameKey("a", "b")]])
+        self.assertEqual(model.rowCount(), 1)
+        self.assertEqual(data(0, 0), "b")
+        self.assertEqual(data(0, 1), "b")
+
+        editor.setMappings([{"a": "b"}], [[RenameKey("a", "b"), SetValue("b", "1")]])
+        self.assertEqual(transforms(), [[RenameKey("a", "b"), SetValue("b", "1")]])
+        self.assertEqual(model.rowCount(), 1)
+        self.assertEqual(data(0, 0), "b")
+        self.assertEqual(data(0, 1), "1")
+
+        editor.setMappings([{"a": "b"}], [[SetValue("a", "c")]])
+        view_edit_text(view, model.index(0, 0), "k")
+
+        self.assertEqual(transforms(),
+                         [[RenameKey("a", "k"), SetValue("k", "c")]])
+
+    def test_editor_mass(self):
+        editor = KeyValueEditor()
+        model = editor.labels_model
+        def transforms(): return mass_key_value_transforms(model)
+        def data(i, j, role=Qt.DisplayRole): return model.index(i, j).data(role)
+
+        ms = [{"a": "b"}, {"a": "b", "c": "c"}]
+        editor.setMappings(ms, [[], []])
+        self.assertEqual(transforms(), [[], []])
+
+        editor.setMappings(ms, [[DeleteKey("a")], []])
+        self.assertEqual(transforms(), [[DeleteKey("a")], []])
+        self.assertEqual(model.rowCount(), 2)
+        self.assertEqual(data(0, 0, Qt.EditRole), ...)
+        self.assertEqual(data(1, 0, Qt.EditRole), ...)
+
+        editor.setMappings(ms, [[AddItem("c", "1")], []])
+        self.assertEqual(transforms(), [[AddItem("c", "1")], []])
+        self.assertEqual(model.rowCount(), 2)
+        self.assertEqual(data(1, 0, Qt.EditRole), "c")
+        self.assertEqual(data(1, 1, Qt.EditRole), ...)
+
+        editor.setMappings(ms, [[SetValue("a", "1")], []])
+        self.assertEqual(transforms(), [[SetValue("a", "1")], []])
+        self.assertEqual(model.rowCount(), 2)
+        self.assertEqual(data(0, 0), "a")
+        self.assertEqual(data(0, 1), ...)
+
+        editor.setMappings(ms, [[RenameKey("a", "r")], []])
+        self.assertEqual(transforms(), [[RenameKey("a", "r")], []])
+        self.assertEqual(model.rowCount(), 2)
+        self.assertEqual(data(0, 0), ...)
+        self.assertEqual(data(0, 1), "b")
+
+        editor.setMappings(ms,
+                           [[RenameKey("a", "b"), SetValue("b", "1")], []])
+        self.assertEqual(transforms(),
+                         [[RenameKey("a", "b"), SetValue("b", "1")], []])
+        self.assertEqual(model.rowCount(), 2)
+        self.assertEqual(data(0, 0), ...)
+        self.assertEqual(data(0, 1), ...)
+
+    def test_mass_edit(self):
+        editor = KeyValueEditor()
+        model = editor.labels_model
+        view = editor.view()
+
+        def edittext(index: QModelIndex, text: str): view_edit_text(view, index, text)
+        def transforms(): return mass_key_value_transforms(model)
+        def data(i, j, role=Qt.DisplayRole): return model.index(i, j).data(role)
+
+        ms = [{"a": "b"}, {"a": "b", "c": "c"}, {}]
+        editor.setMappings(ms, [[], [], []])
+        self.assertEqual(transforms(), [[], [], []])
+
+        editor.setMappings(ms, [[DeleteKey("a")], [], []])
+        edittext(model.index(0, 0), "key")
+        self.assertEqual(transforms(), [[DeleteKey("a")], [RenameKey("a", "key")], []])
+        self.assertEqual(model.rowCount(), 2)
+        self.assertEqual(data(0, 0, Qt.EditRole), "key")
+        self.assertEqual(data(1, 0, Qt.EditRole), ...)
+
+        edittext(model.index(0, 1), "value")
+        self.assertEqual(transforms(),
+                         [[RenameKey("a", "key"), SetValue("key", "value")],
+                          [RenameKey("a", "key"), SetValue("key", "value")],
+                          [AddItem("key", "value")]])
+
+    def test_add_remove(self):
+        editor = KeyValueEditor()
+        model = editor.labels_model
+        view = editor.view()
+
+        def transforms(): return mass_key_value_transforms(model)
+        def data(i, j, role=Qt.DisplayRole): return model.index(i, j).data(role)
+
+        def delete_row(row: int):
+            view.setCurrentIndex(model.index(row, 0))
+            delete.trigger()
+        delete = editor.findChild(QAction, "action-delete-item")
+
+        ms = [{"a": "b"}, {"a": "b", "c": "c"}, {}]
+        editor.setMappings(ms, [[DeleteKey("a")], [], []])
+        delete_row(0)
+        self.assertEqual(transforms(),
+                         [[DeleteKey("a")], [DeleteKey("a")], []])
+        delete_row(1)
+        self.assertEqual(transforms(),
+                         [[DeleteKey("a")], [DeleteKey("a"), DeleteKey("c")], []])
+
+        editor.setMappings(ms, [[AddItem("c", "c")], [RenameKey("c", "d")], []])
+        delete_row(0)
+        self.assertEqual(transforms(),
+                         [[DeleteKey("a"), AddItem("c", "c")],
+                          [DeleteKey("a"), RenameKey("c", "d")],
+                          []])
+        delete_row(1)
+        self.assertEqual(transforms(),
+                         [[DeleteKey("a")],
+                          [DeleteKey("a"), DeleteKey("c")],
+                          []])
+        delete_row(1)  # this actually toggles delete status
+        self.assertEqual(transforms(),
+                         [[DeleteKey("a"), AddItem("c", "c")],
+                          [DeleteKey("a"), RenameKey("c", "d")],
+                          []])
+        delete_row(0)
+        self.assertEqual(transforms(), [[AddItem("c", "c")], [RenameKey("c", "d")], []])
+
+    def test_add(self):
+        editor = KeyValueEditor()
+        model = editor.model()
+        view = editor.view()
+
+        def transforms(): return mass_key_value_transforms(model)
+        def data(i, j, role=Qt.DisplayRole): return model.index(i, j).data(role)
+        def delete_row(row: int):
+            view.setCurrentIndex(model.index(row, 0))
+            delete.trigger()
+
+        def add_item(key, value):
+            add.trigger()
+            curr = view.currentIndex()
+            view_edit_text(view, curr, key)
+            view_edit_text(view, curr.sibling(curr.row(), 1), value)
+
+        delete = editor.findChild(QAction, "action-delete-item")
+        add = editor.findChild(QAction, "action-add-item")
+
+        ms = [{"a": "b"}, {}]
+        editor.setMappings(ms, [[], []])
+        add_item("b", "c")
+        self.assertEqual(transforms(), [[AddItem("b", "c")], [AddItem("b", "c")]])
+        delete_row(1)
+        self.assertEqual(transforms(), [[], []])
+        self.assertEqual(model.rowCount(), 1)
+        editor.setMappings(ms, [[AddItem("b", "c")], [AddItem("b", "d")]])
+        self.assertEqual(transforms(),
+                         [[AddItem("b", "c")], [AddItem("b", "d")]])
+        delete_row(1)
+        self.assertEqual(transforms(), [[], []])
+        editor.setMappings(ms, [[AddItem("b", "c")], [AddItem("b", "d")]])
+        view_edit_text(view, model.index(1, 0), "key")
+        self.assertEqual(transforms(),
+                         [[AddItem("key", "c")], [AddItem("key", "d")]])
+        view_edit_text(view, model.index(1, 1), "val")
+        self.assertEqual(transforms(),
+                         [[AddItem("key", "val")], [AddItem("key", "val")]])
 
 class TestTransforms(TestCase):
     def _test_common(self, var):
