@@ -5,7 +5,6 @@ CSV File Import Widget
 
 """
 import sys
-import types
 import os
 import csv
 import enum
@@ -32,15 +31,14 @@ from typing import (
 )
 
 from AnyQt.QtCore import (
-    Qt, QFileInfo, QTimer, QSettings, QObject, QSize, QMimeDatabase, QMimeType
+    Qt, QTimer, QSettings, QObject, QSize, QMimeDatabase, QMimeType
 )
 from AnyQt.QtGui import (
-    QStandardItem, QStandardItemModel, QPalette, QColor, QIcon
+    QStandardItem, QStandardItemModel, QPalette
 )
 from AnyQt.QtWidgets import (
-    QLabel, QComboBox, QPushButton, QDialog, QDialogButtonBox, QGridLayout,
-    QVBoxLayout, QSizePolicy, QStyle, QFileIconProvider, QFileDialog,
-    QApplication, QMessageBox, QTextBrowser, QMenu
+    QLabel, QPushButton, QDialog, QDialogButtonBox, QVBoxLayout, QSizePolicy,
+    QFileDialog, QApplication, QMessageBox, QTextBrowser, QMenu
 )
 from AnyQt.QtCore import pyqtSlot as Slot, pyqtSignal as Signal
 
@@ -59,9 +57,11 @@ from Orange.widgets.utils.concurrent import PyOwned
 from Orange.widgets.utils import (
     textimport, concurrent as qconcurrent, unique_everseen, enum_get, qname
 )
-from Orange.widgets.utils.combobox import ItemStyledComboBox
 from Orange.widgets.utils.pathutils import (
     PathItem, VarPath, AbsPath, samepath, prettyfypath, isprefixed,
+)
+from Orange.widgets.data.utils.recentpathscontrol import (
+    VarPathItem, VarPathItemModel, RecentPathsControl
 )
 from Orange.widgets.utils.overlay import OverlayWidget
 from Orange.widgets.utils.settings import (
@@ -71,7 +71,6 @@ from Orange.widgets.utils.settings import (
 if typing.TYPE_CHECKING:
     # pylint: disable=invalid-name
     T = typing.TypeVar("T")
-    K = typing.TypeVar("K")
     E = typing.TypeVar("E", bound=enum.Enum)
 
 __all__ = ["OWCSVFileImport"]
@@ -387,89 +386,6 @@ def dialog_button_box_set_enabled(buttonbox, enabled):
             b.setEnabled(state)
 
 
-def icon_for_path(path: str) -> QIcon:
-    iconprovider = QFileIconProvider()
-    finfo = QFileInfo(path)
-    if finfo.exists():
-        return iconprovider.icon(finfo)
-    else:
-        return iconprovider.icon(QFileIconProvider.File)
-
-
-class VarPathItem(QStandardItem):
-    PathRole = Qt.UserRole + 4502
-    VarPathRole = PathRole + 1
-
-    def path(self) -> str:
-        """Return the resolved path or '' if unresolved or missing"""
-        path = self.data(VarPathItem.PathRole)
-        return path if isinstance(path, str) else ""
-
-    def setPath(self, path: str) -> None:
-        """Set absolute path."""
-        self.setData(PathItem.AbsPath(path), VarPathItem.VarPathRole)
-
-    def varPath(self) -> Optional[PathItem]:
-        vpath = self.data(VarPathItem.VarPathRole)
-        return vpath if isinstance(vpath, PathItem) else None
-
-    def setVarPath(self, vpath: PathItem) -> None:
-        """Set variable path item."""
-        self.setData(vpath, VarPathItem.VarPathRole)
-
-    def resolve(self, vpath: PathItem) -> Optional[str]:
-        """
-        Resolve `vpath` item. This implementation dispatches to parent model's
-        (:func:`VarPathItemModel.resolve`)
-        """
-        model = self.model()
-        if isinstance(model, VarPathItemModel):
-            return model.resolve(vpath)
-        else:
-            return vpath.resolve({})
-
-    def data(self, role=Qt.UserRole + 1) -> Any:
-        if role == Qt.DisplayRole:
-            value = super().data(role)
-            if value is not None:
-                return value
-            vpath = self.varPath()
-            if isinstance(vpath, PathItem.AbsPath):
-                return os.path.basename(vpath.path)
-            elif isinstance(vpath, PathItem.VarPath):
-                return os.path.basename(vpath.relpath)
-            else:
-                return None
-        elif role == Qt.DecorationRole:
-            return icon_for_path(self.path())
-        elif role == VarPathItem.PathRole:
-            vpath = self.data(VarPathItem.VarPathRole)
-            if isinstance(vpath, PathItem.AbsPath):
-                return vpath.path
-            elif isinstance(vpath, VarPath):
-                path = self.resolve(vpath)
-                if path is not None:
-                    return path
-            return super().data(role)
-        elif role == Qt.ToolTipRole:
-            vpath = self.data(VarPathItem.VarPathRole)
-            if isinstance(vpath, VarPath.AbsPath):
-                return vpath.path
-            elif isinstance(vpath, VarPath):
-                text = f"${{{vpath.name}}}/{vpath.relpath}"
-                p = self.resolve(vpath)
-                if p is None or not os.path.exists(p):
-                    text += " (missing)"
-                return text
-        elif role == Qt.ForegroundRole:
-            vpath = self.data(VarPathItem.VarPathRole)
-            if isinstance(vpath, PathItem):
-                p = self.resolve(vpath)
-                if p is None or not os.path.exists(p):
-                    return QColor(Qt.red)
-        return super().data(role)
-
-
 class ImportItem(VarPathItem):
     """
     An item representing a file path and associated load options
@@ -511,26 +427,6 @@ class ImportItem(VarPathItem):
         item.setToolTip(text)
         item.setData(path, ImportItem.VarPathRole)
         return item
-
-
-class VarPathItemModel(QStandardItemModel):
-    def __init__(self, *args, replacementEnv=types.MappingProxyType({}),
-                 **kwargs):
-        self.__replacements = types.MappingProxyType(dict(replacementEnv))
-        super().__init__(*args, **kwargs)
-
-    def setReplacementEnv(self, env: Mapping[str, str]) -> None:
-        self.__replacements = types.MappingProxyType(dict(env))
-        self.dataChanged.emit(
-            self.index(0, 0),
-            self.index(self.rowCount() - 1, self.columnCount() - 1)
-        )
-
-    def replacementEnv(self) -> Mapping[str, str]:
-        return self.__replacements
-
-    def resolve(self, vpath: PathItem) -> Optional[str]:
-        return vpath.resolve(self.replacementEnv())
 
 
 def move_item_to_index(model: QStandardItemModel, item: QStandardItem, index: int):
@@ -671,30 +567,17 @@ class OWCSVFileImport(widget.OWWidget):
 
         self.__executor = qconcurrent.ThreadExecutor()
         self.__watcher = None  # type: Optional[qconcurrent.FutureWatcher]
-
+        ct = RecentPathsControl(placeholderText="Recent files…")
+        self.controlArea.layout().addWidget(ct)
         self.controlArea.layout().setSpacing(-1)  # reset spacing
-        grid = QGridLayout()
-        grid.addWidget(QLabel("File:", self), 0, 0, 1, 1)
 
         self.import_items_model = VarPathItemModel(self)
         self.import_items_model.setReplacementEnv(self._replacements())
-        self.recent_combo = ItemStyledComboBox(
-            self, objectName="recent-combo", toolTip="Recent files.",
-            sizeAdjustPolicy=QComboBox.AdjustToMinimumContentsLengthWithIcon,
-            minimumContentsLength=16, placeholderText="Recent files…"
-        )
-        self.recent_combo.setModel(self.import_items_model)
-        self.recent_combo.activated.connect(self.activate_recent)
-        self.recent_combo.setSizePolicy(
-            QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
-        self.browse_button = QPushButton(
-            "…", icon=self.style().standardIcon(QStyle.SP_DirOpenIcon),
-            toolTip="Browse filesystem", autoDefault=False,
-        )
-        # A button drop down menu with selection of explicit workflow dir
-        # relative import. This is only enabled when 'basedir' workflow env
-        # is set. XXX: Always use menu, disable Import relative... action?
-        self.browse_menu = menu = QMenu(self.browse_button)
+        ct.setModel(self.import_items_model)
+        ct.activated.connect(self.activate_recent)
+        self.recent_combo = ct
+
+        self.browse_menu = menu = QMenu(self)
         ac = menu.addAction("Import any file…")
         ac.triggered.connect(self.browse)
 
@@ -703,13 +586,10 @@ class OWCSVFileImport(widget.OWWidget):
         ac.triggered.connect(lambda: self.browse_relative("basedir"))
 
         if "basedir" in self._replacements():
-            self.browse_button.setMenu(menu)
+            ct.browse_button.setMenu(menu)
 
-        self.browse_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.browse_button.clicked.connect(self.browse)
-        grid.addWidget(self.recent_combo, 0, 1, 1, 1)
-        grid.addWidget(self.browse_button, 0, 2, 1, 1)
-        self.controlArea.layout().addLayout(grid)
+        # self.browse_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        ct.browse_button.clicked.connect(self.browse)
 
         ###########
         # Info text
@@ -767,7 +647,7 @@ class OWCSVFileImport(widget.OWWidget):
     def workflowEnvChanged(self, key, value, oldvalue):
         super().workflowEnvChanged(key, value, oldvalue)
         if key == "basedir":
-            self.browse_button.setMenu(self.browse_menu)
+            self.recent_combo.browse_button.setMenu(self.browse_menu)
             self.import_items_model.setReplacementEnv(self._replacements())
 
     @Slot(int)

@@ -17,7 +17,6 @@ from AnyQt.QtGui import QIcon
 from AnyQt.QtWidgets import QFileDialog
 from AnyQt.QtTest import QSignalSpy
 
-from orangewidget.tests.utils import simulate
 from orangewidget.widget import OWBaseWidget
 
 from Orange.data import DiscreteVariable, TimeVariable, ContinuousVariable, \
@@ -131,7 +130,7 @@ class TestOWCSVFileImport(WidgetTest):
         )
         item = w.current_item()
         self.assertIsNone(item)
-        simulate.combobox_activate_index(w.recent_combo, 0)
+        w.activate_recent(0)
         item = w.current_item()
         self.assertTrue(samepath(item.path(), path))
         self.assertEqual(item.options(), self.data_regions_options)
