@@ -661,7 +661,7 @@ class OWCSVFileImport(widget.OWWidget):
             item = model.item(index)
             assert isinstance(item, ImportItem)
             path = item.path()
-            item.setData(True, ImportItem.IsSessionItemRole)
+            item.setIsSessionItem(True)
             move_item_to_index(model, item, 0)
             if not os.path.exists(path):
                 self._browse_for_missing(
@@ -710,10 +710,10 @@ class OWCSVFileImport(widget.OWWidget):
                 vpath_ = VarPath(vpath.name, os.path.relpath(path, prefixpath))
             else:
                 vpath_ = AbsPath(path)
-            item.setVarPath(vpath_)
             if item.row() != 0:
                 move_item_to_index(model, item, 0)
-            item.setData(True, ImportItem.IsSessionItemRole)
+            item.setVarPath(vpath_)
+            item.setIsSessionItem(True)
             self.set_selected_file(path, item.options())
             self._note_recent(path, item.options())
             onfinished(QDialog.Accepted)
@@ -783,47 +783,51 @@ class OWCSVFileImport(widget.OWWidget):
 
         status = dlg.exec()
         dlg.deleteLater()
-        if status == QFileDialog.Accepted:
-            selected_filter = dlg.selectedFileFormat()
-            path = dlg.selectedFiles()[0]
-            if prefixname:
-                _prefixpath = self._replacements().get(prefixname, "")
-                if not isprefixed(_prefixpath, path):
-                    mb = self._path_must_be_relative_mb(_prefixpath)
-                    mb.show()
-                    return
-                varpath = VarPath(prefixname, os.path.relpath(path, _prefixpath))
-            else:
-                varpath = PathItem.AbsPath(path)
+        if status != QFileDialog.Accepted:
+            return
+        selected_filter = dlg.selectedFileFormat()
+        path = dlg.selectedFiles()[0]
+        if prefixname:
+            prefixpath = self._replacements().get(prefixname, "")
+            if not isprefixed(prefixpath, path):
+                mb = self._path_must_be_relative_mb(prefixpath)
+                mb.show()
+                return
+            varpath = VarPath(prefixname,
+                              os.path.relpath(path, prefixpath))
+        else:
+            varpath = PathItem.AbsPath(path)
+        self._run_import_for_new_path(varpath, selected_filter.mime_type)
 
-            # pre-flight check; try to determine the nature of the file
-            mtype = _mime_type_for_path(path)
-            if not mtype.inherits("text/plain"):
-                mb = self._might_be_binary_mb(path)
-                if mb.exec() == QMessageBox.Cancel:
-                    return
-            # initialize options based on selected format
-            options = default_options_for_mime_type(
-                path, selected_filter.mime_type,
-            )
-            # Search for path in history.
-            # If found use the stored params to initialize the import dialog
-            items = self.itemsFromSettings()
-            idx = index_where(items, lambda t: samepath(t[0], path))
-            if idx is not None:
-                _, options_ = items[idx]
-                if options_ is not None:
-                    options = options_
-            dlg = CSVImportDialog(
-                self, windowTitle="Import Options", sizeGripEnabled=True)
-            dlg.setWindowModality(Qt.WindowModal)
-            dlg.setPath(path)
-            dlg.setOptions(options)
-            status = dlg.exec()
-            dlg.deleteLater()
-            if status == QDialog.Accepted:
-                self.set_selected_file(path, dlg.options())
-                self.current_item().setVarPath(varpath)
+    def _run_import_for_new_path(self, varpath: PathItem, mime_type):
+        path = varpath.resolve(self._replacements())
+        # pre-flight check; try to determine the nature of the file
+        mtype = _mime_type_for_path(path, )
+        if not mtype.inherits("text/plain"):
+            mb = self._might_be_binary_mb(path)
+            if mb.exec() == QMessageBox.Cancel:
+                return
+        # initialize dialect based on selected format
+        options = default_options_for_mime_type(
+            path, mime_type,
+        )
+        # Search for path in history.
+        # If found use the stored params to initialize the import dialog
+        items = self.itemsFromSettings()
+        idx = index_where(items, lambda t: samepath(t[0], path))
+        if idx is not None:
+            _, options = items[idx]
+        dlg = CSVImportDialog(
+            self, windowTitle="Import Options", sizeGripEnabled=True)
+        dlg.setWindowModality(Qt.WindowModal)
+        dlg.setPath(path)
+        dlg.setOptions(options)
+
+        status = dlg.exec()
+        dlg.deleteLater()
+        if status == QDialog.Accepted:
+            self.set_selected_file(path, dlg.options())
+            self.current_item().setVarPath(varpath)
 
     def current_item(self):
         # type: () -> Optional[ImportItem]
@@ -912,18 +916,11 @@ class OWCSVFileImport(widget.OWWidget):
             item, *_ = model.takeRow(index)
         else:
             item = ImportItem.fromPath(filename)
-
-        # item.setData(VarPath(filename), ImportItem.VarPathRole)
-        item.setData(True, ImportItem.IsSessionItemRole)
-        model.insertRow(0, item)
-
+        item.setIsSessionItem(True)
         if options is not None:
             item.setOptions(options)
-
+        model.insertRow(0, item)
         self.recent_combo.setCurrentIndex(0)
-
-        if not os.path.exists(filename):
-            return
         self._note_recent(filename, options)
 
     def _note_recent(self, filename, options):
@@ -1149,8 +1146,8 @@ class OWCSVFileImport(widget.OWWidget):
         session_items = []
         model = self.import_items_model
         for item in map(model.item, range(model.rowCount())):
-            if isinstance(item, ImportItem) and item.data(ImportItem.IsSessionItemRole):
-                vp = item.data(VarPathItem.VarPathRole)
+            if isinstance(item, ImportItem) and item.isSessionItem():
+                vp = item.varPath()
                 session_items.append((vp.as_dict(), item.options().as_dict()))
         self._session_items_v2 = session_items
 
