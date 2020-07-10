@@ -297,6 +297,14 @@ class TestUtils(unittest.TestCase):
         assert_array_equal(tb.X[:, 1], [0, np.nan, np.nan])
         assert_array_equal(tb.X[:, 2], [np.nan, 1, np.nan])
 
+    def test_sniff_csv(self):
+        f = io.StringIO("A|B|C\n1|2|3\n1|2|3")
+        dialect, header = owcsvimport.sniff_csv(f)
+        self.assertEqual(dialect.delimiter, "|")
+        self.assertTrue(header)
+        with self.assertRaises(csv.Error):
+            owcsvimport.sniff_csv(f, delimiters=["."])
+
 
 if __name__ == "__main__":
     unittest.main()
