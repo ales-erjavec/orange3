@@ -1876,6 +1876,8 @@ class MassVariablesEditor(QWidget):
     def data(self) -> Sequence[Tuple[DataVector, Sequence[Transform]]]:
         ItemData = MassVariablesEditor.ItemData
         items = self.__items
+        if not items:
+            return []
         nameptr = self.namePattern()
         target_type: Type[Variable] = self.type_combo.currentData(Qt.UserRole)
         if len(items) > 1:
