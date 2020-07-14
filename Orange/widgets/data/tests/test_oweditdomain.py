@@ -120,35 +120,33 @@ class TestOWEditDomain(WidgetTest):
 
     def test_widget_state(self):
         """Check if widget clears its state when the input is disconnected"""
-        editor = self.widget.findChild(ContinuousVariableEditor)
+        editor = self.widget.findChild(MassVariablesEditor)
         self.send_signal(self.widget.Inputs.data, self.iris)
-        self.assertEqual(editor.name_edit.text(), "sepal length")
+        self.assertEqual(editor.namePattern(), "sepal length")
         self.send_signal(self.widget.Inputs.data, None)
-        self.assertEqual(editor.name_edit.text(), "")
+        self.assertEqual(editor.namePattern(), "")
         self.assertEqual(
             self.widget.variables_model.index(0).data(Qt.EditRole), None)
 
-        editor = self.widget.findChild(DiscreteVariableEditor)
         self.send_signal(self.widget.Inputs.data, self.iris)
-        index = self.widget.domain_view.model().index(4)
+        index = self.widget.variables_model.index(4)
         self.widget.variables_view.setCurrentIndex(index)
-        self.assertEqual(editor.name_edit.text(), "iris")
-        self.assertEqual(editor.labels_model.get_dict(), {})
+        self.assertEqual(editor.namePattern(), "iris")
+        self.assertEqual(editor.annotations_edit.mappings(), [({}, [])])
         self.assertNotEqual(
             self.widget.variables_model.index(0).data(Qt.EditRole), None)
-        model = editor.values_edit.selectionModel().model()
+        model = editor.categories_editor.categories_model
         self.assertEqual(model.index(0).data(Qt.EditRole), "Iris-setosa")
         self.send_signal(self.widget.Inputs.data, None)
-        self.assertEqual(editor.name_edit.text(), "")
-        self.assertEqual(editor.labels_model.get_dict(), {})
+        self.assertEqual(editor.namePattern(), "")
+        self.assertEqual(editor.annotations_edit.mappings(), [])
         self.assertEqual(model.index(0).data(Qt.EditRole), None)
         self.assertEqual(
             self.widget.variables_model.index(0).data(Qt.EditRole), None)
 
-        editor = self.widget.findChild(TimeVariableEditor)
         table = Table(test_filename("datasets/cyber-security-breaches.tab"))
         self.send_signal(self.widget.Inputs.data, table)
-        index = self.widget.domain_view.model().index(4)
+        index = self.widget.variables_model.index(4)
         self.widget.variables_view.setCurrentIndex(index)
         self.assertEqual(editor.name_edit.text(), "Date_Posted_or_Updated")
         self.send_signal(self.widget.Inputs.data, None)
@@ -156,13 +154,11 @@ class TestOWEditDomain(WidgetTest):
         self.assertEqual(
             self.widget.variables_model.index(0).data(Qt.EditRole), None)
 
-        editor = self.widget.findChild(VariableEditor)
         self.send_signal(self.widget.Inputs.data, table)
-        index = self.widget.domain_view.model().index(8)
+        index = self.widget.variables_model.index(8)
         self.widget.variables_view.setCurrentIndex(index)
-        self.assertEqual(editor.var.name, "Business_Associate_Involved")
         self.send_signal(self.widget.Inputs.data, None)
-        self.assertEqual(editor.var, None)
+        self.assertEqual(self.widget.variables_model.rowCount(), 0)
         self.assertEqual(
             self.widget.variables_model.index(0).data(Qt.EditRole), None)
 
@@ -205,14 +201,13 @@ class TestOWEditDomain(WidgetTest):
 
         assert isinstance(self.widget, OWEditDomain)
         # select first variable
-        idx = self.widget.domain_view.model().index(0)
-        self.widget.domain_view.setCurrentIndex(idx)
+        idx = self.widget.variables_model.index(0)
+        self.widget.variables_view.setCurrentIndex(idx)
 
         # change first attribute value
-        editor = self.widget.findChild(ContinuousVariableEditor)
-        assert isinstance(editor, ContinuousVariableEditor)
-        idx = editor.labels_model.index(0, 1)
-        editor.labels_model.setData(idx, "[1, 2, 4]", Qt.EditRole)
+        editor = self.widget.findChild(KeyValueEditor)
+        idx = editor.model().index(0, 1)
+        idx.model().setData(idx, "[1, 2, 4]", Qt.EditRole)
 
         self.widget.commit()
         t2 = self.get_output(self.widget.Outputs.data)
@@ -253,9 +248,9 @@ class TestOWEditDomain(WidgetTest):
         self.send_signal(self.widget.Inputs.data, table)
         self.assertFalse(self.widget.Error.duplicate_var_name.is_shown())
 
-        idx = self.widget.domain_view.model().index(0)
-        self.widget.domain_view.setCurrentIndex(idx)
-        editor = self.widget.findChild(ContinuousVariableEditor)
+        idx = self.widget.variables_model.index(0)
+        self.widget.variables_view.setCurrentIndex(idx)
+        editor = self.widget.findChild(MassVariablesEditor)
 
         def enter_text(widget, text):
             # type: (QLineEdit, str) -> None
@@ -284,12 +279,12 @@ class TestOWEditDomain(WidgetTest):
         table = Table.from_numpy(domain, np.zeros((5, 3)), np.zeros((5, 0)))
         self.send_signal(self.widget.Inputs.data, table)
 
-        index = self.widget.domain_view.model().index
+        index = self.widget.variables_view.model().index
         for i in range(3):
-            self.widget.domain_view.setCurrentIndex(index(i))
-            editor = self.widget.findChild(ContinuousVariableEditor)
-            self.assertIs(editor.unlink_var_cb.isEnabled(), i < 2)
-            editor._set_unlink(i == 1)
+            self.widget.variables_view.setCurrentIndex(index(i))
+            editor = self.widget.findChild(MassVariablesEditor)
+            # self.assertIs(editor.unlink_var_cb.isEnabled(), i < 2)
+            editor.unlink_var_cb.setChecked(i == 1)
 
         self.widget.commit()
         out = self.get_output(self.widget.Outputs.data)
@@ -311,9 +306,9 @@ class TestOWEditDomain(WidgetTest):
         view = self.widget.variables_view
         view.setCurrentIndex(view.model().index(4))
 
-        editor = self.widget.findChild(TimeVariableEditor)
+        editor = self.widget.findChild(MassVariablesEditor)
         editor.name_edit.setText("Date")
-        editor.variable_changed.emit()
+        editor.changed.emit()
         self.widget.commit()
         output = self.get_output(self.widget.Outputs.data)
         self.assertEqual(str(table[0, 4]), str(output[0, 4]))
