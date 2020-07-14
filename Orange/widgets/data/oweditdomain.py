@@ -1819,11 +1819,11 @@ class MassVariablesEditor(QWidget):
         typecb.addItem(variable_icon(Time), "Time", Time)
         typecb.activated[int].connect(self.__reinterpret_activated)
         layout.addRow("Type", typecb)
-        self.unlink_check = QCheckBox("Unlink", objectName="unlink-edit")
-        self.unlink_check.toggled.connect(self.changed)
-        self.unlink_check.toggled.connect(self.edited)
+        self.unlink_var_cb = QCheckBox("Unlink", objectName="unlink-edit")
+        self.unlink_var_cb.toggled.connect(self.changed)
+        self.unlink_var_cb.toggled.connect(self.edited)
 
-        layout.addRow("", self.unlink_check)
+        layout.addRow("", self.unlink_var_cb)
         self.categories_editor = CategoriesEditor(objectName="categories-editor")
 
         self.categories_editor.changed.connect(self.changed)
@@ -1975,7 +1975,7 @@ class MassVariablesEditor(QWidget):
         else:
             names = [nameptr]
 
-        unlink = self.unlink_check.isChecked()
+        unlink = self.unlink_var_cb.isChecked()
         annot_trs = self.annotations_edit.mappings()
         items_t = [ItemData.create(it.data, None, []) for it in items]
         for name, item, item_t, (_, annot_tr) in zip_longest(names, items, items_t, annot_trs):
