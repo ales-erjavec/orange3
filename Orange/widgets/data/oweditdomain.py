@@ -1727,11 +1727,11 @@ class MassVariablesEditor(QWidget):
         typecb.addItem(variable_icon(Time), "Time", Time)
         typecb.activated[int].connect(self.__reinterpret_activated)
         layout.addRow("Type", typecb)
-        self.unlink_check = QCheckBox("Unlink", objectName="unlink-edit")
-        self.unlink_check.toggled.connect(self.changed)
-        self.unlink_check.toggled.connect(self.edited)
+        self.unlink_var_cb = QCheckBox("Unlink", objectName="unlink-edit")
+        self.unlink_var_cb.toggled.connect(self.changed)
+        self.unlink_var_cb.toggled.connect(self.edited)
 
-        layout.addRow("", self.unlink_check)
+        layout.addRow("", self.unlink_var_cb)
         self.categories_editor = CategoriesEditor(objectName="categories-editor")
 
         self.categories_editor.changed.connect(self.changed)
@@ -1883,7 +1883,7 @@ class MassVariablesEditor(QWidget):
         else:
             names = [nameptr]
 
-        unlink = self.unlink_check.isChecked()
+        unlink = self.unlink_var_cb.isChecked()
         # annots_tr = self.annotations_edit.transform()
         annot_trs = mass_key_value_transforms(self.annotations_edit.model())
         annot_trs = self.annotations_edit.mappings()
