@@ -339,18 +339,18 @@ class TestOWEditDomain(WidgetTest):
 
 class TestEditors(GuiTest):
     def test_variable_editor(self):
-        w = VariableEditor()
-        self.assertEqual(w.get_data(), (None, []))
+        w = MassVariablesEditor()
+        self.assertEqual(w.data(), [])
 
         v = String("S", (("A", "1"), ("B", "b")), False)
-        w.set_data(v, [])
+        w.setData([v, []])
 
         self.assertEqual(w.name_edit.text(), v.name)
         self.assertEqual(w.labels_model.get_dict(),
                          {"A": "1", "B": "b"})
-        self.assertEqual(w.get_data(), (v, []))
+        self.assertEqual(w.data(), (v, []))
 
-        w.set_data(None)
+        w.setData([])
         self.assertEqual(w.name_edit.text(), "")
         self.assertEqual(w.labels_model.get_dict(), {})
         self.assertEqual(w.get_data(), (None, []))
@@ -364,19 +364,17 @@ class TestEditors(GuiTest):
         remove.trigger()
 
     def test_continuous_editor(self):
-        w = ContinuousVariableEditor()
-        self.assertEqual(w.get_data(), (None, []))
-
+        w = MassVariablesEditor()
         v = Real("X", (-1, ""), (("A", "1"), ("B", "b")), False)
-        w.set_data(v, [])
+        w.setData([(RealVector(v, None), [])])
 
         self.assertEqual(w.name_edit.text(), v.name)
-        self.assertEqual(w.labels_model.get_dict(), dict(v.annotations))
+        self.assertEqual(w.annotations_edit.mappings()[0][0], dict(v.annotations))
 
-        w.set_data(None)
+        w.setData([])
         self.assertEqual(w.name_edit.text(), "")
-        self.assertEqual(w.labels_model.get_dict(), {})
-        self.assertEqual(w.get_data(), (None, []))
+        self.assertEqual(w.annotations_edit.mappings(), [])
+        self.assertEqual(w.data(), [])
 
     def test_discrete_editor(self):
         w = DiscreteVariableEditor()
