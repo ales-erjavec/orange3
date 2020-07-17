@@ -2169,9 +2169,21 @@ class OWEditDomain(widget.OWWidget):
 
         box.layout().addWidget(self._editor)
 
-        self.le_output_name = gui.lineEdit(
-            self.mainArea, self, "output_table_name", "Output table name: ",
-            box=True, orientation=Qt.Horizontal)
+        self.le_output_name = ledit = QLineEdit(text=self.output_table_name)
+        self.connect_control("output_table_name", ledit.setText)
+
+        @ledit.textEdited.connect
+        def _edited(text):
+            if self.output_table_name != text:
+                self.output_table_name = text
+                self._set_modified(True)
+
+        form = QFormLayout(
+            formAlignment=Qt.AlignLeft, labelAlignment=Qt.AlignLeft,
+            fieldGrowthPolicy=QFormLayout.AllNonFixedFieldsGrow
+        )
+        form.addRow("Output table name", ledit)
+        mainlayout.addLayout(form)
 
         bbox = QDialogButtonBox(
             sizePolicy=QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Maximum),
