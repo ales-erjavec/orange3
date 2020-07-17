@@ -26,7 +26,9 @@ from AnyQt.QtWidgets import (
     QLineEdit, QAction, QActionGroup, QGroupBox,
     QStyledItemDelegate, QStyleOptionViewItem, QStyle, QSizePolicy,
     QDialogButtonBox, QPushButton, QCheckBox, QComboBox,
-    QDialog, QRadioButton, QGridLayout, QLabel, QSpinBox, QDoubleSpinBox)
+    QDialog, QRadioButton, QGridLayout, QLabel, QSpinBox, QDoubleSpinBox,
+    QSplitter
+)
 from AnyQt.QtGui import QStandardItemModel, QStandardItem, QKeySequence, QIcon, \
     QPalette
 from AnyQt.QtCore import (
@@ -2125,6 +2127,7 @@ class OWEditDomain(widget.OWWidget):
     _selected_item = settings.ContextSetting(None)  # type: Optional[Tuple[str, int]]
     _merge_dialog_settings = settings.ContextSetting({})
     output_table_name = settings.ContextSetting("")
+    _saved_splitter_state: bytes = settings.Setting(b'')
 
     want_control_area = False
 
@@ -2132,14 +2135,20 @@ class OWEditDomain(widget.OWWidget):
         super().__init__()
         self.data = None  # type: Optional[Orange.data.Table]
         self._invalidated = False
-
         mainlayout = self.mainArea.layout()
         assert isinstance(mainlayout, QVBoxLayout)
-        layout = QHBoxLayout()
-        mainlayout.addLayout(layout)
-        box = QGroupBox("Variables")
+        self._edit_splitter = splitter = QSplitter(
+            Qt.Horizontal,
+            childrenCollapsible=False,
+            sizePolicy=QSizePolicy(QSizePolicy.MinimumExpanding,
+                                   QSizePolicy.MinimumExpanding),
+            objectName="edit-splitter"
+        )
+        # layout = QHBoxLayout()
+        mainlayout.addWidget(splitter)
+        box = QGroupBox("Variables", objectName="variables-group-box")
         box.setLayout(QVBoxLayout())
-        layout.addWidget(box)
+        splitter.addWidget(box)
 
         self.variables_model = VariableListModel(parent=self)
         self.variables_view = QListView(
@@ -2155,8 +2164,7 @@ class OWEditDomain(widget.OWWidget):
 
         box = QGroupBox("Edit", )
         box.setLayout(QVBoxLayout(margin=4))
-        layout.addWidget(box)
-
+        splitter.addWidget(box)
         self._editor = MassVariablesEditor()
 
         box.layout().addWidget(self._editor)
@@ -2165,9 +2173,10 @@ class OWEditDomain(widget.OWWidget):
             self.mainArea, self, "output_table_name", "Output table name: ",
             box=True, orientation=Qt.Horizontal)
 
-        bbox = QDialogButtonBox()
-        bbox.setStyleSheet(
-            "button-layout: {:d};".format(QDialogButtonBox.MacLayout))
+        bbox = QDialogButtonBox(
+            sizePolicy=QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Maximum),
+            styleSheet=f"button-layout: {QDialogButtonBox.MacLayout:d};",
+        )
         bapply = QPushButton(
             "Apply",
             objectName="button-apply",
@@ -2200,6 +2209,11 @@ class OWEditDomain(widget.OWWidget):
 
         self.info.set_input_summary(self.info.NoInput)
         self.info.set_output_summary(self.info.NoOutput)
+        splitter.restoreState(self._saved_splitter_state)
+        self.settingsAboutToBePacked.connect(self.__save_state)
+
+    def __save_state(self):
+        self._saved_splitter_state = bytes(self._edit_splitter.saveState())
 
     @Inputs.data
     def set_data(self, data):
