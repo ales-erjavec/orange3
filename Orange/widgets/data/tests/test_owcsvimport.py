@@ -547,7 +547,6 @@ class TestUtils(unittest.TestCase):
             with named_file('', suffix=f".{ext}") as fname:
                 with _open_write(fname, "wt", encoding="ascii") as f:
                     f.write(content)
-                f.close()
 
                 with owcsvimport._open(fname, "rt", encoding="ascii") as f:
                     self.assertEqual(content, f.read())
@@ -581,13 +580,14 @@ def _open_write(path, mode, encoding=None):
         arh = zipfile.ZipFile(path, 'w')
         filename, _ = os.path.splitext(os.path.basename(path))
         f = arh.open(filename, mode="w")
-        f_close = f.close
-        # patch the f.close to also close the main archive file
-
-        def close_():
-            f_close()
-            arh.close()
-        f.close = close_
+        f = owcsvimport.ProxyIOWrapper(f, arh.close)
+        # f_close = f.close
+        # # patch the f.close to also close the main archive file
+        #
+        # def close_():
+        #     f_close()
+        #     arh.close()
+        # f.close = close_
         if 't' in mode:
             f = io.TextIOWrapper(f, encoding=encoding)
         return f

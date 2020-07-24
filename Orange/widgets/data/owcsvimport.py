@@ -1238,6 +1238,87 @@ def sniff_csv_with_path(
         return sniff_csv(f, samplesize, delimiters)
 
 
+class ProxyIOWrapper(io.BufferedIOBase):
+    def __init__(self, fileobj: io.IOBase, release: Callable[[], None] = None):
+        self.fileobj = fileobj
+        self._release = release
+        self._closed = False
+
+    def close(self) -> None:
+        if self.closed:
+            return
+        self.fileobj.close()
+        self._closed = True
+        if self._release is not None:
+            self._release()
+        self.fileobj = None
+        self._release = None
+
+    @property
+    def closed(self) -> bool:
+        if self._closed:
+            return self._closed
+        return self.fileobj.closed
+
+    def fileno(self) -> int:
+        return self.fileobj.fileno()
+
+    def flush(self) -> None:
+        return self.fileobj.flush()
+
+    def isatty(self) -> bool:
+        return self.fileobj.isatty()
+
+    def readable(self) -> bool:
+        return self.fileobj.readable()
+
+    def readlines(self, hint: int = -1) -> List[bytes]:
+        return self.fileobj.readlines(hint)
+
+    def seekable(self) -> bool:
+        return self.fileobj.seekable()
+
+    def seek(self, offset: int, whence: int = 0) -> int:
+        return self.fileobj.seek(offset, whence)
+
+    def tell(self) -> int:
+        return self.fileobj.tell()
+
+    def truncate(self, size=None) -> int:
+        return self.fileobj.truncate()
+
+    def writable(self) -> bool:
+        return self.fileobj.writable()
+
+    def writelines(self, lines: Iterable[Union[bytes, bytearray]]) -> None:
+        return self.fileobj.writelines(lines)
+
+    def readline(self, size: int = -1) -> bytes:
+        return self.fileobj.readline(size)
+
+    def write(self, buffer: Union[bytes, bytearray]) -> int:
+        return self.fileobj.write(buffer)
+
+    def read(self, size: int = -1) -> bytes:
+        return self.fileobj.read(size)
+
+    def readinto(self, buffer: 'WriteableBuffer') -> int:
+        return self.fileobj.readinto(buffer)
+
+    def readinto1(self, buffer: 'WriteableBuffer') -> int:
+        return self.fileobj.readinto1(buffer)
+
+    def read1(self, size: int = -1) -> bytes:
+        return self.fileobj.read1(size)
+
+    def detach(self) -> io.IOBase:
+        fileobj = self.fileobj
+        self.fileobj = None
+        self._release = None
+        self._closed = True
+        return fileobj
+
+
 def _open(path, mode, encoding=None):
     # type: (str, str, Optional[str]) -> typing.IO[Any]
     """
