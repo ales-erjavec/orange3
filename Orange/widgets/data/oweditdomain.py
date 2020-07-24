@@ -5,6 +5,7 @@ Edit Domain
 A widget for manual editing of a domain's attributes.
 
 """
+import abc
 import warnings
 from operator import itemgetter
 
@@ -40,7 +41,7 @@ import Orange.data
 
 from Orange.preprocess.transformation import Transformation, Identity, Lookup
 from Orange.widgets import widget, gui, settings
-from Orange.widgets.utils import itemmodels, unique_everseen
+from Orange.widgets.utils import itemmodels, unique_everseen, DataType
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.utils.state_summary import format_summary_details
 from Orange.widgets.utils.buttons import FixedSizeButton
@@ -69,64 +70,63 @@ class _DataType:
     def __hash__(self):
         return hash((type(self), super().__hash__()))
 
+
 #: An ordered sequence of key, value pairs (variable annotations)
 AnnotationsType = Tuple[Tuple[str, str], ...]
 
 
 # Define abstract representation of the variable types edited
 
-class Categorical(
-    _DataType, NamedTuple("Categorical", [
-        ("name", str),
-        ("categories", Tuple[str, ...]),
-        ("annotations", AnnotationsType),
-        ("linked", bool)
-    ])): pass
+class Categorical(DataType):
+    name: str
+    categories: Tuple[str, ...]
+    annotations: AnnotationsType
+    linked: bool
 
 
-class Real(
-    _DataType, NamedTuple("Real", [
-        ("name", str),
-        # a precision (int, and a format specifier('f', 'g', or '')
-        ("format", Tuple[int, str]),
-        ("annotations", AnnotationsType),
-        ("linked", bool)
-    ])): pass
+class Real(DataType):
+    name: str
+    # a precision (int, and a format specifier('f', 'g', or '')
+    format: Tuple[int, str]
+    annotations: AnnotationsType
+    linked: bool
 
 
-class String(
-    _DataType, NamedTuple("String", [
-        ("name", str),
-        ("annotations", AnnotationsType),
-        ("linked", bool)
-    ])): pass
+class String(DataType):
+    name: str
+    annotations: AnnotationsType
+    linked: bool
 
 
-class Time(
-    _DataType, NamedTuple("Time", [
-        ("name", str),
-        ("annotations", AnnotationsType),
-        ("linked", bool)
-    ])): pass
+class Time(DataType):
+    name: str
+    annotations: AnnotationsType
+    linked: bool
+
+
+assert String("a", (), True) != Time("a", (), True)
+assert not String("a", (), True) == Time("a", (), True)
+assert hash(String("a", (), True)) != hash(Time("a", (), True))
 
 
 Variable = Union[Categorical, Real, Time, String]
 VariableTypes = (Categorical, Real, Time, String)
 
-
 # Define variable transformations.
 
-class Rename(_DataType, namedtuple("Rename", ["name"])):
-    """
-    Rename a variable.
 
-    Parameters
-    ----------
-    name : str
-        The new name
-    """
-    def __call__(self, var):
-        # type: (Variable) -> Variable
+class Transform:
+    @abc.abstractmethod
+    def __call__(self, var: Variable) -> Variable:
+        raise NotImplementedError
+
+
+class Rename(DataType, Transform):
+    """Rename a variable."""
+    #: The new name
+    name: str
+
+    def __call__(self, var: Variable) -> Variable:
         return var._replace(name=self.name)
 
 
@@ -142,38 +142,36 @@ class Rename(_DataType, namedtuple("Rename", ["name"])):
 CategoriesMappingType = List[Tuple[Optional[str], Optional[str]]]
 
 
-class CategoriesMapping(_DataType, namedtuple("CategoriesMapping", ["mapping"])):
-    """
-    Change categories of a categorical variable.
+class CategoriesMapping(DataType, Transform):
+    """Change categories of a categorical variable."""
+    mapping: CategoriesMappingType
 
-    Parameters
-    ----------
-    mapping : CategoriesMappingType
-    """
     def __call__(self, var):
         # type: (Categorical) -> Categorical
         cat = tuple(unique_everseen(cj for _, cj in self.mapping if cj is not None))
         return var._replace(categories=cat)
 
 
-class Annotate(_DataType, namedtuple("Annotate", ["annotations"])):
+class Annotate(DataType, Transform):
     """
     Replace variable annotations.
     """
+    annotations: AnnotationsType
+
     def __call__(self, var):
         return var._replace(annotations=self.annotations)
 
 
-class ModifyAnnotations(_DataType, NamedTuple("ModifyAnnotations", [
-    ("transform", Sequence['MappingTransform']),
-])):
+class ModifyAnnotations(DataType, Transform):
+    transform: Sequence['MappingTransform']
+
     def __call__(self, var: Variable) -> Variable:
         return var._replace(annotations=tuple(
             apply_mapping_transform(dict(var.annotations), self.transform)
         ))
 
 
-class Unlink(_DataType, namedtuple("Unlink", [])):
+class Unlink(DataType, Transform):
     """Unlink variable from its source, that is, remove compute_value"""
 
 
@@ -184,39 +182,31 @@ CategoricalTransformTypes = (CategoriesMapping, Unlink)
 
 
 # Reinterpret vector transformations.
-class CategoricalVector(
-    _DataType, NamedTuple("CategoricalVector", [
-        ("vtype", Categorical),
-        ("data", Callable[[], MArray]),
-    ])): ...
+class CategoricalVector(DataType):
+    vtype: Categorical
+    data: Callable[[], MArray]
 
 
-class RealVector(
-    _DataType, NamedTuple("RealVector", [
-        ("vtype", Real),
-        ("data", Callable[[], MArray]),
-    ])): ...
+class RealVector(DataType):
+    vtype: Real
+    data: Callable[[], MArray]
 
 
-class StringVector(
-    _DataType, NamedTuple("StringVector", [
-        ("vtype", String),
-        ("data", Callable[[], MArray]),
-    ])): ...
+class StringVector(DataType):
+    vtype: String
+    data: Callable[[], MArray]
 
 
-class TimeVector(
-    _DataType, NamedTuple("TimeVector", [
-        ("vtype", Time),
-        ("data", Callable[[], MArray]),
-    ])): ...
+class TimeVector(DataType):
+    vtype: Time
+    data: Callable[[], MArray]
 
 
 DataVector = Union[CategoricalVector, RealVector, StringVector, TimeVector]
 DataVectorTypes = (CategoricalVector, RealVector, StringVector, TimeVector)
 
 
-class AsString(_DataType, NamedTuple("AsString", [])):
+class AsString(DataType):
     """Reinterpret a data vector as a string."""
     def __call__(self, vector: DataVector) -> StringVector:
         var, _ = vector
@@ -228,7 +218,7 @@ class AsString(_DataType, NamedTuple("AsString", [])):
         )
 
 
-class AsContinuous(_DataType, NamedTuple("AsContinuous", [])):
+class AsContinuous(DataType):
     """
     Reinterpret as a continuous variable (values that do not parse as
     float are NaN).
@@ -260,7 +250,7 @@ class AsContinuous(_DataType, NamedTuple("AsContinuous", [])):
         raise AssertionError
 
 
-class AsCategorical(_DataType, namedtuple("AsCategorical", [])):
+class AsCategorical(DataType):
     """Reinterpret as a categorical variable"""
     def __call__(self, vector: DataVector) -> CategoricalVector:
         # this is the main complication in type transformation since we need
@@ -277,7 +267,7 @@ class AsCategorical(_DataType, namedtuple("AsCategorical", [])):
         raise AssertionError
 
 
-class AsTime(_DataType, namedtuple("AsTime", [])):
+class AsTime(DataType):
     """Reinterpret as a datetime vector"""
     def __call__(self, vector: DataVector) -> TimeVector:
         var, _ = vector

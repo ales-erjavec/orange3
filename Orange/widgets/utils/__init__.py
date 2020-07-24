@@ -2,7 +2,10 @@ import enum
 import inspect
 import sys
 from collections import deque, Hashable
-from typing import TypeVar, Callable, Any, Iterable, Type, Union, Optional
+from typing import (
+    TypeVar, Callable, Any, Iterable, Type, Union, Optional, NamedTuple
+)
+from typing import NamedTuple as DataType
 
 from AnyQt.QtCore import QObject
 
@@ -134,3 +137,53 @@ def unique_everseen(iterable, key=None):
         if el_k not in seen:
             seen.add(el_k)
             yield el
+
+
+_NamedTupleMeta = type(NamedTuple)  # type: ignore
+
+
+class _DataTypeMethods:
+    def __eq__(self: tuple, other):
+        """Equal if `other` has the same type and all elements compare equal."""
+        if type(self) is not type(other):
+            return False
+        return tuple.__eq__(self, other)
+
+    def __ne__(self: tuple, other):
+        return not self == other
+
+    def __hash__(self: tuple):
+        return hash((type(self), tuple.__hash__(self)))
+
+
+class _DataTypeMeta(_NamedTupleMeta):
+    def __new__(cls, typename, bases, ns, **kwargs):
+        if ns.get('_root', False):
+            return super().__new__(cls, typename, bases, ns)
+        cls = super().__new__(cls, typename, bases, ns, **kwargs)
+        cls.__eq__ = _DataTypeMethods.__eq__
+        cls.__ne__ = _DataTypeMethods.__ne__
+        cls.__hash__ = _DataTypeMethods.__hash__
+        return cls
+
+
+# Replace the DataType (alias for NamedTuple) in globals without the type
+# checker being any the wiser. NamedTuple are special cased. The only way
+# for type checkers to consistently apply NamedTuple aliasing is
+# import ... as ...,
+globals()["DataType"] = _DataTypeMeta("DataType", (), {"_root": True})
+
+
+class A(DataType):
+    a: str
+    b: int
+
+
+class B(DataType):
+    a: str
+    b: int
+
+
+assert A("a", 1) != B("a", 1)
+assert not A("a", 1) == B("a", 1)
+assert hash(A("a", 1)) != hash(B("a", 1))
