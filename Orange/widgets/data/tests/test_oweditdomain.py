@@ -342,22 +342,25 @@ class TestEditors(GuiTest):
         w = MassVariablesEditor()
         self.assertEqual(w.data(), [])
 
-        v = String("S", (("A", "1"), ("B", "b")), False)
-        w.setData([v, []])
+        v = StringVector(
+            String("S", (("A", "1"), ("B", "b")), False),
+            lambda: MArray([])
+        )
+        w.setData([(v, [])])
 
-        self.assertEqual(w.name_edit.text(), v.name)
-        self.assertEqual(w.labels_model.get_dict(),
-                         {"A": "1", "B": "b"})
-        self.assertEqual(w.data(), (v, []))
+        self.assertEqual(w.name_edit.text(), v.vtype.name)
+        self.assertEqual(w.annotations_edit.mappings(),
+                         [({"A": "1", "B": "b"}, [])])
+        self.assertEqual(w.data(), [(v, [])])
 
         w.setData([])
         self.assertEqual(w.name_edit.text(), "")
-        self.assertEqual(w.labels_model.get_dict(), {})
-        self.assertEqual(w.get_data(), (None, []))
+        self.assertEqual(w.annotations_edit.mappings(), [])
+        self.assertEqual(w.data(), [])
 
-        w.set_data(v, [Rename("T"), Annotate((("a", "1"), ("b", "2")))])
+        w.setData([(v, [Rename("T"), Annotate((("a", "1"), ("b", "2")))])])
         self.assertEqual(w.name_edit.text(), "T")
-        self.assertEqual(w.labels_model.rowCount(), 2)
+        self.assertEqual(w.annotations_edit.model().rowCount(), 2)
         add = w.findChild(QAction, "action-add-label")
         add.trigger()
         remove = w.findChild(QAction, "action-delete-label")
@@ -377,33 +380,36 @@ class TestEditors(GuiTest):
         self.assertEqual(w.data(), [])
 
     def test_discrete_editor(self):
-        w = DiscreteVariableEditor()
-        self.assertEqual(w.get_data(), (None, []))
-
-        v = Categorical("C", ("a", "b", "c"), (("A", "1"), ("B", "b")), False)
+        w = MassVariablesEditor()
+        self.assertEqual(w.data(), [])
         values = [0, 0, 0, 1, 1, 2]
-        w.set_data_categorical(v, values)
+        v = CategoricalVector(
+            Categorical("C", ("a", "b", "c"), (("A", "1"), ("B", "b")), False),
+            lambda: MArray(values),
+        )
+        w.setData([(v, [])])
 
-        self.assertEqual(w.name_edit.text(), v.name)
-        self.assertEqual(w.labels_model.get_dict(), dict(v.annotations))
-        self.assertEqual(w.get_data(), (v, []))
-        w.set_data_categorical(None, None)
+        self.assertEqual(w.name_edit.text(), v.vtype.name)
+        self.assertSequenceEqual(w.annotations_edit.mappings(),
+                                 [(dict(v.vtype.annotations), [])])
+        self.assertEqual(w.data(), [(v, [])])
+        w.setData([])
         self.assertEqual(w.name_edit.text(), "")
-        self.assertEqual(w.labels_model.get_dict(), {})
-        self.assertEqual(w.get_data(), (None, []))
+        self.assertEqual(w.annotations_edit.mappings(), [])
+        self.assertEqual(w.data(), [])
         mapping = [
             ("c", "C"),
             ("a", "A"),
             ("b", None),
             (None, "b")
         ]
-        w.set_data_categorical(v, values, [CategoriesMapping(mapping)])
+        w.setData([(v, [CategoriesMapping(mapping)])])
         w.grab()  # run delegate paint method
-        self.assertEqual(w.get_data(), (v, [CategoriesMapping(mapping)]))
+        self.assertEqual(w.data(), [(v, [CategoriesMapping(mapping)])])
 
         # test selection/deselection in the view
-        w.set_data_categorical(v, values)
-        view = w.values_edit
+        w.setData([(v, [])])
+        view = w.categories_editor.categories_edit
         model = view.model()
         assert model.rowCount()
         sel_model = view.selectionModel()
@@ -417,8 +423,8 @@ class TestEditors(GuiTest):
             ("b", "b"),
             ("c", "b")
         ]
-        w.set_data_categorical(v, values, [CategoriesMapping(mapping)])
-        self.assertEqual(w.get_data()[1], [CategoriesMapping(mapping)])
+        w.setData([(v, [CategoriesMapping(mapping)])])
+        self.assertEqual(w.data()[0][1], [CategoriesMapping(mapping)])
         self.assertEqual(model.data(model.index(0, 0), MultiplicityRole), 1)
         self.assertEqual(model.data(model.index(1, 0), MultiplicityRole), 2)
         self.assertEqual(model.data(model.index(2, 0), MultiplicityRole), 2)
@@ -430,14 +436,16 @@ class TestEditors(GuiTest):
         w.grab()
 
     def test_discrete_editor_add_remove_action(self):
-        w = DiscreteVariableEditor()
-        v = Categorical("C", ("a", "b", "c"),
-                        (("A", "1"), ("B", "b")), False)
-        values = [0, 0, 0, 1, 1, 2]
-        w.set_data_categorical(v, values)
-        action_add = w.add_new_item
-        action_remove = w.remove_item
-        view = w.values_edit
+        w = MassVariablesEditor()
+        v = CategoricalVector(
+            Categorical("C", ("a", "b", "c"),
+                        (("A", "1"), ("B", "b")), False),
+            lambda: MArray([0, 0, 0, 1, 1, 2])
+        )
+        w.setData([(v, [])])
+        action_add = w.categories_editor.add_new_item
+        action_remove = w.categories_editor.remove_item
+        view = w.categories_editor.categories_edit
         model, selection = view.model(), view.selectionModel()
         selection.clear()
 
@@ -478,18 +486,15 @@ class TestEditors(GuiTest):
         This function check whether results of dialog have effect on
         merging the attributes. The dialog itself is tested separately.
         """
-        w = DiscreteVariableEditor()
-        v = Categorical("C", ("a", "b", "c"),
-                        (("A", "1"), ("B", "b")), False)
-
-        w.set_data_categorical(
-            v, [0, 0, 0, 1, 1, 2],
-            [CategoriesMapping([
-                ("a", "AA"), ("b", "BB"), ("c", "CC"),
-            ])]
+        w = MassVariablesEditor()
+        v = CategoricalVector(
+            Categorical("C", ("a", "b", "c"),
+                        (("A", "1"), ("B", "b")), False),
+            lambda: MArray([0, 0, 0, 1, 1, 2])
         )
-
-        view = w.values_edit
+        w.setData([(v, [CategoriesMapping([
+                    ("a", "AA"), ("b", "BB"), ("c", "CC"),])])])
+        view = w.categories_editor.categories_edit
         model = view.model()
         selmodel = view.selectionModel()  # type: QItemSelectionModel
         selmodel.select(
@@ -552,19 +557,22 @@ class TestEditors(GuiTest):
         menu.close()
 
     def test_time_editor(self):
-        w = TimeVariableEditor()
-        self.assertEqual(w.get_data(), (None, []))
+        w = MassVariablesEditor()
+        self.assertEqual(w.data(), [])
 
-        v = Time("T", (("A", "1"), ("B", "b")), False)
-        w.set_data(v,)
+        v = TimeVector(
+            Time("T", (("A", "1"), ("B", "b")), False),
+            lambda: MArray([]))
+        w.setData([(v, [])])
 
-        self.assertEqual(w.name_edit.text(), v.name)
-        self.assertEqual(w.labels_model.get_dict(), dict(v.annotations))
+        self.assertEqual(w.name_edit.text(), v.vtype.name)
+        self.assertEqual(w.annotations_edit.mappings(),
+                         [(dict(v.vtype.annotations), [])])
 
-        w.set_data(None)
+        w.setData([])
         self.assertEqual(w.name_edit.text(), "")
-        self.assertEqual(w.labels_model.get_dict(), {})
-        self.assertEqual(w.get_data(), (None, []))
+        self.assertEqual(w.annotations_edit.mappings(), [])
+        self.assertEqual(w.data(), [])
 
     DataVectors = [
         CategoricalVector(
@@ -591,31 +599,30 @@ class TestEditors(GuiTest):
     }
 
     def test_reinterpret_editor(self):
-        w = ReinterpretVariableEditor()
-        self.assertEqual(w.get_data(), (None, []))
+        w = MassVariablesEditor()
         data = self.DataVectors[0]
-        w.set_data(data, )
-        self.assertEqual(w.get_data(), (data.vtype, []))
-        w.set_data(data, [Rename("Z")])
-        self.assertEqual(w.get_data(), (data.vtype, [Rename("Z")]))
+        w.setData([(data, [])])
+        self.assertEqual(w.data(), [(data, [])])
+        w.setData([(data, [Rename("Z")])])
+        self.assertEqual(w.data(), [(data, [Rename("Z")])])
 
         for vec, tr in product(self.DataVectors, self.ReinterpretTransforms.values()):
-            w.set_data(vec, [t() for t in tr])
-            v, tr_ = w.get_data()
-            self.assertEqual(v, vec.vtype)
+            w.setData([(vec, [t() for t in tr])])
+            [(v, tr_)] = w.data()
+            self.assertEqual(v, vec)
             if not tr_:
-                self.assertEqual(tr, self.ReinterpretTransforms[type(v)])
+                self.assertEqual(tr, self.ReinterpretTransforms[type(v.vtype)])
             else:
                 self.assertListEqual(tr_, [t() for t in tr])
 
     def test_reinterpret_editor_simulate(self):
-        w = ReinterpretVariableEditor()
+        w = MassVariablesEditor()
         tc = w.findChild(QComboBox, name="type-combo")
 
         def cb():
-            var, tr = w.get_data()
+            [(var, tr)] = w.data()
             type_ = tc.currentData()
-            if type_ is not type(var):
+            if type_ is not type(var.vtype):
                 self.assertEqual(
                     tr, [t() for t in self.ReinterpretTransforms[type_]] + [Rename("Z")]
                 )
@@ -623,41 +630,45 @@ class TestEditors(GuiTest):
                 self.assertEqual(tr, [Rename("Z")])
 
         for vec in self.DataVectors:
-            w.set_data(vec, [Rename("Z")])
+            w.setData([(vec, [Rename("Z")])])
             simulate.combobox_run_through_all(tc, callback=cb)
 
     def test_unlink(self):
-        w = ContinuousVariableEditor()
+        w = MassVariablesEditor()
         cbox = w.unlink_var_cb
-        self.assertEqual(w.get_data(), (None, []))
 
-        v = Real("X", (-1, ""), (("A", "1"), ("B", "b")), False)
-        w.set_data(v, [])
+        v1 = RealVector(
+            Real("X", (-1, ""), (("A", "1"), ("B", "b")), False),
+            lambda: MArray([])
+        )
+        w.setData([(v1, [])])
         self.assertFalse(cbox.isEnabled())
 
-        v = Real("X", (-1, ""), (("A", "1"), ("B", "b")), True)
-        w.set_data(v, [Unlink()])
+        v2 = RealVector(
+            Real("X", (-1, ""), (("A", "1"), ("B", "b")), True),
+            lambda: MArray([])
+        )
+        w.setData([(v2, [Unlink()])])
         self.assertTrue(cbox.isEnabled())
         self.assertTrue(cbox.isChecked())
 
-        v = Real("X", (-1, ""), (("A", "1"), ("B", "b")), True)
-        w.set_data(v, [])
+        w.setData([(v2, [])])
         self.assertTrue(cbox.isEnabled())
         self.assertFalse(cbox.isChecked())
 
         cbox.setChecked(True)
-        self.assertEqual(w.get_data()[1], [Unlink()])
+        self.assertEqual(w.data(), [(v2, [Unlink()])])
 
-        w.set_data(v, [Unlink()])
+        w.setData([(v2, [Unlink()])])
         self.assertTrue(cbox.isChecked())
 
         cbox.setChecked(False)
-        self.assertEqual(w.get_data()[1], [])
+        self.assertEqual(w.data(), [(v2, [])])
 
         cbox.setChecked(True)
         w.clear()
         self.assertFalse(cbox.isChecked())
-        self.assertEqual(w.get_data()[1], [])
+        self.assertEqual(w.data(), [])
 
         w._set_unlink(True)
         self.assertTrue(cbox.isChecked())
