@@ -36,7 +36,7 @@ from Orange.widgets.data.oweditdomain import (
     LookupMappingTransform, as_float_or_nan, column_str_repr,
     GroupItemsDialog, VariableListModel, StrpTime, MassVariablesEditor,
     KeyValueEditor, DeleteKey, AddItem, SetValue, RenameKey,
-    mass_key_value_transforms
+    mass_key_value_transforms, CategoriesEditor
 )
 
 from Orange.widgets.data.owcolor import OWColor, ColorRole
@@ -701,6 +701,80 @@ class TestModels(GuiTest):
         set_data(1, [], TransformRole)
         self.assertEqual(data(0, MultiplicityRole), 1)
         self.assertEqual(data(1, MultiplicityRole), 1)
+
+
+class TestCategoriesEditor(GuiTest):
+    def test_categories_editor(self):
+        w = CategoriesEditor()
+        v = CategoricalVector(
+            Categorical("C", ("a", "b", "c"),
+                        (("A", "1"), ("B", "b")), False),
+            lambda: MArray([0, 0, 0, 1, 1, 2])
+        )
+        w.setData(v, None)
+        action_add = w.add_new_item
+        action_remove = w.remove_item
+        view = w.categories_edit
+        model, selection = view.model(), view.selectionModel()
+        selection.clear()
+
+        action_add.trigger()
+        self.assertTrue(view.state() == view.EditingState)
+        editor = view.focusWidget()
+        assert isinstance(editor, QLineEdit)
+        spy = QSignalSpy(model.dataChanged)
+        QTest.keyClick(editor, Qt.Key_D)
+        QTest.keyClick(editor, Qt.Key_Return)
+        self.assertTrue(model.rowCount() == 4)
+        # The commit to model is executed via a queued invoke
+        self.assertTrue(bool(spy) or spy.wait())
+        self.assertEqual(model.index(3, 0).data(Qt.EditRole), "d")
+        # remove it
+        spy = QSignalSpy(model.rowsRemoved)
+        action_remove.trigger()
+        self.assertEqual(model.rowCount(), 3)
+        self.assertEqual(len(spy), 1)
+        _, first, last = spy[0]
+        self.assertEqual((first, last), (3, 3))
+        # remove/drop and existing value
+        selection.select(model.index(1, 0), QItemSelectionModel.ClearAndSelect)
+        removespy = QSignalSpy(model.rowsRemoved)
+        changedspy = QSignalSpy(model.dataChanged)
+        action_remove.trigger()
+        self.assertEqual(len(removespy), 0, "Should only mark item as removed")
+        self.assertGreaterEqual(len(changedspy), 1, "Did not change data")
+        w.grab()
+
+    @patch(
+        "Orange.widgets.data.oweditdomain.GroupItemsDialog.exec",
+        Mock(side_effect=lambda: QDialog.Accepted)
+    )
+    def test_merge_action(self):
+        """
+        This function check whether results of dialog have effect on
+        merging the attributes. The dialog itself is tested separately.
+        """
+        w = CategoriesEditor()
+        v = CategoricalVector(
+            Categorical("C", ("a", "b", "c"),
+                        (("A", "1"), ("B", "b")), False),
+            lambda: MArray([0, 0, 0, 1, 1, 2])
+        )
+        w.setData(v, None)
+
+        view = w.categories_edit
+        model = view.model()
+        selmodel = view.selectionModel()  # type: QItemSelectionModel
+        selmodel.select(
+            QItemSelection(model.index(0, 0), model.index(1, 0)),
+            QItemSelectionModel.ClearAndSelect
+        )
+
+        # trigger the action, then find the active popup, and simulate entry
+        w.merge_items.trigger()
+
+        self.assertEqual(model.index(0, 0).data(Qt.EditRole), "other")
+        self.assertEqual(model.index(1, 0).data(Qt.EditRole), "other")
 
 
 class TestDelegates(GuiTest):
