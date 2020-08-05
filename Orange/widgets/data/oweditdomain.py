@@ -156,6 +156,8 @@ class ModifyAnnotations(DataType, Transform):
 
 class Unlink(DataType, Transform):
     """Unlink variable from its source, that is, remove compute_value"""
+    def __call__(self, var: Variable) -> Variable:
+        return var
 
 
 class StrpTime(_DataType, namedtuple("StrpTime", ["label", "formats", "have_date", "have_time"])):
@@ -1798,7 +1800,7 @@ class MassVariablesEditor(QWidget):
         typecb.activated[int].connect(self.__reinterpret_activated)
         layout.addRow("Type", typecb)
         self.unlink_var_cb = QCheckBox("Unlink", objectName="unlink-edit")
-        self.unlink_var_cb.toggled.connect(self.changed)
+        self.unlink_var_cb.stateChanged.connect(self.changed)
         self.unlink_var_cb.toggled.connect(self.edited)
 
         layout.addRow("", self.unlink_var_cb)
@@ -1942,6 +1944,23 @@ class MassVariablesEditor(QWidget):
             self.__categories_edit_row.setVisible(False)
         self.categories_editor.setEnabled(can_edit_categories)
         self.annotations_edit.setEnabled(bool(items))
+
+        all_linked = all(item.vtype.linked for item in items)
+        unlink_trs = [find_instance(item.transforms, Unlink) is not None
+                      for item in items]
+        all_have_unlinked = all(unlink_trs)
+        none_have_unlinked = not any(unlink_trs)
+
+        self.unlink_var_cb.setEnabled(
+            bool(items) and all_linked and (all_have_unlinked or none_have_unlinked)
+        )
+        if items and all_have_unlinked:
+            state = Qt.Checked
+        elif none_have_unlinked:
+            state = Qt.Unchecked
+        else:
+            state = Qt.PartiallyChecked
+        self.unlink_var_cb.setCheckState(state)
 
     def data(self) -> Sequence[Tuple[DataVector, Sequence[Transform]]]:
         ItemData = MassVariablesEditor.ItemData
