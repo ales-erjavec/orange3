@@ -229,16 +229,16 @@ class TestTools(unittest.TestCase):
         self.assertTrue(validate_("()"))
         self.assertTrue(validate_("[]"))
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(SyntaxError):
             validate_("[a for a in s]")
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(SyntaxError):
             validate_("(a for a in s)")
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(SyntaxError):
             validate_("{a for a in s}")
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(SyntaxError):
             validate_("{a:1 for a in s}")
 
 
