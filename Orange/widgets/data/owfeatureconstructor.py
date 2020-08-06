@@ -156,6 +156,22 @@ def selected_row(view):
         return None
 
 
+class ExpressionValidator(QValidator):
+    def validate(self, string, pos):
+        # type: (str, int) -> Tuple[QValidator.State, str, int]
+        assert len(string.splitlines()) <= 1
+        try:
+            exp = ast.parse(string, mode="eval")
+        except SyntaxError as err:
+            return QValidator.Intermediate, string, err.offset
+        try:
+            validate_exp(exp)
+        except SyntaxError as err:
+            return QValidator.Intermediate, string, err.offset
+
+        return QValidator.Acceptable, string, pos
+
+
 class FeatureEditor(QFrame):
     FUNCTIONS = dict(chain([(key, val) for key, val in math.__dict__.items()
                             if not key.startswith("_")],
@@ -180,7 +196,17 @@ class FeatureEditor(QFrame):
         )
         self.expressionedit = QLineEdit(
             placeholderText="Expression...",
-            toolTip=self.ExpressionTooltip)
+            toolTip=self.ExpressionTooltip
+        )
+        self.expressionedit.setValidator(ExpressionValidator(self.expressionedit))
+        @self.expressionedit.textChanged.connect
+        def _():
+            palette = self.expressionedit.palette()
+            if not self.expressionedit.hasAcceptableInput():
+                palette.setColor(QPalette.Base, Qt.darkYellow)
+            else:
+                palette.setColor(QPalette.Base, self.palette().color(QPalette.Base))
+            self.expressionedit.setPalette(palette)
 
         self.attrs_model = itemmodels.VariableListModel(
             ["Select Feature"], parent=self)
@@ -824,19 +850,10 @@ class OWFeatureConstructor(OWWidget):
         return None
 
     def _validate_descriptors(self, desc):
-
-        def validate(source):
-            try:
-                return validate_exp(ast.parse(source, mode="eval"))
-            # ast.parse can return arbitrary errors, not only SyntaxError
-            # pylint: disable=broad-except
-            except Exception:
-                return False
-
         final = []
         invalid = []
         for d in desc:
-            if validate(d.expression):
+            if is_valid_expression(d.expression):
                 final.append(d)
             else:
                 final.append(d._replace(expression=""))
@@ -1034,10 +1051,12 @@ def validate_exp(exp):
     """
     # pylint: disable=too-many-branches
     if not isinstance(exp, ast.AST):
-        raise TypeError("exp is not a 'ast.AST' instance")
+        raise TypeError("'exp' is not a 'ast.AST' instance")
+    # if not isinstance(exp, (ast.expr, ast.Expr, ast.Expression)):
+    #     raise TypeError("'exp' is not an expression")
 
     etype = type(exp)
-    if etype in [ast.Expr, ast.Expression]:
+    if isinstance(exp, (ast.Expr, ast.Expression)):
         return validate_exp(exp.body)
     elif etype == ast.BoolOp:
         return all(map(validate_exp, exp.values))
@@ -1082,8 +1101,22 @@ def validate_exp(exp):
         return validate_exp(exp.value)
     elif etype == ast.keyword:
         return validate_exp(exp.value)
+    elif isinstance(exp, ast.expr):
+        # raise ExpressionValidationError()
+        raise SyntaxError("Invalid expression: {}".format(type(exp).__name__),
+                          ("<unknown>", exp.lineno, exp.col_offset, ""))
     else:
-        raise ValueError(exp)
+        raise ValueError(f"Unsupported ast.AST node type{type(exp)}")
+
+
+class ExpressionValidationError(ValueError):
+    def __init__(self, message, node, source=None):
+        # type: (str, ast.expr, Optional[str]) -> None
+        self.message = message
+        self.node = node
+        self.lineno = node.lineno
+        self.offset = node.col_offset
+        self.source = source
 
 
 def construct_variables(descriptions, data):
