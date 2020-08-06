@@ -26,10 +26,19 @@ import numpy as np
 from AnyQt.QtWidgets import (
     QSizePolicy, QAbstractItemView, QComboBox, QFormLayout, QLineEdit,
     QHBoxLayout, QVBoxLayout, QStackedWidget, QStyledItemDelegate,
-    QPushButton, QMenu, QListView, QFrame, QLabel
+    QPushButton, QMenu, QListView, QFrame, QLabel,
+    QTextEdit, QStyleOptionFrame, QStyle, QApplication
 )
-from AnyQt.QtGui import QKeySequence, QValidator, QPalette
-from AnyQt.QtCore import Qt, pyqtSignal as Signal, pyqtProperty as Property
+from AnyQt.QtGui import (
+    QKeySequence, QValidator, QPalette, QTextOption, QKeyEvent,
+    QTextCharFormat, QColor, QPainter, QTextCursor
+)
+from AnyQt.QtCore import Qt, pyqtSignal as Signal, pyqtProperty as Property, \
+    QSize, QEvent
+
+from pygments.token import Error
+from qtconsole.pygments_highlighter import PygmentsHighlighter
+
 from orangewidget.utils.combobox import ComboBoxSearch
 
 import Orange
@@ -172,6 +181,106 @@ class ExpressionValidator(QValidator):
         return QValidator.Acceptable, string, pos
 
 
+class Highlighter(PygmentsHighlighter):
+    def validator(self):
+        return ExpressionValidator()
+
+    def highlightBlock(self, string):
+        super().highlightBlock(string)
+        state, _, pos = self.validator().validate(string, 0)
+        if state != QValidator.Acceptable:
+            format = QTextCharFormat()
+            format.setUnderlineStyle(QTextCharFormat.SpellCheckUnderline)
+            f = self._get_format(Error)
+            if f is not None and f.foreground().style() != Qt.NoBrush:
+                format.setUnderlineColor(f.foreground().color())
+            else:
+                format.setUnderlineColor(QColor("red"))
+            self.setFormat(pos, len(string) - pos, format)
+
+
+class ExpressionEdit(QTextEdit):
+    __documentMargin = 1  # same as QLineEditPrivate::verticalMargin
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setTabChangesFocus(True)
+        self.setWordWrapMode(QTextOption.NoWrap)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        sp = self.sizePolicy()
+        sp.setVerticalPolicy(QSizePolicy.Fixed)
+        sp.setControlType(QSizePolicy.LineEdit)
+        self.setSizePolicy(sp)
+        self.setAttribute(Qt.WA_WState_OwnSizePolicy, True)
+        doc = self.document()
+        doc.setDocumentMargin(self.__documentMargin)
+        self.setAttribute(Qt.WA_MacShowFocusRect)
+
+    def text(self) -> str:
+        return self.toPlainText()
+
+    def setText(self, text: str) -> None:
+        self.setPlainText(text)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            event.ignore()
+        else:
+            super().keyPressEvent(event)
+
+    def minimumSizeHint(self) -> QSize:
+        msh = super().minimumSizeHint()
+        sh = self.sizeHint()
+        return QSize(msh.width(), sh.height())
+
+    def sizeHint(self) -> QSize:
+        fm = self.fontMetrics()
+        margin = int(math.ceil(self.document().documentMargin()))
+        h = max(fm.height(), 14) + 2 * margin
+        w = fm.width('x') * 17 + 2 * margin
+        opt = QStyleOptionFrame()
+        self.__initStyleOptionLineEdit(opt)
+        size = QSize(w, h).expandedTo(QApplication.globalStrut())
+        size = self.style().sizeFromContents(QStyle.CT_LineEdit, opt, size, self)
+        size.setHeight(max(h, size.height()))
+        return size
+
+    def event(self, event: QEvent):
+        if event.type() == QEvent.Paint:
+            # draw frame like a QLineEdit
+            painter = QPainter(self)
+            option = QStyleOptionFrame()
+            self.__initStyleOptionLineEdit(option)
+            self.style().drawPrimitive(QStyle.PE_PanelLineEdit, option, painter, self)
+            painter.end()
+            return True
+        return super().event(event)
+
+    def __initStyleOptionLineEdit(self, option: QStyleOptionFrame):
+        option.initFrom(self)
+        style = self.style()
+        option.lineWidth = style.pixelMetric(QStyle.PM_DefaultFrameWidth, option, None)
+        option.state |= QStyle.State_Sunken
+        option.state |= QStyle.State_HasFocus
+        option.features = QStyleOptionFrame.None_
+
+    def __moveCursor(self, op, mark, steps):
+        mode = QTextCursor.KeepAnchor if mark else QTextCursor.MoveAnchor
+        c = self.textCursor()
+        c.movePosition(op, mode, steps)
+        self.setTextCursor(c)
+
+    def cursorBackward(self, mark: bool, steps: int = 1):
+        self.__moveCursor(QTextCursor.PreviousCharacter, mark, steps)
+
+    def cursorForward(self, mark: bool, steps: int = 1):
+        self.__moveCursor(QTextCursor.NextCharacter, mark, steps)
+
+    def cursorPosition(self):
+        return self.textCursor().position()
+
+
 class FeatureEditor(QFrame):
     FUNCTIONS = dict(chain([(key, val) for key, val in math.__dict__.items()
                             if not key.startswith("_")],
@@ -194,19 +303,21 @@ class FeatureEditor(QFrame):
             sizePolicy=QSizePolicy(QSizePolicy.Minimum,
                                    QSizePolicy.Fixed)
         )
-        self.expressionedit = QLineEdit(
+        self.expressionedit = ExpressionEdit(
+        # self.expressionedit = QLineEdit(
             placeholderText="Expression...",
             toolTip=self.ExpressionTooltip
         )
-        self.expressionedit.setValidator(ExpressionValidator(self.expressionedit))
-        @self.expressionedit.textChanged.connect
-        def _():
-            palette = self.expressionedit.palette()
-            if not self.expressionedit.hasAcceptableInput():
-                palette.setColor(QPalette.Base, Qt.darkYellow)
-            else:
-                palette.setColor(QPalette.Base, self.palette().color(QPalette.Base))
-            self.expressionedit.setPalette(palette)
+        _ = Highlighter(self.expressionedit.document())
+        # self.expressionedit.setValidator(ExpressionValidator(self.expressionedit))
+        # @self.expressionedit.textChanged.connect
+        # def _():
+        #     palette = self.expressionedit.palette()
+        #     if not self.expressionedit.hasAcceptableInput():
+        #         palette.setColor(QPalette.Base, Qt.darkYellow)
+        #     else:
+        #         palette.setColor(QPalette.Base, self.palette().color(QPalette.Base))
+        #     self.expressionedit.setPalette(palette)
 
         self.attrs_model = itemmodels.VariableListModel(
             ["Select Feature"], parent=self)
@@ -241,7 +352,7 @@ class FeatureEditor(QFrame):
         self.setLayout(layout)
 
         self.nameedit.textEdited.connect(self._invalidate)
-        self.expressionedit.textEdited.connect(self._invalidate)
+        self.expressionedit.textChanged.connect(self._invalidate)
         self.attributescb.activated.connect(self.on_attrs_changed)
         self.functionscb.activated.connect(self.on_funcs_changed)
 
@@ -263,7 +374,7 @@ class FeatureEditor(QFrame):
     def setEditorData(self, data, domain):
         with itemmodels.signal_blocking(self):
             self.nameedit.setText(data.name)
-            self.expressionedit.setText(data.expression)
+            self.expressionedit.setPlainText(data.expression)
 
         self.setModified(False)
         self.featureChanged.emit()
@@ -287,7 +398,7 @@ class FeatureEditor(QFrame):
         if not self.nameedit.hasAcceptableInput():
             return False
         try:
-            validate_exp(ast.parse(self.expressionedit.text(), mode="eval"))
+            validate_exp(ast.parse(self.expressionedit.toPlainText(), mode="eval"))
             return True
         except SyntaxError:
             return False
@@ -320,10 +431,8 @@ class FeatureEditor(QFrame):
             self.functionscb.setCurrentIndex(0)
 
     def insert_into_expression(self, what):
-        cp = self.expressionedit.cursorPosition()
-        ct = self.expressionedit.text()
-        text = ct[:cp] + what + ct[cp:]
-        self.expressionedit.setText(text)
+        c = self.expressionedit.textCursor()
+        c.insertText(what)
         self.expressionedit.setFocus()
         self._invalidate()
 
@@ -335,7 +444,7 @@ class ContinuousFeatureEditor(FeatureEditor):
         return ContinuousDescriptor(
             name=self.nameedit.text(),
             number_of_decimals=None,
-            expression=self.expressionedit.text()
+            expression=self.expressionedit.toPlainText()
         )
 
 
