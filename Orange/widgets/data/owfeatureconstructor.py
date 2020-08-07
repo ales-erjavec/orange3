@@ -27,7 +27,7 @@ from AnyQt.QtWidgets import (
     QSizePolicy, QAbstractItemView, QComboBox, QFormLayout, QLineEdit,
     QHBoxLayout, QVBoxLayout, QStackedWidget, QStyledItemDelegate,
     QPushButton, QMenu, QListView, QFrame, QLabel,
-    QTextEdit, QStyleOptionFrame, QStyle, QApplication
+    QTextEdit, QStyleOptionFrame, QStyle, QApplication, QGridLayout
 )
 from AnyQt.QtGui import (
     QKeySequence, QValidator, QPalette, QTextOption, QKeyEvent,
@@ -707,10 +707,8 @@ class OWFeatureConstructor(OWWidget):
         self.editors = {}
 
         box = gui.vBox(self.controlArea, "Variable Definitions")
-
-        toplayout = QHBoxLayout()
-        toplayout.setContentsMargins(0, 0, 0, 0)
-        box.layout().addLayout(toplayout)
+        grid = QGridLayout(margin=4)
+        box.layout().addLayout(grid)
 
         self.editorstack = QStackedWidget(
             sizePolicy=QSizePolicy(QSizePolicy.MinimumExpanding,
@@ -725,9 +723,6 @@ class OWFeatureConstructor(OWWidget):
             self.editorstack.addWidget(editor)
 
         self.editorstack.setEnabled(False)
-
-        buttonlayout = QVBoxLayout(spacing=10)
-        buttonlayout.setContentsMargins(0, 0, 0, 0)
 
         self.addbutton = QPushButton(
             "New", toolTip="Create a new variable",
@@ -777,12 +772,10 @@ class OWFeatureConstructor(OWWidget):
         )
         self.removebutton.clicked.connect(self.removeSelectedFeature)
 
-        buttonlayout.addWidget(self.addbutton)
-        buttonlayout.addWidget(self.removebutton)
-        buttonlayout.addStretch(10)
-
-        toplayout.addLayout(buttonlayout, 0)
-        toplayout.addWidget(self.editorstack, 10)
+        grid.addWidget(self.addbutton, 0, 0)
+        grid.addWidget(self.removebutton, 1, 0)
+        grid.addWidget(self.editorstack, 0, 1, 3, 1)
+        grid.setRowStretch(2, 10)
 
         # Layout for the list view
         layout = QVBoxLayout(spacing=1, margin=0)
