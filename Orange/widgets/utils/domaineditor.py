@@ -63,8 +63,7 @@ class VarTableModel(QAbstractTableModel):
     def rowCount(self, parent):
         return 0 if parent.isValid() else len(self.variables)
 
-    @staticmethod
-    def columnCount(parent):
+    def columnCount(self, parent):
         return 0 if parent.isValid() else Column.not_valid
 
     def data(self, index, role):

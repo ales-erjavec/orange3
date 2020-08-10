@@ -31,8 +31,9 @@ class BlockSelectionModel(QItemSelectionModel):
             self, model: QAbstractItemModel, parent: Optional[QObject] = None,
             selectBlocks=True, **kwargs
     ) -> None:
-        super().__init__(model, parent, **kwargs)
+        super().__init__(model, **kwargs)
         self.__selectBlocks = selectBlocks
+        self.setParent(parent)
 
     def select(self, selection: Union[QItemSelection, QModelIndex],
                flags: QItemSelectionModel.SelectionFlags) -> None:

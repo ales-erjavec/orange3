@@ -2095,7 +2095,7 @@ class OWEditDomain(widget.OWWidget):
         current = self._editor
         try:
             current.variable_changed.disconnect(self._on_variable_changed)
-        except TypeError:
+        except (TypeError, RuntimeError):
             pass
         current.set_data(None)
         current.layout().currentWidget().clear()

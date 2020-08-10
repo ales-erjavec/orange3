@@ -2,7 +2,7 @@ import io
 import csv
 
 from AnyQt.QtCore import Signal, QItemSelectionModel, Qt, QSize, QEvent, \
-    QByteArray, QMimeData
+    QByteArray, QMimeData, Slot
 from AnyQt.QtGui import QMouseEvent
 from AnyQt.QtWidgets import QTableView, QStyleOptionViewItem, QStyle
 
@@ -59,6 +59,7 @@ class TableView(QTableView):
         if selectionModel is not None:
             selectionModel.selectionChanged.connect(self.__on_selectionChanged)
 
+    @Slot()
     def __on_selectionChanged(self):
         if self.__mouseDown:
             self.__selectionDidChange = True
