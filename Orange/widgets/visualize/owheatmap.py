@@ -1,7 +1,5 @@
 import asyncio
 import enum
-
-from Orange.clustering.kmeans import KMeansModel
 from collections import defaultdict
 from itertools import islice
 from typing import (
@@ -43,7 +41,9 @@ from Orange.widgets.visualize.utils.heatmap import HeatmapGridWidget, \
 from Orange.widgets.utils.colorgradientselection import ColorGradientSelection
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.utils.state_summary import format_summary_details
+from Orange.widgets.utils.concurrent import ThreadExecutor
 
+from orangecontrib.prototypes.widgets.utils.asyncutils import get_event_loop
 
 __all__ = []
 
@@ -221,9 +221,10 @@ class OWHeatMap(widget.OWWidget):
     def __init__(self):
         super().__init__()
         self.__pending_selection = self.selected_rows
-        from orangecontrib.prototypes.widgets.utils.asyncutils import get_event_loop
         self.__loop = get_event_loop()
-        self._task = None # type: asyncio.Task
+        self.__executor = ThreadExecutor()
+
+        self._task = None  # type: Optional[asyncio.Task]
         # A kingdom for a save_state/restore_state
         self.col_clustering = enum_get(
             Clustering, self.col_clustering_method, Clustering.None_)
@@ -559,6 +560,7 @@ class OWHeatMap(widget.OWWidget):
         self.__columns_cache.clear()
         self.__rows_cache.clear()
         self.__update_clustering_enable_state(None)
+        self.__cancel()
 
     def clear_scene(self):
         if self.scene.widget is not None:
@@ -671,13 +673,15 @@ class OWHeatMap(widget.OWWidget):
                 )
 
         self.update_heatmaps()
-        if data is not None and self.__pending_selection is not None:
-            assert self.scene.widget is not None
-            self.scene.widget.selectRows(self.__pending_selection)
-            self.selected_rows = self.__pending_selection
-            self.__pending_selection = None
-
-        self.unconditional_commit()
+        # if data is not None and self.__pending_selection is not None:
+        #     assert self.scene.widget is not None
+        #     self.scene.widget.selectRows(self.__pending_selection)
+        #     self.selected_rows = self.__pending_selection
+        #     self.__pending_selection = None
+        #
+        if data is None:
+            self.setInvalidated(False)
+            self.unconditional_commit()
 
     def _set_input_summary(self, data):
         summary = len(data) if data else self.info.NoInput
@@ -700,14 +704,8 @@ class OWHeatMap(widget.OWWidget):
             self.split_columns_var = var
             self.update_heatmaps()
 
-    async def _do_update_heatmaps(self):
-        pass
-
     def update_heatmaps(self,):
-        if self._task is not None:
-            self._task.cancel()
-            self._task = None
-
+        task = self.__cancel()
         if self.data is not None:
             self.clear_scene()
             self.clear_messages()
@@ -722,8 +720,6 @@ class OWHeatMap(widget.OWWidget):
                 self.Error.not_enough_instances_k_means()
             else:
                 async def construct_heatmaps(data, vr, vc):
-                    effective_data = self.effective_data
-                    ...
                     parts = await self.construct_heatmaps(data, vr, vc)
                     effective_data = self.effective_data
                     self.effective_data = effective_data
@@ -733,17 +729,49 @@ class OWHeatMap(widget.OWWidget):
                 self._task = self.__loop.create_task(
                     construct_heatmaps(self.data, self.split_by_var, self.split_columns_var)
                 )
+                self.setInvalidated(True)
+                self.progressBarInit()
+                self.progressBarSet(1)
+
+                async def oncomplete(task):
+
+                    try:
+                        res = await task
+                    except asyncio.CancelledError:
+                        return
+                    except MemoryError:
+                        self.setInvalidated(False)
+                        self.progressBarFinished()
+                        self.Error.not_enough_memory()
+                    else:
+                        self.setInvalidated(False)
+                        self.progressBarFinished()
+                        self.__restore_selection()
+                        self.commit()
+                self.__loop.create_task(oncomplete(self._task))
                 # self.construct_heatmaps_scene(parts, self.effective_data)
                 # self.selected_rows = []
         else:
             self.clear()
 
+    def submit_task(self, coro, name=""):
+        loop = self.__loop
+        task = loop.create_task(coro, name)
+
+    def __restore_selection(self):
+        if self.data is not None and self.__pending_selection is not None:
+            assert self.scene.widget is not None
+            self.scene.widget.selectRows(self.__pending_selection)
+            self.selected_rows = self.__pending_selection
+            self.__pending_selection = None
+
     def update_merge(self):
+        self.__cancel()
         self.kmeans_model = None
         self.merge_indices = None
         if self.data is not None and self.merge_kmeans:
             self.update_heatmaps()
-            self.commit()
+            # self.commit()
 
     @staticmethod
     def _make_parts(data, group_var=None, column_split_key=None):
@@ -803,8 +831,7 @@ class OWHeatMap(widget.OWWidget):
                 matrix = None
                 need_dist = cluster is None or (ordered and cluster_ord is None)
                 if need_dist:
-                    subset = data[row.indices].copy()
-                    print(subset)
+                    subset = data[row.indices]
                     matrix = Orange.distance.Euclidean(subset)
 
                 if cluster is None:
@@ -854,7 +881,7 @@ class OWHeatMap(widget.OWWidget):
         return parts._replace(columns=col_groups)
 
     @staticmethod
-    async def _kmeans_merge(data, k) -> Tuple[Table, List[np.ndarray], KMeansModel]:
+    def _kmeans_merge(data, k) -> Tuple[Table, List[np.ndarray], kmeans.KMeansModel]:
         effective_data = data.transform(
             Orange.data.Domain(
                 [var for var in data.domain.attributes if var.is_continuous],
@@ -878,14 +905,15 @@ class OWHeatMap(widget.OWWidget):
 
     async def construct_heatmaps(self, data, group_var=None, column_split_key=None, ) -> 'Parts':
         loop = self.__loop
+        executor = self.__executor
         if self.merge_kmeans:
             if self.kmeans_model is None:
                 effective_data, merge_indices, model = await loop.run_in_executor(
-                    None, self._kmeans_merge, data, self.merge_kmeans_k
+                    executor, self._kmeans_merge, data, self.merge_kmeans_k
                 )
                 self.kmeans_model = model
                 self.merge_indices = merge_indices
-                if len(merge_indices) != len(model.k):
+                if len(merge_indices) != model.k:
                     self.Warning.empty_clusters()
                 effective_data = effective_data
             else:
@@ -899,7 +927,8 @@ class OWHeatMap(widget.OWWidget):
 
         self.effective_data = effective_data
 
-        parts = self._make_parts(
+        parts = await loop.run_in_executor(
+            executor, self._make_parts,
             effective_data, group_var,
             column_split_key.name if column_split_key is not None else None)
 
@@ -917,12 +946,12 @@ class OWHeatMap(widget.OWWidget):
                 columns=self.__columns_cache[column_split_key].columns)
 
         if self.row_clustering != Clustering.None_:
-            parts = await loop.run_in_executor(None, self.cluster_rows,
+            parts = await loop.run_in_executor(executor, self.cluster_rows,
                 effective_data, parts,
                 self.row_clustering == Clustering.OrderedClustering
             )
         if self.col_clustering != Clustering.None_:
-            parts = await loop.run_in_executor(None, self.cluster_columns,
+            parts = await loop.run_in_executor(executor, self.cluster_columns,
                 effective_data, parts,
                 self.col_clustering == Clustering.OrderedClustering
             )
@@ -1103,11 +1132,11 @@ class OWHeatMap(widget.OWWidget):
 
     def __update_column_clustering(self):
         self.update_heatmaps()
-        self.commit()
+        # self.commit()
 
     def __update_row_clustering(self):
         self.update_heatmaps()
-        self.commit()
+        # self.commit()
 
     def update_legend(self):
         widget = self.scene.widget
@@ -1281,7 +1310,15 @@ class OWHeatMap(widget.OWWidget):
 
     def onDeleteWidget(self):
         self.clear()
+        self.__cancel()
         super().onDeleteWidget()
+
+    def __cancel(self):
+        task = None
+        if self._task is not None:
+            task, self._task = self._task, None
+            task.cancel()
+        return task
 
     def send_report(self):
         self.report_items((
