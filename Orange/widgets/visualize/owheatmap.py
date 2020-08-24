@@ -1,4 +1,7 @@
+import asyncio
 import enum
+
+from Orange.clustering.kmeans import KMeansModel
 from collections import defaultdict
 from itertools import islice
 from typing import (
@@ -218,7 +221,9 @@ class OWHeatMap(widget.OWWidget):
     def __init__(self):
         super().__init__()
         self.__pending_selection = self.selected_rows
-
+        from orangecontrib.prototypes.widgets.utils.asyncutils import get_event_loop
+        self.__loop = get_event_loop()
+        self._task = None # type: asyncio.Task
         # A kingdom for a save_state/restore_state
         self.col_clustering = enum_get(
             Clustering, self.col_clustering_method, Clustering.None_)
@@ -695,7 +700,14 @@ class OWHeatMap(widget.OWWidget):
             self.split_columns_var = var
             self.update_heatmaps()
 
-    def update_heatmaps(self):
+    async def _do_update_heatmaps(self):
+        pass
+
+    def update_heatmaps(self,):
+        if self._task is not None:
+            self._task.cancel()
+            self._task = None
+
         if self.data is not None:
             self.clear_scene()
             self.clear_messages()
@@ -709,9 +721,20 @@ class OWHeatMap(widget.OWWidget):
             elif self.merge_kmeans and len(self.data) < 3:
                 self.Error.not_enough_instances_k_means()
             else:
-                parts = self.construct_heatmaps(self.data, self.split_by_var, self.split_columns_var)
-                self.construct_heatmaps_scene(parts, self.effective_data)
-                self.selected_rows = []
+                async def construct_heatmaps(data, vr, vc):
+                    effective_data = self.effective_data
+                    ...
+                    parts = await self.construct_heatmaps(data, vr, vc)
+                    effective_data = self.effective_data
+                    self.effective_data = effective_data
+                    self.parts = parts
+                    self.construct_heatmaps_scene(parts, effective_data)
+                    self.selected_rows = []
+                self._task = self.__loop.create_task(
+                    construct_heatmaps(self.data, self.split_by_var, self.split_columns_var)
+                )
+                # self.construct_heatmaps_scene(parts, self.effective_data)
+                # self.selected_rows = []
         else:
             self.clear()
 
@@ -722,7 +745,8 @@ class OWHeatMap(widget.OWWidget):
             self.update_heatmaps()
             self.commit()
 
-    def _make_parts(self, data, group_var=None, column_split_key=None):
+    @staticmethod
+    def _make_parts(data, group_var=None, column_split_key=None):
         """
         Make initial `Parts` for data, split by group_var, group_key
         """
@@ -762,7 +786,8 @@ class OWHeatMap(widget.OWWidget):
         minv, maxv = np.nanmin(data.X), np.nanmax(data.X)
         return Parts(row_groups, col_groups, span=(minv, maxv))
 
-    def cluster_rows(self, data: Table, parts: 'Parts', ordered=False) -> 'Parts':
+    @staticmethod
+    def cluster_rows(data: Table, parts: 'Parts', ordered=False) -> 'Parts':
         row_groups = []
         for row in parts.rows:
             if row.cluster is not None:
@@ -778,7 +803,8 @@ class OWHeatMap(widget.OWWidget):
                 matrix = None
                 need_dist = cluster is None or (ordered and cluster_ord is None)
                 if need_dist:
-                    subset = data[row.indices]
+                    subset = data[row.indices].copy()
+                    print(subset)
                     matrix = Orange.distance.Euclidean(subset)
 
                 if cluster is None:
@@ -793,7 +819,8 @@ class OWHeatMap(widget.OWWidget):
 
         return parts._replace(rows=row_groups)
 
-    def cluster_columns(self, data, parts: 'Parts', ordered=False):
+    @staticmethod
+    def cluster_columns(data, parts: 'Parts', ordered=False):
         assert all(var.is_continuous for var in data.domain.attributes)
         col_groups = []
         for col in parts.columns:
@@ -826,30 +853,41 @@ class OWHeatMap(widget.OWWidget):
             col_groups.append(col._replace(cluster=cluster, cluster_ordered=cluster_ord))
         return parts._replace(columns=col_groups)
 
-    def construct_heatmaps(self, data, group_var=None, column_split_key=None) -> 'Parts':
+    @staticmethod
+    async def _kmeans_merge(data, k) -> Tuple[Table, List[np.ndarray], KMeansModel]:
+        effective_data = data.transform(
+            Orange.data.Domain(
+                [var for var in data.domain.attributes if var.is_continuous],
+                data.domain.class_vars, data.domain.metas)
+        )
+        nclust = min(k, len(effective_data) - 1)
+        model = kmeans_compress(effective_data, k=nclust)
+        effective_data.domain = model.domain
+        merge_indices = [np.flatnonzero(model.labels == ind)
+                         for ind in range(nclust)]
+        not_empty_indices = [i for i, x in enumerate(merge_indices)
+                             if len(x) > 0]
+        indices = [merge_indices[i] for i in not_empty_indices]
+        # if len(merge_indices) != nclust:
+        #     self.Warning.empty_clusters()
+        effective_data = Orange.data.Table(
+            Orange.data.Domain(effective_data.domain.attributes),
+            model.centroids[not_empty_indices]
+        )
+        return effective_data, indices, model
+
+    async def construct_heatmaps(self, data, group_var=None, column_split_key=None, ) -> 'Parts':
+        loop = self.__loop
         if self.merge_kmeans:
             if self.kmeans_model is None:
-                effective_data = self.input_data.transform(
-                    Orange.data.Domain(
-                        [var for var in self.input_data.domain.attributes
-                         if var.is_continuous],
-                        self.input_data.domain.class_vars,
-                        self.input_data.domain.metas))
-                nclust = min(self.merge_kmeans_k, len(effective_data) - 1)
-                self.kmeans_model = kmeans_compress(effective_data, k=nclust)
-                effective_data.domain = self.kmeans_model.domain
-                merge_indices = [np.flatnonzero(self.kmeans_model.labels == ind)
-                                 for ind in range(nclust)]
-                not_empty_indices = [i for i, x in enumerate(merge_indices)
-                                     if len(x) > 0]
-                self.merge_indices = \
-                    [merge_indices[i] for i in not_empty_indices]
-                if len(merge_indices) != len(self.merge_indices):
-                    self.Warning.empty_clusters()
-                effective_data = Orange.data.Table(
-                    Orange.data.Domain(effective_data.domain.attributes),
-                    self.kmeans_model.centroids[not_empty_indices]
+                effective_data, merge_indices, model = await loop.run_in_executor(
+                    None, self._kmeans_merge, data, self.merge_kmeans_k
                 )
+                self.kmeans_model = model
+                self.merge_indices = merge_indices
+                if len(merge_indices) != len(model.k):
+                    self.Warning.empty_clusters()
+                effective_data = effective_data
             else:
                 effective_data = self.effective_data
 
@@ -865,6 +903,7 @@ class OWHeatMap(widget.OWWidget):
             effective_data, group_var,
             column_split_key.name if column_split_key is not None else None)
 
+        await asyncio.sleep(0)  # cancellation point
         self.__update_clustering_enable_state(parts)
         # Restore/update the row/columns items descriptions from cache if
         # available
@@ -878,16 +917,15 @@ class OWHeatMap(widget.OWWidget):
                 columns=self.__columns_cache[column_split_key].columns)
 
         if self.row_clustering != Clustering.None_:
-            parts = self.cluster_rows(
+            parts = await loop.run_in_executor(None, self.cluster_rows,
                 effective_data, parts,
-                ordered=self.row_clustering == Clustering.OrderedClustering
+                self.row_clustering == Clustering.OrderedClustering
             )
         if self.col_clustering != Clustering.None_:
-            parts = self.cluster_columns(
+            parts = await loop.run_in_executor(None, self.cluster_columns,
                 effective_data, parts,
-                ordered=self.col_clustering == Clustering.OrderedClustering
+                self.col_clustering == Clustering.OrderedClustering
             )
-
         # Cache the updated parts
         self.__rows_cache[rows_cache_key] = parts
         return parts
