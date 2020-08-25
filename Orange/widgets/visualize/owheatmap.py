@@ -705,7 +705,7 @@ class OWHeatMap(widget.OWWidget):
             self.update_heatmaps()
 
     def update_heatmaps(self,):
-        task = self.__cancel()
+        cancelled = self.__cancel()
         if self.data is not None:
             self.clear_scene()
             self.clear_messages()
@@ -719,7 +719,15 @@ class OWHeatMap(widget.OWWidget):
             elif self.merge_kmeans and len(self.data) < 3:
                 self.Error.not_enough_instances_k_means()
             else:
+                async def chain(t1, t2):
+                    await asyncio.gather(t1, return_exceptions=True)
+                    return await t2
+
                 async def construct_heatmaps(data, vr, vc):
+                    if cancelled is not None:
+                        print("await for cancelled")
+                        await asyncio.gather(cancelled, return_exceptions=True)
+                        print("did await for cancelled")
                     parts = await self.construct_heatmaps(data, vr, vc)
                     effective_data = self.effective_data
                     self.effective_data = effective_data
@@ -731,10 +739,10 @@ class OWHeatMap(widget.OWWidget):
                 )
                 self.setInvalidated(True)
                 self.progressBarInit()
-                self.progressBarSet(1)
+                # self.progressBarSet(1)
 
                 async def oncomplete(task):
-
+                    await asyncio.gather(task, return_exceptions=True)
                     try:
                         res = await task
                     except asyncio.CancelledError:
