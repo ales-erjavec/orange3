@@ -1853,6 +1853,45 @@ def pandas_to_table(df):
     return Orange.data.Table.from_numpy(domain, X, None, M)
 
 
+from orangewidget.workflow.drophandler import SingleFileDropHandler
+
+
+class OWCSVFileImportDropHandler(SingleFileDropHandler):
+    WIDGET = OWCSVFileImport
+
+    def canDropFile(self, path: str) -> bool:
+        return _mime_type_for_path(path).inherits("text/plain")
+
+    def parametersFromFile(self, path: str) -> 'Dict[str, Any]':
+        return {}  # is never called `parametersFromMimeData` does all
+
+    def parametersFromMimeData(self, document, data: 'QMimeData') -> 'Dict[str, Any]':
+        urls = data.urls()
+        path = urls[0].toLocalFile()
+        mt = _mime_type_for_path(path)
+        dialect, header = default_options_for_mime_type(path, mt.name())
+        if header:
+            rowspec = [(range(0, 1), RowSpec.Header)]
+        else:
+            rowspec = []
+
+        workflow = document.scheme()
+        base = workflow.get_runtime_env("basedir", None)
+
+        if base is not None and isprefixed(base, path):
+            path = VarPath("basedir", os.path.relpath(path, base))
+        else:
+            path = AbsPath(path)
+
+        parameters = {
+            "__version__": 3,
+            "_session_items_v2": [
+                (path.as_dict(), Options(dialect=dialect, rowspec=rowspec).as_dict()),
+            ],
+        }
+        return parameters
+
+
 def main(argv=None):  # pragma: no cover
     app = QApplication(argv or [])
     w = OWCSVFileImport()

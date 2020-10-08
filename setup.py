@@ -101,6 +101,7 @@ ENTRY_POINTS = {
         "Load Model = Orange.widgets.model.owloadmodel:OWLoadModelDropHandler",
         "Distance File = Orange.widgets.unsupervised.owdistancefile:OWDistanceFileDropHandler",
         "Python Script = Orange.widgets.data.owpythonscript:OWPythonScriptDropHandler",
+        "CSV Import = Orange.widgets.data.owcsvimport:OWCSVFileImportDropHandler",
     ),
     "gui_scripts": (
         "orange-canvas = Orange.canvas.__main__:main",
