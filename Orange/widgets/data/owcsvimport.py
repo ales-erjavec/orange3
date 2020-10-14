@@ -754,6 +754,8 @@ class OWCSVFileImport(widget.OWWidget):
         item = self.current_item()
         if item is not None:
             self._invalidate()
+        else:
+            self.setBlocking(True)
 
     def workflowEnvChanged(self, key, value, oldvalue):
         super().workflowEnvChanged(key, value, oldvalue)
@@ -1126,6 +1128,7 @@ class OWCSVFileImport(widget.OWWidget):
         """
         Cancel current pending or executing task.
         """
+        self.__committimer.stop()
         if self.__watcher is not None:
             self.__cancel_task()
             self.__clear_running_state()
@@ -1890,6 +1893,21 @@ class OWCSVFileImportDropHandler(SingleFileDropHandler):
             ],
         }
         return parameters
+
+    def shouldActivateNode(self):
+        """Reimplemented."""
+        return True
+
+    def activateNode(self, document: 'SchemeEditWidget', node: 'Node', widget: 'QWidget'):
+        """Reimpmlemented."""
+        super().activateNode(document, node, widget)
+        if isinstance(widget, OWCSVFileImport):
+            # has already scheduled, so cancel it, ...
+            widget.cancel()
+            widget._activate_import_dialog()
+            # schedule on dlg finish
+            dlg = widget.findChild(CSVImportDialog)
+            dlg.finished.connect(lambda: widget._invalidate())
 
 
 def main(argv=None):  # pragma: no cover
