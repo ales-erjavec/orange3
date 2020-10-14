@@ -1248,7 +1248,12 @@ class OWCSVFileImport(widget.OWWidget):
         """
         Return items from local history.
         """
-        s = self._local_settings()
+        return self._recent_items()
+
+    @classmethod
+    def _recent_items(cls):
+        # type: () -> List[Tuple[str, Options]]
+        s = cls._local_settings()
         items_ = QSettings_readArray(s, "recent", OWCSVFileImport.SCHEMA)
         items = []  # type: List[Tuple[str, Options]]
         for item in items_:
@@ -1871,12 +1876,20 @@ class OWCSVFileImportDropHandler(SingleFileDropHandler):
     def parametersFromMimeData(self, document, data: 'QMimeData') -> 'Dict[str, Any]':
         urls = data.urls()
         path = urls[0].toLocalFile()
-        mt = _mime_type_for_path(path)
-        dialect, header = default_options_for_mime_type(path, mt.name())
-        if header:
-            rowspec = [(range(0, 1), RowSpec.Header)]
+        # search recent items for path
+        hist = OWCSVFileImport._recent_items()
+        from orangecanvas.utils import assocf
+        res = assocf(hist, lambda p: samepath(p, path))
+        if res is not None:
+            _, options = res
         else:
-            rowspec = []
+            mt = _mime_type_for_path(path)
+            dialect, header = default_options_for_mime_type(path, mt.name())
+            if header:
+                rowspec = [(range(0, 1), RowSpec.Header)]
+            else:
+                rowspec = []
+            options = Options(dialect=dialect, rowspec=rowspec)
 
         workflow = document.scheme()
         base = workflow.get_runtime_env("basedir", None)
@@ -1889,7 +1902,7 @@ class OWCSVFileImportDropHandler(SingleFileDropHandler):
         parameters = {
             "__version__": 3,
             "_session_items_v2": [
-                (path.as_dict(), Options(dialect=dialect, rowspec=rowspec).as_dict()),
+                (path.as_dict(), options.as_dict()),
             ],
         }
         return parameters
