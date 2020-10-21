@@ -43,7 +43,8 @@ from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.utils.state_summary import format_summary_details
 from Orange.widgets.utils.concurrent import ThreadExecutor
 
-from orangecontrib.prototypes.widgets.utils.asyncutils import get_event_loop
+# from orangecontrib.prototypes.widgets.utils.asyncutils import get_event_loop
+from orangecanvas.utils.asyncutils import get_event_loop
 
 __all__ = []
 
