@@ -307,9 +307,8 @@ class TestOWTestAndScore(WidgetTest):
         # this is done manually to avoid multiple computations
         self.widget.resampling = 5
         self.widget.set_train_data(iris)
-        self.widget.set_learner(SetosaLearner(), 1)
-        self.widget.set_learner(VersicolorLearner(), 2)
-
+        self.widget.insert_learner(0, SetosaLearner())
+        self.widget.insert_learner(1, VersicolorLearner())
         self.send_signal(self.widget.Inputs.test_data, setosa, wait=5000)
 
         self.widget.adjustSize()
