@@ -31,13 +31,13 @@ class TestOWPythonScript(WidgetTest):
                              ("Learner", self.learner),
                              ("Classifier", self.model),
                              ("Object", "object")):
-            self.assertEqual(getattr(self.widget, input_.lower()), {})
+            self.assertEqual(getattr(self.widget, input_.lower()), [])
             self.send_signal(input_, data, 1)
-            self.assertEqual(getattr(self.widget, input_.lower()), {1: data})
+            self.assertEqual(getattr(self.widget, input_.lower()), [data])
             self.send_signal(input_, None, 1)
-            self.assertEqual(getattr(self.widget, input_.lower()), {1: None})
+            self.assertEqual(getattr(self.widget, input_.lower()), [None])
             self.send_signal(input_, Input.Closed, 1)
-            self.assertEqual(getattr(self.widget, input_.lower()), {})
+            self.assertEqual(getattr(self.widget, input_.lower()), [])
 
     def test_outputs(self):
         """Check widget's outputs"""
