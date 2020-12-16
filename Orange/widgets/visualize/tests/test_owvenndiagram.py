@@ -243,7 +243,8 @@ class TestOWVennDiagram(WidgetTest, WidgetOutputsTestMixin):
         self.send_signal(self.signal_name, self.data, 6)
         self.assertTrue(self.widget.Error.too_many_inputs.is_shown())
 
-        self.send_signal(self.signal_name, None, 6)
+        self.send_signal(self.signal_name,
+                         self.widget.Inputs.data.closing_sentinel, 6)
         self.assertFalse(self.widget.Error.too_many_inputs.is_shown())
 
     def test_no_attributes(self):
