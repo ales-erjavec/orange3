@@ -5,11 +5,10 @@ Concatenate
 Concatenate (append) two or more datasets.
 
 """
-
 from collections import OrderedDict, namedtuple, defaultdict
 from functools import reduce
 from itertools import chain, count
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Sequence
 
 import numpy as np
 from AnyQt.QtWidgets import QFormLayout
@@ -21,11 +20,11 @@ from Orange.util import flatten
 from Orange.widgets import widget, gui, settings
 from Orange.widgets.settings import Setting
 from Orange.widgets.utils.annotated_data import add_columns
-from Orange.widgets.utils.sql import check_sql_input
+from Orange.widgets.utils.sql import check_sql_input, check_sql_input_sequence
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.utils.state_summary import format_summary_details, \
     format_multiple_summaries
-from Orange.widgets.widget import Input, Output, Msg
+from Orange.widgets.widget import Input, MultiInput, Output, Msg
 
 
 class OWConcatenate(widget.OWWidget):
@@ -37,12 +36,9 @@ class OWConcatenate(widget.OWWidget):
 
     class Inputs:
         primary_data = Input("Primary Data", Orange.data.Table)
-        additional_data = Input("Additional Data",
-                                Orange.data.Table,
-                                multiple=True,
-                                default=True,
-                                closing_sentinel=Input.Closed
-                                )
+        additional_data = MultiInput(
+            "Additional Data", Orange.data.Table, default=True
+        )
 
     class Outputs:
         data = Output("Data", Orange.data.Table)
@@ -90,7 +86,7 @@ class OWConcatenate(widget.OWWidget):
         super().__init__()
 
         self.primary_data = None
-        self._more_data_input: Dict[Any, Optional[Orange.data.Table]] = {}
+        self._more_data_input: List[Optional[Orange.data.Table]] = []
 
         self.mergebox = gui.vBox(self.controlArea, "Variable Merging")
         box = gui.radioButtons(
@@ -167,20 +163,25 @@ class OWConcatenate(widget.OWWidget):
         self.primary_data = data
 
     @Inputs.additional_data
-    @check_sql_input
-    def set_more_data(self, data=None, sig_id=None):
-        if data is Input.Closed:
-            self._more_data_input.pop(sig_id, None)
-        else:
-            self._more_data_input[sig_id] = data
+    @check_sql_input_sequence
+    def set_more_data(self, index, data):
+        self._more_data_input[index] = data
+
+    @Inputs.additional_data.insert
+    @check_sql_input_sequence
+    def insert_more_data(self, index, data):
+        self._more_data_input.insert(index, data)
+
+    @Inputs.additional_data.remove
+    def remove_more_data(self, index):
+        self._more_data_input.pop(index)
 
     @property
-    def more_data(self):
-        return {key: val for key, val in self._more_data_input.items()
-                if val is not None}
+    def more_data(self) -> Sequence[Orange.data.Table]:
+        return [t for t in self._more_data_input if t is not None]
 
     def _set_input_summary(self):
-        more_data = list(self.more_data.values()) if self.more_data else [None]
+        more_data = list(self.more_data) if self.more_data else [None]
         n_primary = len(self.primary_data) if self.primary_data else 0
         n_more_data = [len(data) if data else 0 for data in more_data]
 
@@ -208,8 +209,8 @@ class OWConcatenate(widget.OWWidget):
         types_ = set()
         if self.primary_data is not None:
             types_.add(type(self.primary_data))
-        for key in self.more_data:
-            types_.add(type(self.more_data[key]))
+        for table in self.more_data:
+            types_.add(type(table))
         if len(types_) > 1:
             return True
 
@@ -219,13 +220,13 @@ class OWConcatenate(widget.OWWidget):
         self.Warning.renamed_variables.clear()
         tables, domain, source_var = [], None, None
         if self.primary_data is not None:
-            tables = [self.primary_data] + list(self.more_data.values())
+            tables = [self.primary_data] + list(self.more_data)
             domain = self.primary_data.domain
         elif self.more_data:
             if self.ignore_compute_value:
                 tables = self._dumb_tables()
             else:
-                tables = self.more_data.values()
+                tables = self.more_data
             domains = [table.domain for table in tables]
             domain = self.merge_domains(domains)
 
@@ -263,7 +264,7 @@ class OWConcatenate(widget.OWWidget):
             return enumerate((domain.attributes, domain.class_vars, domain.metas))
 
         compute_value_groups = defaultdict(set)
-        for table in self.more_data.values():
+        for table in self.more_data:
             for part, part_vars in enumerated_parts(table.domain):
                 for var in part_vars:
                     desc = (var.name, type(var), part)
@@ -273,7 +274,7 @@ class OWConcatenate(widget.OWWidget):
                       if len(compute_values) > 1}
 
         dumb_tables = []
-        for table in self.more_data.values():
+        for table in self.more_data:
             dumb_domain = Orange.data.Domain(
                 *[[var.copy(compute_value=None)
                    if (var.name, type(var), part) in to_dumbify
@@ -385,5 +386,5 @@ class OWConcatenate(widget.OWWidget):
 
 if __name__ == "__main__":  # pragma: no cover
     WidgetPreview(OWConcatenate).run(
-        set_more_data=[(Orange.data.Table("iris"), 0),
-                       (Orange.data.Table("zoo"), 1)])
+        insert_more_data=[(0, Orange.data.Table("iris")),
+                          (1, Orange.data.Table("zoo"))])
