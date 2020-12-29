@@ -200,3 +200,37 @@ class DataDelegate(QStyledItemDelegate):
             st.prepare(QTransform(), option.font)
             self.__static_text_lru_cache[key] = st
         return st
+
+
+from collections import deque
+from AnyQt.QtCore import QTimer, QElapsedTimer, pyqtSlot
+
+
+class FPSMonitor(QTimer):
+    __slots__ = ("_fps", "_data", "_elapsed", "_update")
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._elapsed = QElapsedTimer()
+        self._update = QElapsedTimer()
+        self._fps = 60
+        self._data = deque()
+        self.timeout.connect(self.__on_timeout)
+        self.start(16)
+        self._update.start()
+        self._elapsed.start()
+
+    @pyqtSlot()
+    def __on_timeout(self):
+        e = self._elapsed.restart()
+        # self._data.append(e)
+        new = 1000 / max(e, 1)
+        old = self._fps
+        mix = min(e / 1000, 1)
+        self._fps = (1 - mix) * old + mix * new
+        if self._update.hasExpired(1000):
+            self._update.restart()
+            # data = list(self._data)
+            print(self._fps)
+
+m = FPSMonitor()
