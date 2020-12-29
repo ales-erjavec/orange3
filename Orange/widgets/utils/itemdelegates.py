@@ -1,9 +1,11 @@
 import math
+from functools import lru_cache
 from typing import Optional, Tuple
 
 import numpy as np
 
-from AnyQt.QtCore import QModelIndex, QSize
+from AnyQt.QtCore import QModelIndex, QSize, Qt, QPointF
+from AnyQt.QtGui import QStaticText, QPainter, QTransform
 from AnyQt.QtWidgets import QStyle, QStyleOptionViewItem, QStyledItemDelegate, QApplication
 
 from Orange.misc.cache import LRUCache
@@ -37,7 +39,7 @@ class FixedFormatNumericColumnDelegate(QStyledItemDelegate):
         self.__sh_cache = LRUCache(maxlen=200)
 
     def displayText(self, value, locale) -> str:
-        if isinstance(value, NumberTypes):
+        if isinstance(value, _Number):
             return f"{value:.{self.ndecimals}f}"
         return super().displayText(value, locale)
 
@@ -94,3 +96,107 @@ class FixedFormatNumericColumnDelegate(QStyledItemDelegate):
         else:
             sh = self.__sh_cache[key]
         return QSize(sh)
+
+
+_Real = (float, np.float64, np.float32, np.float16)
+_Integral = (int, np.integer)
+_Number = _Integral + _Real
+_String = (str, np.str_)
+
+isnan = math.isnan
+
+
+class DataDelegate(QStyledItemDelegate):
+    """
+    A QStyledItemDelegate optimized for displaying fixed tabular data.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        @lru_cache(maxsize=100 * 200)
+        def sttext(text: str) -> QStaticText:
+            return QStaticText(text)
+        self.__static_text_cache = sttext
+        self.__static_text_lru_cache = LRUCache(100 * 200)
+
+    def displayText(self, value, locale):
+        if isinstance(value, _Integral):
+            return super().displayText(int(value), locale)
+        elif isinstance(value, _Real):
+            if isnan(value):
+                return "N/A"
+            else:
+                super().displayText(float(value), locale)
+        elif isinstance(value, _String):
+            return str(value)
+        return super().displayText(value, locale)
+
+    def initStyleOption(self, option, index):
+        # type: (QStyleOptionViewItem, QModelIndex) -> None
+        super().initStyleOption(option, index)
+        model = index.model()
+        v = model.data(index, Qt.DisplayRole)
+        if isinstance(v, _Number):
+            option.displayAlignment = \
+                (option.displayAlignment & ~Qt.AlignHorizontal_Mask) | \
+                Qt.AlignRight
+
+    def paint(self, painter, option, index):
+        # type: (QPainter, QStyleOptionViewItem, QModelIndex) -> None
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        widget = option.widget
+        if widget is not None:
+            style = widget.style()
+        else:
+            style = QApplication.style()
+        self.__style = style
+        text = opt.text
+        opt.text = ""
+        trect = style.subElementRect(QStyle.SE_ItemViewItemText, opt, widget)
+        style.drawControl(QStyle.CE_ItemViewItem, opt, painter, widget)
+        # text margin (as in QCommonStylePrivate::viewItemDrawText)
+        margin = style.pixelMetric(QStyle.PM_FocusFrameHMargin, None, widget) + 1
+        trect = trect.adjusted(margin, 0, -margin, 0)
+        opt.text = text
+        if opt.textElideMode != Qt.ElideNone:
+            st = self.__static_text_elided_cache(opt, trect.width())
+        else:
+            st = self.__static_text_cache(text)
+        tsize = st.size()
+        textalign = opt.displayAlignment
+        text_pos_x = text_pos_y = 0.0
+
+        if textalign & Qt.AlignLeft:
+            text_pos_x = trect.left()
+        elif textalign & Qt.AlignRight:
+            text_pos_x = trect.x() + trect.width() - tsize.width()
+        elif textalign & Qt.AlignHCenter:
+            text_pos_x = trect.center().x() - tsize.width() / 2
+
+        if textalign & Qt.AlignTop:
+            text_pos_y = trect.top()
+        elif textalign & Qt.AlignBottom:
+            text_pos_y = trect.top() + trect.height() - tsize.height()
+        elif textalign & Qt.AlignVCenter:
+            text_pos_y = trect.center().y() - tsize.height() / 2
+
+        painter.setFont(opt.font)
+        painter.drawStaticText(QPointF(text_pos_x, text_pos_y), st)
+
+    def __static_text_elided_cache(
+            self, option: QStyleOptionViewItem, width: int) -> QStaticText:
+        """
+        Return a QStaticText instance for depicting the text of the `option`
+        item.
+        """
+        key = option.text, option.font.key(), option.textElideMode, width
+        try:
+            st = self.__static_text_lru_cache[key]
+        except KeyError:
+            fm = option.fontMetrics
+            text = fm.elidedText(option.text, option.textElideMode, width)
+            st = QStaticText(text)
+            st.prepare(QTransform(), option.font)
+            self.__static_text_lru_cache[key] = st
+        return st

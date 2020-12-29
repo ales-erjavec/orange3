@@ -11,7 +11,8 @@ from Orange.misc import DistMatrix
 from Orange.widgets import widget, gui
 from Orange.widgets.gui import OrangeUserRole
 from Orange.widgets.settings import Setting, ContextSetting, ContextHandler
-from Orange.widgets.utils.itemdelegates import FixedFormatNumericColumnDelegate
+from Orange.widgets.utils.itemdelegates import FixedFormatNumericColumnDelegate, \
+    DataDelegate
 from Orange.widgets.utils.itemmodels import VariableListModel
 from Orange.widgets.utils.itemselectionmodel import SymmetricSelectionModel
 from Orange.widgets.utils.widgetpreview import WidgetPreview
@@ -103,7 +104,7 @@ class DistanceMatrixModel(QAbstractTableModel):
             return self.color_for_label(ind, 150)
 
 
-class TableBorderItem(FixedFormatNumericColumnDelegate):
+class TableBorderItem(FixedFormatNumericColumnDelegate, DataDelegate):
     BorderColorRole = next(OrangeUserRole)
 
     def paint(self, painter, option, index):
