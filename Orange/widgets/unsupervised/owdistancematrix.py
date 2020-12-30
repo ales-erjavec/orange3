@@ -19,6 +19,9 @@ from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.widget import Input, Output
 
 
+BorderColorRole = next(OrangeUserRole)
+
+
 class DistanceMatrixModel(QAbstractTableModel):
     def __init__(self):
         super().__init__()
@@ -75,7 +78,15 @@ class DistanceMatrixModel(QAbstractTableModel):
     def color_for_cell(self, row, col):
         return QBrush(QColor.fromHsv(120, self.colors[row, col], 255))
 
+    _Roles = {
+        Qt.TextAlignmentRole, Qt.DisplayRole, Qt.BackgroundColorRole,
+        BorderColorRole,
+        FixedFormatNumericColumnDelegate.ColumnDataSpanRole
+    }
+
     def data(self, index, role=Qt.DisplayRole):
+        if role not in self._Roles:
+            return None
         if role == Qt.TextAlignmentRole:
             return Qt.AlignRight | Qt.AlignVCenter
         row, col = index.row(), index.column()
@@ -105,7 +116,7 @@ class DistanceMatrixModel(QAbstractTableModel):
 
 
 class TableBorderItem(FixedFormatNumericColumnDelegate, DataDelegate):
-    BorderColorRole = next(OrangeUserRole)
+    BorderColorRole = BorderColorRole
 
     def paint(self, painter, option, index):
         super().paint(painter, option, index)
