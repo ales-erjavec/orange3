@@ -1,11 +1,16 @@
+import traceback
+
+from datetime import date, datetime
+
 import math
 from functools import lru_cache
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Type, TypeVar, Any, Container, Dict
 
 import numpy as np
 
 from AnyQt.QtCore import QModelIndex, QSize, Qt, QPointF
-from AnyQt.QtGui import QStaticText, QPainter, QTransform
+from AnyQt.QtGui import QStaticText, QPainter, QTransform, QFont, QFontMetrics, \
+    QBrush, QPalette, QIcon, QColor, QPixmap, QImage
 from AnyQt.QtWidgets import QStyle, QStyleOptionViewItem, QStyledItemDelegate, QApplication
 
 from Orange.misc.cache import LRUCache
@@ -105,13 +110,107 @@ _String = (str, np.str_)
 
 isnan = math.isnan
 
+A = TypeVar("A")
+
+
+def cast_(type_: Type[A], value: Any) -> Optional[A]:
+    if value is None:
+        return value
+    if isinstance(type_, type) and type(value) is type_:
+        return value
+    try:
+        return type_(value)
+    except (TypeError,ValueError):
+        return None
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def init_style_option(
+        delegate: QStyledItemDelegate,
+        option: QStyleOptionViewItem,
+        index: QModelIndex,
+        roles: Container[Qt.ItemDataRole]
+) -> Dict[Qt.ItemDataRole, Any]:
+    """
+    Like `QStyledItemDelegate.initStyleOption` but only fill in the fields for
+    `roles`. Returns a mapping of all item data values that were accessed.
+
+    This can be faster when fetching data from python item models.
+    """
+    itemData = {}
+    option.styleObject = None
+    option.index = index
+    model = index.model()
+    if Qt.DisplayRole in roles:
+        value = model.data(index, Qt.DisplayRole)
+        itemData[Qt.DisplayRole] = value
+        if value is not None:
+            option.text = delegate.displayText(value, option.locale)
+            option.features |= QStyleOptionViewItem.HasDisplay
+    if Qt.FontRole in roles:
+        value = model.data(index, Qt.FontRole)
+        itemData[Qt.FontRole] = value
+        font = cast_(QFont, value)
+        if font is not None:
+            font = font.resolve(option.font)
+            option.font = font
+            option.fontMetrics = QFontMetrics(option.font)
+    if Qt.ForegroundRole in roles:
+        value = model.data(index, Qt.ForegroundRole)
+        itemData[Qt.ForegroundRole] = value
+        foreground = cast_(QBrush, value)
+        if foreground is not None:
+            option.palette.setBrush(QPalette.Text, foreground)
+    if Qt.BackgroundRole in roles:
+        value = model.data(index, Qt.BackgroundRole)
+        itemData[Qt.BackgroundRole] = value
+        background = cast_(QBrush, value)
+        if background is not None:
+            option.backgroundBrush = background
+    if Qt.TextAlignmentRole in roles:
+        value = model.data(index, Qt.TextAlignmentRole)
+        itemData[Qt.TextAlignmentRole] = value
+        alignment = cast_(int, value)
+        if alignment is not None:
+            option.displayAlignment = Qt.Alignment(alignment)
+    if Qt.CheckStateRole in roles:
+        state = model.data(index, Qt.CheckStateRole)
+        itemData[Qt.CheckStateRole] = state
+        if state is not None:
+            option.features |= QStyleOptionViewItem.HasCheckIndicator
+            state = cast_(int, state)
+            if state is not None:
+                option.checkState = state
+    if Qt.DecorationRole:
+        value = model.data(index, Qt.DecorationRole)
+        itemData[Qt.DecorationRole] = value
+        if value is not None:
+            option.features |= QStyleOptionViewItem.HasDecoration
+        if isinstance(value, QIcon):
+            option.icon = value
+        elif isinstance(value, QColor):
+            pix = QPixmap(option.decorationSize)
+            pix.fill(value)
+            option.icon = QIcon(pix)
+        elif isinstance(value, QPixmap):
+            option.icon = QIcon(value)
+            option.decorationSize = (value.size() / value.devicePixelRatio()).toSize()
+        elif isinstance(value, QImage):
+            pix = QPixmap.fromImage(value)
+            option.icon = QIcon(value)
+            option.decorationSize = (pix.size() / pix.devicePixelRatio()).toSize()
+    return itemData
+
 
 class DataDelegate(QStyledItemDelegate):
     """
     A QStyledItemDelegate optimized for displaying fixed tabular data.
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, roles=(Qt.DisplayRole,), **kwargs):
         super().__init__(*args, **kwargs)
+        self.roles = frozenset(roles)
 
         @lru_cache(maxsize=100 * 200)
         def sttext(text: str) -> QStaticText:
@@ -129,14 +228,14 @@ class DataDelegate(QStyledItemDelegate):
                 super().displayText(float(value), locale)
         elif isinstance(value, _String):
             return str(value)
+        elif isinstance(value, (date, datetime)):
+            return value.isoformat()
         return super().displayText(value, locale)
 
     def initStyleOption(self, option, index):
         # type: (QStyleOptionViewItem, QModelIndex) -> None
-        super().initStyleOption(option, index)
-        model = index.model()
-        v = model.data(index, Qt.DisplayRole)
-        if isinstance(v, _Number):
+        data = init_style_option(self, option, index, self.roles)
+        if isinstance(data.get(Qt.DisplayRole), _Number):
             option.displayAlignment = \
                 (option.displayAlignment & ~Qt.AlignHorizontal_Mask) | \
                 Qt.AlignRight
@@ -230,7 +329,6 @@ class FPSMonitor(QTimer):
         self._fps = (1 - mix) * old + mix * new
         if self._update.hasExpired(1000):
             self._update.restart()
-            # data = list(self._data)
             print(self._fps)
 
 m = FPSMonitor()

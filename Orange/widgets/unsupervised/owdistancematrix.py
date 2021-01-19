@@ -204,7 +204,7 @@ class OWDistanceMatrix(widget.OWWidget):
         view.setWordWrap(False)
         view.setTextElideMode(Qt.ElideNone)
         view.setEditTriggers(QTableView.NoEditTriggers)
-        view.setItemDelegate(TableBorderItem())
+        view.setItemDelegate(TableBorderItem(roles=(Qt.DisplayRole, Qt.BackgroundRole)))
         view.setModel(self.tablemodel)
         view.setShowGrid(False)
         for header in (view.horizontalHeader(), view.verticalHeader()):
@@ -357,5 +357,5 @@ class OWDistanceMatrix(widget.OWWidget):
 if __name__ == "__main__":  # pragma: no cover
     import Orange.distance
     data = Orange.data.Table("iris")
-    dist = Orange.distance.Euclidean(data[::5])
+    dist = Orange.distance.Euclidean(data)
     WidgetPreview(OWDistanceMatrix).run(dist)
