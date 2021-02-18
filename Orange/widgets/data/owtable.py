@@ -268,6 +268,9 @@ class OWDataTable(OWWidget):
             else:
                 view = DataTableView()
                 view.setSortingEnabled(True)
+                view.setItemDelegate(
+                    DataDelegate(view, roles=(Qt.DisplayRole, Qt.BackgroundRole))
+                )
 
                 if self.select_rows:
                     view.setSelectionBehavior(QTableView.SelectRows)
@@ -359,7 +362,7 @@ class OWDataTable(OWWidget):
                     self, color=self.dist_color, color_schema=color_schema)
             )
         else:
-            view.setItemDelegate(QStyledItemDelegate(self))
+            view.setItemDelegate(DataDelegate(self, roles=(Qt.DisplayRole, Qt.BackgroundRole)))
 
         # Enable/disable view sorting based on data's type
         view.setSortingEnabled(is_sortable(data))
