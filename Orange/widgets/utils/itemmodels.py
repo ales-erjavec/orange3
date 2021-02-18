@@ -798,7 +798,7 @@ class TableModel(AbstractSortTableModel):
 
     #: Standard column descriptor
     Column = namedtuple(
-        "Column", ["var", "role", "background", "format"])
+        "Column", ["var", "index", "role", "background", "format"])
     #: Basket column descriptor (i.e. sparse X/Y/metas/ compressed into
     #: a single column).
     Basket = namedtuple(
@@ -824,8 +824,8 @@ class TableModel(AbstractSortTableModel):
             data = datagetter(instance)
             return ", ".join(vars[i].name for i in data.indices)
 
-        def format_dense(var, instance):
-            return str(instance[var])
+        def format_dense(index, instance):
+            return str(instance[index])
 
         def make_basket_formater(vars, density, role):
             formater = (format_sparse if density == Storage.SPARSE
@@ -845,9 +845,10 @@ class TableModel(AbstractSortTableModel):
             )
 
         def make_column(var, role):
+            index = domain.index(var)
             return TableModel.Column(
-                var, role, self.ColorForRole[role],
-                partial(format_dense, var)
+                var, index, role, self.ColorForRole[role],
+                partial(format_dense, index)
             )
 
         columns = []
