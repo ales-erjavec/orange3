@@ -3,7 +3,6 @@ import traceback
 from datetime import date, datetime
 
 import math
-from functools import lru_cache
 from typing import Optional, Tuple, Type, TypeVar, Any, Container, Dict
 
 import numpy as np
@@ -211,11 +210,6 @@ class DataDelegate(QStyledItemDelegate):
     def __init__(self, *args, roles=(Qt.DisplayRole,), **kwargs):
         super().__init__(*args, **kwargs)
         self.roles = frozenset(roles)
-
-        @lru_cache(maxsize=100 * 200)
-        def sttext(text: str) -> QStaticText:
-            return QStaticText(text)
-        self.__static_text_cache = sttext
         self.__static_text_lru_cache = LRUCache(100 * 200)
 
     def displayText(self, value, locale):
@@ -258,10 +252,7 @@ class DataDelegate(QStyledItemDelegate):
         margin = style.pixelMetric(QStyle.PM_FocusFrameHMargin, None, widget) + 1
         trect = trect.adjusted(margin, 0, -margin, 0)
         opt.text = text
-        if opt.textElideMode != Qt.ElideNone:
-            st = self.__static_text_elided_cache(opt, trect.width())
-        else:
-            st = self.__static_text_cache(text)
+        st = self.__static_text_elided_cache(opt, trect.width())
         tsize = st.size()
         textalign = opt.displayAlignment
         text_pos_x = text_pos_y = 0.0
