@@ -44,9 +44,9 @@ import Orange.data
 
 from Orange.preprocess.transformation import Transformation, Identity, Lookup
 from Orange.widgets import widget, gui, settings
-from Orange.widgets.utils import itemmodels, unique_everseen, ftry, DataType
+from Orange.widgets.utils import itemmodels, unique_everseen, ftry, datatype
 from Orange.widgets.utils.buttons import FixedSizeButton
-from Orange.widgets.utils.itemmodels import signal_blockingq
+from Orange.widgets.utils.itemmodels import signal_blocking
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.widget import Input, Output
 from Orange.widgets.data.utils.bracepattern import expand_pattern, infer_pattern
@@ -65,14 +65,16 @@ AnnotationsType = Tuple[Tuple[str, str], ...]
 
 # Define abstract representation of the variable types edited
 
-class Categorical(DataType):
+@datatype
+class Categorical:
     name: str
     categories: Tuple[str, ...]
     annotations: AnnotationsType
     linked: bool
 
 
-class Real(DataType):
+@datatype
+class Real:
     name: str
     # a precision (int, and a format specifier('f', 'g', or '')
     format: Tuple[int, str]
@@ -80,13 +82,15 @@ class Real(DataType):
     linked: bool
 
 
-class String(DataType):
+@datatype
+class String:
     name: str
     annotations: AnnotationsType
     linked: bool
 
 
-class Time(DataType):
+@datatype
+class Time:
     name: str
     annotations: AnnotationsType
     linked: bool
@@ -104,7 +108,8 @@ class Transform:
         raise NotImplementedError
 
 
-class Rename(DataType, Transform):
+@datatype
+class Rename(Transform):
     """Rename a variable."""
     #: The new name
     name: str
@@ -125,7 +130,8 @@ class Rename(DataType, Transform):
 CategoriesMappingType = List[Tuple[Optional[str], Optional[str]]]
 
 
-class CategoriesMapping(DataType, Transform):
+@datatype
+class CategoriesMapping(Transform):
     """Change categories of a categorical variable."""
     mapping: CategoriesMappingType
 
@@ -134,8 +140,8 @@ class CategoriesMapping(DataType, Transform):
         cat = tuple(unique_everseen(cj for _, cj in self.mapping if cj is not None))
         return var._replace(categories=cat)
 
-
-class Annotate(DataType, Transform):
+@datatype
+class Annotate(Transform):
     """
     Replace variable annotations.
     """
@@ -145,7 +151,8 @@ class Annotate(DataType, Transform):
         return var._replace(annotations=self.annotations)
 
 
-class ModifyAnnotations(DataType, Transform):
+@datatype
+class ModifyAnnotations(Transform):
     transform: Sequence['MappingTransform']
 
     def __call__(self, var: Variable) -> Variable:
@@ -154,7 +161,8 @@ class ModifyAnnotations(DataType, Transform):
         ))
 
 
-class Unlink(DataType, Transform):
+@datatype
+class Unlink(Transform):
     """Unlink variable from its source, that is, remove compute_value"""
     def __call__(self, var: Variable) -> Variable:
         return var
@@ -171,22 +179,31 @@ CategoricalTransformTypes = (CategoriesMapping, Unlink)
 
 
 # Reinterpret vector transformations.
-class CategoricalVector(DataType):
+class BaseVector:
+    def __iter__(self):
+        return iter(tuple(self.vtype, self.data))
+
+
+@datatype
+class CategoricalVector(BaseVector):
     vtype: Categorical
     data: Callable[[], MArray]
 
 
-class RealVector(DataType):
+@datatype
+class RealVector(BaseVector):
     vtype: Real
     data: Callable[[], MArray]
 
 
-class StringVector(DataType):
+@datatype
+class StringVector(BaseVector):
     vtype: String
     data: Callable[[], MArray]
 
 
-class TimeVector(DataType):
+@datatype
+class TimeVector(BaseVector):
     vtype: Time
     data: Callable[[], MArray]
 
@@ -195,10 +212,11 @@ DataVector = Union[CategoricalVector, RealVector, StringVector, TimeVector]
 DataVectorTypes = (CategoricalVector, RealVector, StringVector, TimeVector)
 
 
-class AsString(DataType):
+@datatype
+class AsString:
     """Reinterpret a data vector as a string."""
     def __call__(self, vector: DataVector) -> StringVector:
-        var, _ = vector
+        var = vector.vtype
         if isinstance(var, String):
             return vector
         return StringVector(
@@ -207,13 +225,14 @@ class AsString(DataType):
         )
 
 
-class AsContinuous(DataType):
+@datatype
+class AsContinuous:
     """
     Reinterpret as a continuous variable (values that do not parse as
     float are NaN).
     """
     def __call__(self, vector: DataVector) -> RealVector:
-        var, _ = vector
+        var = vector.vtype
         if isinstance(var, Real):
             return vector
         elif isinstance(var, Categorical):
@@ -239,12 +258,13 @@ class AsContinuous(DataType):
         raise AssertionError
 
 
-class AsCategorical(DataType):
+@datatype
+class AsCategorical:
     """Reinterpret as a categorical variable"""
     def __call__(self, vector: DataVector) -> CategoricalVector:
         # this is the main complication in type transformation since we need
         # the data and not just the variable description
-        var, _ = vector
+        var = vector.vtype
         if isinstance(var, Categorical):
             return vector
         if isinstance(var, (Real, Time, String)):
@@ -256,10 +276,11 @@ class AsCategorical(DataType):
         raise AssertionError
 
 
-class AsTime(DataType):
+@datatype
+class AsTime:
     """Reinterpret as a datetime vector"""
     def __call__(self, vector: DataVector) -> TimeVector:
-        var, _ = vector
+        var = vector.vtype
         if isinstance(var, Time):
             return vector
         elif isinstance(var, Real):
@@ -292,7 +313,7 @@ ReinterpretTransformTypes = (AsCategorical, AsContinuous, AsTime, AsString)
 
 
 def deconstruct(obj):
-    # type: (tuple) -> Tuple[str, Tuple[Any, ...]]
+    # type: (datatype) -> Tuple[str, Tuple[Any, ...]]
     """
     Deconstruct a tuple subclass to its class name and its contents.
 
@@ -304,9 +325,7 @@ def deconstruct(obj):
     -------
     value: Tuple[str, Tuple[Any, ...]]
     """
-    cname = type(obj).__name__
-    args = tuple(obj)
-    return cname, args
+    return datatype.deconstruct(obj)
 
 
 def reconstruct(tname, args, types=None):
@@ -1236,8 +1255,8 @@ class MappingTransform:
     def __call__(self, mapping: MutableMapping) -> MutableMapping:
         raise NotImplementedError
 
-
-class DeleteKey(DataType, MappingTransform):
+@datatype
+class DeleteKey(MappingTransform):
     key: str
 
     def __call__(self, mapping: MutableMapping) -> MutableMapping:
@@ -1248,7 +1267,8 @@ class DeleteKey(DataType, MappingTransform):
         return mapping
 
 
-class AddItem(DataType, MappingTransform):
+@datatype
+class AddItem(MappingTransform):
     key: str
     value: str
 
@@ -1257,7 +1277,8 @@ class AddItem(DataType, MappingTransform):
         return mapping
 
 
-class RenameKey(DataType, MappingTransform):
+@datatype
+class RenameKey(MappingTransform):
     key: str
     target: str
 
@@ -1272,7 +1293,8 @@ class RenameKey(DataType, MappingTransform):
         return mapping
 
 
-class SetValue(DataType, MappingTransform):
+@datatype
+class SetValue(MappingTransform):
     key: str
     value: str
 

@@ -4,7 +4,7 @@ import sys
 from collections import deque
 from typing import (
     TypeVar, Callable, Any, Iterable, Optional, Hashable, Type, Union, Tuple,
-    NamedTuple
+    NamedTuple, Mapping
 )
 from xml.sax.saxutils import escape
 from typing import NamedTuple as DataType
@@ -229,3 +229,105 @@ class B(DataType):
 assert A("a", 1) != B("a", 1)
 assert not A("a", 1) == B("a", 1)
 assert hash(A("a", 1)) != hash(B("a", 1))
+
+A(0., "a")
+
+from dataclasses import dataclass, dataclass as datatype
+
+
+class DataTypeSetializeMixin:
+    def __reduce__(self) -> 'Tuple[str, tuple]':
+        args = tuple(getattr(self, f) for f in self.__dataclass_fields__)
+        return qname(type(self)), args
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        _regtypes[qname(cls)] = cls
+
+    def _replace(self, **kwargs):
+        return self.updated(**kwargs)
+
+    def updated(self, **kwargs):
+        state = {f: getattr(self, f) for f in type(self).__dataclass_fields__}
+        state.update(kwargs)
+        return type(self)(**state)
+
+    def as_dict(self):
+        return {f: getattr(self, f) for f in type(self).__dataclass_fields__}
+
+    @classmethod
+    def from_dict(cls, state: Mapping[str, Any]):
+        return cls(**state)
+
+
+_regtypes = {}
+
+
+def reconstruct(qname, args, types):
+    try:
+        constructor = types[qname]
+    except KeyError:
+        raise NameError(qname)
+    return constructor(*args)
+
+
+def _datatype(cls: type) -> type:
+    __module__= m = cls.__module__
+    __name__ = n = cls.__name__
+    __qualname__ = q = cls.__qualname__
+
+    cls = dataclass(frozen=True, unsafe_hash=True)(cls)
+    # cls.__reduce__ = DataTypeSetializeMixin.__reduce__
+    cls._replace = DataTypeSetializeMixin._replace
+    cls.updated = DataTypeSetializeMixin.updated
+    cls.as_dict = DataTypeSetializeMixin.as_dict
+    cls.from_dict = DataTypeSetializeMixin.from_dict
+
+    return cls
+    # cls.__init_subclass__
+    # class DataType(DataTypeSetializeMixin, cls):
+    #     # pass
+    #     __module__ = m
+    #     __qualname__ = q
+    #     __name__ = n
+    # DataType.__name__ = __name__
+    # DataType.__qualname__ = __qualname__
+    # DataType.__name__ = __name__
+    return DataType
+
+
+def datatype_deserialize(qname, args, types):
+    return reconstruct(qname, args, types)
+
+
+def datatype_deconstruct(obj):
+    return qname(type(obj)), tuple(obj.as_dict().values())
+    # rc, type, *args = obj.__reduce__()
+    # if rc is copyreg.__newobj__:
+    #     return qname(type), args[0]
+
+
+globals()["datatype"] = _datatype
+datatype.deserialize = datatype_deserialize
+datatype.deconstruct = datatype_deconstruct
+datatype: Callable[[type], type]
+
+@datatype
+class A:
+    a: str
+    b: int
+
+
+@dataclass(frozen=True, unsafe_hash=True)
+class B:
+    a: str
+    b: int
+
+
+assert A("a", 1) != B("a", 1)
+assert not A("a", 1) == B("a", 1)
+# assert hash(A("a", 1)) != hash(B("a", 1))
+
+a = A("1", 3).a
+A(0., "1")
+B(0., "1")
