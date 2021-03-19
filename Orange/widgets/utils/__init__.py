@@ -9,7 +9,8 @@ from typing import (
 from xml.sax.saxutils import escape
 from typing import NamedTuple as DataType
 
-from AnyQt.QtCore import QObject
+from AnyQt.QtCore import QObject, QRect
+from AnyQt.QtWidgets import QWidget
 
 from Orange.data.variable import TimeVariable
 from Orange.util import deepgetattr
@@ -178,6 +179,16 @@ def instance_tooltip(domain, row, skip_attrs=()):
              ("Meta", "Metas", 4, domain.metas),
              ("Feature", "Features", 10, domain.attributes))
     return "<br/>".join(show_part(row, *columns) for columns in parts)
+
+
+def map_rect_to(widget: QWidget, parent: QWidget, rect: QRect) -> QRect:
+    """Map `rect` from `widget` to `parent` coordinate system."""
+    return QRect(widget.mapTo(parent, rect.topLeft()), rect.size())
+
+
+def map_rect_to_global(widget: QWidget, rect: QRect) -> QRect:
+    """Map `rect` from `widget` to global screen coordinate system."""
+    return QRect(widget.mapToGlobal(rect.topLeft()), rect.size())
 
 
 _NamedTupleMeta = type(NamedTuple)  # type: ignore
