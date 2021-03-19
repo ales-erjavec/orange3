@@ -2,6 +2,7 @@ import enum
 import inspect
 import sys
 from collections import deque
+from contextlib import contextmanager
 from typing import (
     TypeVar, Callable, Any, Iterable, Optional, Hashable, Type, Union, Tuple,
     NamedTuple, Mapping
@@ -9,7 +10,7 @@ from typing import (
 from xml.sax.saxutils import escape
 from typing import NamedTuple as DataType
 
-from AnyQt.QtCore import QObject, QRect
+from AnyQt.QtCore import QObject, QRect, Qt
 from AnyQt.QtWidgets import QWidget
 
 from Orange.data.variable import TimeVariable
@@ -189,6 +190,15 @@ def map_rect_to(widget: QWidget, parent: QWidget, rect: QRect) -> QRect:
 def map_rect_to_global(widget: QWidget, rect: QRect) -> QRect:
     """Map `rect` from `widget` to global screen coordinate system."""
     return QRect(widget.mapToGlobal(rect.topLeft()), rect.size())
+
+
+@contextmanager
+def disconnected(signal, slot, connection_type=Qt.AutoConnection):
+    signal.disconnect(slot)
+    try:
+        yield
+    finally:
+        signal.connect(slot, connection_type)
 
 
 _NamedTupleMeta = type(NamedTuple)  # type: ignore
