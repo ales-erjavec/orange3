@@ -10,7 +10,7 @@ from Orange.classification import LogisticRegressionLearner
 from Orange.tests import named_file
 from Orange.widgets.data.owpythonscript import OWPythonScript, read_file_content, Script
 from Orange.widgets.tests.base import WidgetTest, DummySignalManager
-from Orange.widgets.widget import OWWidget
+from Orange.widgets.widget import OWWidget, Input
 
 
 class TestOWPythonScript(WidgetTest):
@@ -31,11 +31,13 @@ class TestOWPythonScript(WidgetTest):
                              ("Learner", self.learner),
                              ("Classifier", self.model),
                              ("Object", "object")):
-            self.assertEqual(getattr(self.widget, input_.lower()), {})
+            self.assertEqual(getattr(self.widget, input_.lower()), [])
             self.send_signal(input_, data, 1)
-            self.assertEqual(getattr(self.widget, input_.lower()), {1: data})
+            self.assertEqual(getattr(self.widget, input_.lower()), [data])
             self.send_signal(input_, None, 1)
-            self.assertEqual(getattr(self.widget, input_.lower()), {})
+            self.assertEqual(getattr(self.widget, input_.lower()), [None])
+            self.send_signal(input_, Input.Closed, 1)
+            self.assertEqual(getattr(self.widget, input_.lower()), [])
 
     def test_outputs(self):
         """Check widget's outputs"""
@@ -113,12 +115,19 @@ class TestOWPythonScript(WidgetTest):
 
         self.send_signal("Data", None, 2)
         click()
+        datas = console_locals["in_datas"]
+        self.assertEqual(len(datas), 2)
+        self.assertIs(datas[0], self.iris)
+        self.assertIs(datas[1], None)
+
+        self.send_signal("Data", Input.Closed, 2)
+        click()
         self.assertIs(console_locals["in_data"], self.iris)
         datas = console_locals["in_datas"]
         self.assertEqual(len(datas), 1)
         self.assertIs(datas[0], self.iris)
 
-        self.send_signal("Data", None, 1)
+        self.send_signal("Data", Input.Closed, 1)
         click()
         self.assertIsNone(console_locals["in_data"])
         self.assertEqual(console_locals["in_datas"], [])
