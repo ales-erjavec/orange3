@@ -10,9 +10,13 @@ from AnyQt.QtGui import QMouseEvent, QContextMenuEvent
 from AnyQt.QtWidgets import QApplication, QWidget
 
 from Orange.data import Table, Domain, ContinuousVariable
+from orangewidget.tests.utils import (
+    simulate, excepthook_catch, EventSpy, mouseMove
+)
 
 
-class EventSpy(QObject):
+EventSpy = EventSpy
+class _EventSpy(QObject):
     """
     A testing utility class (similar to QSignalSpy) to record events
     delivered to a QObject instance.
@@ -103,9 +107,10 @@ class EventSpy(QObject):
         """
         return list(self.__record)
 
+excepthook_catch = excepthook_catch
 
 @contextlib.contextmanager
-def excepthook_catch(raise_on_exit=True):
+def _excepthook_catch(raise_on_exit=True):
     """
     Override `sys.excepthook` with a custom handler to record unhandled
     exceptions.
@@ -167,8 +172,7 @@ def excepthook_catch(raise_on_exit=True):
         if shouldraise and seen:
             raise seen[0][1]
 
-
-class simulate:
+class _simulate:
     """
     Utility functions for simulating user interactions with Qt widgets.
     """
@@ -229,14 +233,10 @@ class simulate:
         mindex = model.index(index, column, root)
         assert mindex.flags() & Qt.ItemIsEnabled
         cbox.setCurrentIndex(index)
-        text = cbox.currentText()
         # QComboBox does not have an interface which would allow selecting
         # the current item as if a user would. Only setCurrentIndex which
         # does not emit the activated signals.
-        cbox.activated[int].emit(index)
-        cbox.activated[str].emit(text)
-        if delay >= 0:
-            QTest.qWait(delay)
+        qcombobox_emit_activated(cbox, index)
 
     @staticmethod
     def combobox_index_of(cbox, value, role=Qt.DisplayRole):
@@ -306,7 +306,7 @@ def override_locale(language):
     return wrapper
 
 
-def mouseMove(widget, pos=QPoint(), delay=-1):  # pragma: no-cover
+def _mouseMove(widget, pos=QPoint(), delay=-1):  # pragma: no-cover
     # Like QTest.mouseMove, but functional without QCursor.setPos
     if pos.isNull():
         pos = widget.rect().center()
