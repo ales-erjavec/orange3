@@ -77,6 +77,9 @@ class TestOWDataTable(WidgetTest, WidgetOutputsTestMixin, dbt):
         # false positive, pylint: disable=unsubscriptable-object
         self.assertEqual(
             self.widget.set_corner_text.call_args[0][1], "\na\nb\nc")
+        self.widget.controls.show_attribute_labels.nextCheckState()
+        self.assertEqual(
+            self.widget.set_corner_text.call_args[0][1], "")
 
     def test_unconditional_commit_on_new_signal(self):
         with patch.object(self.widget, 'unconditional_commit') as commit:
