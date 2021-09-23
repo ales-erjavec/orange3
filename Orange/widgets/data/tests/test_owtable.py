@@ -8,7 +8,7 @@ from AnyQt.QtCore import Qt
 from orangewidget.tests.utils import excepthook_catch
 from orangewidget.widget import StateInfo
 
-from Orange.widgets.data.owtable import OWDataTable
+from Orange.widgets.data.owtable import OWDataTable, DataTableView
 from Orange.widgets.tests.base import WidgetTest, WidgetOutputsTestMixin
 from Orange.data import Table, Domain
 from Orange.widgets.utils.state_summary import format_summary_details
@@ -167,6 +167,22 @@ class TestOWDataTable(WidgetTest, WidgetOutputsTestMixin, dbt):
         with excepthook_catch():
             w.grab()
         w.controls.show_distributions.toggle()
+
+    def test_toggle_select_rows(self):
+        w = self.widget
+        data = self.data
+        self.send_signal(w.Inputs.data, data, 0)
+        view = w.findChild(DataTableView)
+        self.assertEqual(view.selectionBehavior(), DataTableView.SelectRows)
+        w.controls.select_rows.nextCheckState()
+        self.assertEqual(view.selectionBehavior(), DataTableView.SelectItems)
+        sel_model = view.selectionModel()
+        model = view.model()
+        sel_model.select(model.index(0, 0), sel_model.ClearAndSelect)
+        self.assertEqual(len(sel_model.selectedIndexes()), 1)
+        w.controls.select_rows.nextCheckState()
+        self.assertEqual(view.selectionBehavior(), DataTableView.SelectRows)
+        self.assertEqual(len(sel_model.selectedIndexes()), model.columnCount())
 
 
 if __name__ == "__main__":
