@@ -2,7 +2,7 @@ import math
 from typing import Optional, Union, Any, Iterable, List, Callable
 
 from AnyQt.QtCore import Qt, QSizeF, QEvent, QMarginsF
-from AnyQt.QtGui import QFont, QFontMetrics, QFontInfo
+from AnyQt.QtGui import QFont, QFontMetrics, QFontInfo, QPalette
 from AnyQt.QtWidgets import (
     QGraphicsWidget, QSizePolicy, QGraphicsItemGroup, QGraphicsSimpleTextItem,
     QGraphicsItem, QGraphicsScene, QGraphicsSceneResizeEvent
@@ -183,7 +183,7 @@ class TextListWidget(QGraphicsWidget):
 
         elif event.type() == QEvent.PaletteChange:
             palette = self.palette()
-            brush = palette.brush(palette.Text)
+            brush = palette.brush(QPalette.Text)
             for item in self.__textitems:
                 item.setBrush(brush)
         super().changeEvent(event)
@@ -193,8 +193,10 @@ class TextListWidget(QGraphicsWidget):
         font = self.__effectiveFont if self.__autoScale else self.font()
         assert self.__group is None
         group = QGraphicsItemGroup()
+        brush = self.palette().brush(QPalette.Text)
         for text in self.__items:
             t = QGraphicsSimpleTextItem(group)
+            t.setBrush(brush)
             t.setFont(font)
             t.setText(text)
             t.setToolTip(text)
