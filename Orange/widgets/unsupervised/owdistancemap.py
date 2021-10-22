@@ -7,7 +7,7 @@ import numpy
 from AnyQt.QtWidgets import (
     QGraphicsRectItem, QGraphicsGridLayout, QApplication, QSizePolicy
 )
-from AnyQt.QtGui import QFontMetrics, QPen, QTransform, QFont, QPalette
+from AnyQt.QtGui import QFontMetrics, QPen, QTransform, QFont
 from AnyQt.QtCore import Qt, QRect, QRectF, QPointF
 from AnyQt.QtCore import pyqtSignal as Signal
 
@@ -26,6 +26,7 @@ from Orange.widgets.utils.graphicstextlist import TextListWidget
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.widget import Input, Output
 from Orange.widgets.utils.dendrogram import DendrogramWidget
+from Orange.widgets.visualize.utils.plotutils import GraphicsView
 from Orange.widgets.visualize.utils.heatmap import (
     GradientColorMap, GradientLegendWidget,
 )
@@ -330,8 +331,7 @@ class OWDistanceMap(widget.OWWidget):
 
         gui.auto_send(self.buttonsArea, self, "autocommit")
 
-        self.view = pg.GraphicsView(background=None)
-        self.view.setBackgroundRole(QPalette.Base)
+        self.view = GraphicsView(background=None)
         self.mainArea.layout().addWidget(self.view)
 
         self.grid_widget = pg.GraphicsWidget()
