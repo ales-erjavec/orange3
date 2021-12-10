@@ -1,5 +1,7 @@
 import re
 from enum import IntEnum
+
+from Orange.widgets.utils.lineedit import LineEdit
 from collections import namedtuple
 from typing import Optional, Tuple, Iterable, Union, Callable, Any
 
@@ -340,7 +342,7 @@ class OWDiscretize(widget.OWWidget):
         self.k_general.layout().setContentsMargins(0, 0, 0, 0)
 
         def manual_cut_editline(text="", enabled=True) -> QLineEdit:
-            edit = QLineEdit(
+            edit = LineEdit(
                 text=text,
                 placeholderText="e.g. 0.0, 0.5, 1.0",
                 toolTip="Enter fixed discretization cut points (a comma "
@@ -355,20 +357,9 @@ class OWDiscretize(widget.OWWidget):
                     state, _, _ = validator.validate(edit.text(), 0)
                 else:
                     state = QValidator.Acceptable
-                palette = edit.palette()
-                colors = {
-                    QValidator.Intermediate: (Qt.yellow, Qt.black),
-                    QValidator.Invalid: (Qt.red, Qt.black),
-                }.get(state, None)
-                if colors is None:
-                    palette = QPalette()
-                else:
-                    palette.setColor(QPalette.Base, colors[0])
-                    palette.setColor(QPalette.Text, colors[1])
 
                 cr = edit.cursorRect()
                 p = edit.mapToGlobal(cr.bottomRight())
-                edit.setPalette(palette)
                 if state != QValidator.Acceptable and edit.isVisible():
                     show_tip(edit, p, edit.toolTip(), textFormat=Qt.RichText)
                 else:
