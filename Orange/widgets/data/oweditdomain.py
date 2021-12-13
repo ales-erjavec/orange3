@@ -28,7 +28,7 @@ from AnyQt.QtWidgets import (
 )
 from AnyQt.QtGui import (
     QStandardItemModel, QStandardItem, QKeySequence, QIcon, QBrush, QPalette,
-    QHelpEvent
+    QHelpEvent, QValidator
 )
 from AnyQt.QtCore import (
     Qt, QSize, QModelIndex, QAbstractItemModel, QPersistentModelIndex, QRect,
@@ -39,9 +39,11 @@ from AnyQt.QtCore import pyqtSignal as Signal, pyqtSlot as Slot
 import Orange.data
 
 from Orange.preprocess.transformation import Transformation, Identity, Lookup
+from Orange.data.util import get_unique_names_duplicates
 from Orange.widgets import widget, gui, settings
 from Orange.widgets.utils import itemmodels
 from Orange.widgets.utils.buttons import FixedSizeButton
+from Orange.widgets.utils.lineedit import LineEdit
 from Orange.widgets.utils.itemmodels import signal_blocking
 from Orange.widgets.utils.widgetpreview import WidgetPreview
 from Orange.widgets.widget import Input, Output
@@ -493,7 +495,7 @@ class VariableEditor(QWidget):
         )
         layout.addLayout(self.form)
 
-        self.name_edit = QLineEdit(objectName="name-editor")
+        self.name_edit = LineEdit(objectName="name-editor")
         self.name_edit.editingFinished.connect(
             lambda: self.name_edit.isModified() and self.on_name_changed()
         )
@@ -1839,6 +1841,35 @@ class ReinterpretVariableEditor(VariableEditor):
         return self.disc_edit.merge_dialog_settings
 
 
+class UniqueNamesValidator(QValidator):
+    def __init__(self, parent=None, *, reserved=(), **kwargs):
+        self.trim = True
+        self.reserved = {}
+        super().__init__(parent, **kwargs)
+        if reserved:
+            self.setReservedNames(reserved)
+
+    def setReservedNames(self, names):
+        self.reserved = set(names)
+        self.changed.emit()
+
+    def validate(self, string: str, pos: int) -> Tuple[QValidator.State, str, int]:
+        if self.trim:
+             string_ = string.strip()
+        else:
+            string_ = string
+        if string_ in self.reserved:
+            return QValidator.Intermediate, string, pos
+        else:
+            return QValidator.Acceptable, string, pos
+
+    def fixup(self, string: str) -> str:
+        if self.trim:
+            string = string.strip()
+        if string in self.reserved:
+            string, *_ = get_unique_names_duplicates([string, *self.reserved,])
+        return string
+
 class OWEditDomain(widget.OWWidget):
     name = "Edit Domain"
     description = "Rename variables, edit categories and variable annotations."
@@ -2059,6 +2090,10 @@ class OWEditDomain(widget.OWWidget):
         editor.variable_changed.connect(
             self._on_variable_changed, Qt.UniqueConnection
         )
+        names = [model.effective_name(index)
+                 for index in map(model.index, range(model.rowCount()))]
+        names.pop(index)
+        self._update_validators(names)
 
     def clear_editor(self):
         current = self._editor
@@ -2068,6 +2103,7 @@ class OWEditDomain(widget.OWWidget):
             pass
         current.set_data(None)
         current.layout().currentWidget().clear()
+        self._update_validators([])
 
     @Slot()
     def _on_variable_changed(self):
@@ -2080,6 +2116,13 @@ class OWEditDomain(widget.OWWidget):
         model.setData(midx, transform, TransformRole)
         self._store_transform(var, transform)
         self._invalidate()
+
+    def _update_validators(self, reserved_names: Sequence[str]):
+        editor = self._editor
+        nameedits = editor.findChildren(LineEdit, "name-editor", Qt.FindChildrenRecursively)
+        validator = UniqueNamesValidator(reserved=reserved_names)
+        for ne in nameedits:
+            ne.setValidator(validator)
 
     def _store_transform(self, var, transform):
         # type: (Variable, List[Transform]) -> None
