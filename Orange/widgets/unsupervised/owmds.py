@@ -83,6 +83,7 @@ class OWMDSGraph(OWScatterPlotBase):
 
     def __init__(self, scatter_widget, parent):
         super().__init__(scatter_widget, parent)
+        self.plot_widget.setAspectLocked(True)
         self.pairs_curve = None
         self.draw_pairs = True
         self._similar_pairs = None
