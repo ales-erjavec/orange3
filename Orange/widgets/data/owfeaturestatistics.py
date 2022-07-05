@@ -714,13 +714,11 @@ class DistributionDelegate(NoFocusRectDelegate):
         # type: (QPainter, QStyleOptionViewItem, QModelIndex) -> None
         scene = index.data(Qt.DisplayRole)  # type: Optional[QGraphicsScene]
         if scene is None:
-            return super().paint(painter, option, index)
+            super().paint(painter, option, index)
+            return
 
         painter.setRenderHint(QPainter.Antialiasing)
-        scene.render(painter, target=QRectF(option.rect), mode=Qt.IgnoreAspectRatio)
-
-        # pylint complains about inconsistent return statements
-        return None
+        scene.render(painter, QRectF(option.rect), QRectF(), Qt.IgnoreAspectRatio)
 
 
 class OWFeatureStatistics(widget.OWWidget):

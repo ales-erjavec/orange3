@@ -32,15 +32,15 @@ class SimpleLayoutItem(QGraphicsLayoutItem):
     anchorItem: Tuple[float, float]
         The relative anchor in `item` 's bounding rect.
     """
-    __slots__ = (
-        "__anchorThis",
-        "__anchorItem",
-        "item",
-        "__resizeContents",
-        "__aspectMode",
-        "__transform",
-        "__scale",
-    )
+    # __slots__ = (
+    #     "__anchorThis",
+    #     "__anchorItem",
+    #     "item",
+    #     "__resizeContents",
+    #     "__aspectMode",
+    #     "__transform",
+    #     "__scale",
+    # )
 
     def __init__(
             self,

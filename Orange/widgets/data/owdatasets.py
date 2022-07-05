@@ -205,8 +205,9 @@ class OWDataSets(OWWidget):
         self.__awaiting_state = None  # type: Optional[_FetchState]
 
         self.filterLineEdit = QLineEdit(
-            textChanged=self.filter, placeholderText="Search for data set ..."
+            placeholderText="Search for data set ..."
         )
+        self.filterLineEdit.textChanged.connect(self.filter)
         self.mainArea.layout().addWidget(self.filterLineEdit)
 
         self.splitter = QSplitter(orientation=Qt.Vertical)

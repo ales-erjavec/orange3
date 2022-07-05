@@ -16,9 +16,10 @@ from contextlib import contextmanager
 
 from AnyQt.QtCore import (
     Qt, QObject, QMetaObject, QThreadPool, QThread, QRunnable,
-    QEventLoop, QCoreApplication, QEvent, Q_ARG,
+    QEventLoop, QCoreApplication, QEvent,
     pyqtSignal as Signal, pyqtSlot as Slot
 )
+from orangecanvas.utils.qinvoke import qinvoke
 
 from orangewidget.utils.concurrent import (
     FutureWatcher, FutureSetWatcher, methodinvoke, PyOwned
@@ -114,12 +115,20 @@ class _TaskRunnable(QRunnable):
         # Move the task to the current thread so it's events, signals, slots
         # are triggered from this thread.
         assert self.task.thread() is _TaskDepotThread.instance()
-
-        QMetaObject.invokeMethod(
-            self.task.thread(), "transfer", Qt.BlockingQueuedConnection,
-            Q_ARG(object, self.task),
-            Q_ARG(object, QThread.currentThread())
+        thread = self.task.thread()
+        current = QThread.currentThread()
+        task = self.task
+        call = qinvoke(
+            lambda: thread.transfer(task, current),
+            context=thread,
+            type=Qt.BlockingQueuedConnection
         )
+        call()
+        # QMetaObject.invokeMethod(
+        #     self.task.thread(), "transfer", Qt.BlockingQueuedConnection,
+        #     Q_ARG(object, self.task),
+        #     Q_ARG(object, QThread.currentThread())
+        # )
 
         self.eventLoop.processEvents()
 
@@ -130,6 +139,7 @@ class _TaskRunnable(QRunnable):
         self.task.finished.connect(self.eventLoop.quit)
         self.task.cancelled.connect(self.eventLoop.quit)
         self.eventLoop.exec()
+        call.disconnect()
 
 
 class FutureRunnable(QRunnable):

@@ -601,7 +601,7 @@ TableVariable = next(OrangeUserRole)
 class TableBarItem(_BarItemDataDelegate):
     BarRole = next(OrangeUserRole)
     BarColorRole = next(OrangeUserRole)
-    __slots__ = ("color_schema",)
+    # __slots__ = ("color_schema",)
 
     def __init__(
             self, parent=None, color=QColor(255, 170, 127), width=5,

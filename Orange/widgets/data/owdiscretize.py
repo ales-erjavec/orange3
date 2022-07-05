@@ -361,12 +361,10 @@ class DefaultDiscModel(QAbstractListModel):
                 "★", QColor(0, 0, 0, 0), Qt.black)
         self.hint: VarHint = DefaultHint
 
-    @staticmethod
-    def rowCount(parent):
+    def rowCount(self, parent):
         return 0 if parent.isValid() else 1
 
-    @staticmethod
-    def columnCount(parent):
+    def columnCount(self, parent):
         return 0 if parent.isValid() else 1
 
     def data(self, _, role=Qt.DisplayRole):

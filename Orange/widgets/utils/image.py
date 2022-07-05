@@ -32,8 +32,12 @@ def qimage_from_array(arr: np.ndarray) -> QImage:
     img.fill(Qt.white)
     if img.size().isEmpty():
         return img
-    buffer = img.bits().asarray(w * h * 4)
-    view = np.frombuffer(buffer, np.uint32).reshape((h, w))
+    # buffer = img.bits().asarray(w * h * 4)
+    # view = np.frombuffer(buffer, np.uint32).reshape((h, w))
+    view = np.frombuffer(
+        img.bits(), np.uint32, count=w*h
+    )
+    view = view.reshape((h, w))
     if format == QImage.Format_ARGB32:
         view[:, :] = qrgba(*channels)
     elif format == QImage.Format_RGB32:

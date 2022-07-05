@@ -6,7 +6,7 @@ import numpy as np
 
 from AnyQt.QtCore import QRectF, QSizeF, Qt, QPointF, QMarginsF
 from AnyQt.QtWidgets import QGraphicsLayout, QGraphicsLayoutItem
-from AnyQt import sip
+from AnyQt.QtCore import delete
 
 FLT_MAX = np.finfo(np.float32).max
 
@@ -166,7 +166,7 @@ class GraphicsFlowLayout(QGraphicsLayout):
         for item in items:
             item.setParentLayoutItem(None)
             if item.ownedByLayout():
-                sip.delete(item)
+                delete(item)
 
 
 def qrect_aligned_to(
