@@ -1,6 +1,7 @@
 import enum
 import inspect
 import sys
+import typing
 from collections import deque
 from contextlib import contextmanager
 from typing import (
@@ -201,7 +202,10 @@ def disconnected(signal, slot, connection_type=Qt.AutoConnection):
         signal.connect(slot, connection_type)
 
 
-_NamedTupleMeta = type(NamedTuple)  # type: ignore
+try:
+    _NamedTupleMeta = typing.NamedTupleMeta  # type: ignore
+except AttributeError:
+    _NamedTupleMeta = type(NamedTuple)  # type: ignore
 
 
 class _DataTypeMethods:
@@ -234,7 +238,8 @@ class _DataTypeMeta(_NamedTupleMeta):
 # checker being any the wiser. NamedTuple are special cased. The only way
 # for type checkers to consistently apply NamedTuple aliasing is
 # import ... as ...,
-globals()["DataType"] = _DataTypeMeta("DataType", (), {"_root": True})
+# breakpoint()
+# globals()["DataType"] = _DataTypeMeta("DataType", (), {"_root": True})
 
 
 class A(DataType):
@@ -247,11 +252,11 @@ class B(DataType):
     b: int
 
 
-assert A("a", 1) != B("a", 1)
-assert not A("a", 1) == B("a", 1)
-assert hash(A("a", 1)) != hash(B("a", 1))
-
-A(0., "a")
+# assert A("a", 1) != B("a", 1)
+# assert not A("a", 1) == B("a", 1)
+# assert hash(A("a", 1)) != hash(B("a", 1))
+#
+# A(0., "a")
 
 from dataclasses import dataclass, dataclass as datatype
 
