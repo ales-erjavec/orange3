@@ -4,6 +4,7 @@ import locale
 import pickle
 import re
 import sys
+import urllib.error
 import warnings
 from typing import List, Iterable
 
@@ -429,8 +430,13 @@ class UrlReader(FileFormat):
         return urlopen(req, timeout=10)
 
     def read(self):
-        self.filename = self._trim(self._resolve_redirects(self.filename))
-        with contextlib.closing(self.urlopen(self.filename)) as response:
+        filename = self._trim(self.filename)
+        with contextlib.ExitStack() as stack:
+            response = stack.enter_context(self.urlopen(filename))
+            url_ = self._trim(response.url)  # redirect services
+            if url_ != response.url:
+                response = stack.enter_context(self.urlopen(url_))
+            url = response.url
             name = self._suggest_filename(response.headers['content-disposition'])
             # using Path since splitext does not extract more extensions
             extension = ''.join(Path(name).suffixes)  # get only file extension
@@ -443,13 +449,8 @@ class UrlReader(FileFormat):
             remove(f.name)
         # Override name set in from_file() to avoid holding the temp prefix
         data.name = path.splitext(name)[0]
-        data.origin = self.filename
+        data.origin = url
         return data
-
-    def _resolve_redirects(self, url):
-        # Resolve (potential) redirects to a final URL
-        with contextlib.closing(self.urlopen(url)) as response:
-            return response.url
 
     @classmethod
     def _trim(cls, url):
