@@ -4,6 +4,7 @@ import locale
 import pickle
 import re
 import sys
+import time
 import urllib.error
 import warnings
 from typing import List, Iterable
@@ -423,11 +424,33 @@ class UrlReader(FileFormat):
 
     @staticmethod
     def urlopen(url):
-        req = Request(
-            url,
-            # Avoid 403 error with servers that dislike scrapers
-            headers={'User-Agent': 'Mozilla/5.0 (X11; Linux) Gecko/20100101 Firefox/'})
-        return urlopen(req, timeout=10)
+        retry = 3
+        while retry > 0:
+            wait = (3 - retry) ** 2
+            retry -= 1
+            req = Request(
+                url,
+                # Avoid 403 error with servers that dislike scrapers
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (X11; Linux) Gecko/20100101 Firefox/'}
+            )
+            try:
+                try:
+                    return urlopen(req, timeout=10)
+                except urllib.error.HTTPError as e:
+                    if (
+                            e.status == 503 or  # Service Unavailable
+                            e.status == 429     # Too Many Requests
+                    ):
+                        try:
+                            wait = min(int(e.headers.get("Retry-After", "")), 5)
+                        except ValueError:
+                            pass
+                    raise
+            except Exception as e:
+                if retry == 0:  # raise last error
+                    raise
+            time.sleep(1 + wait)
 
     def read(self):
         filename = self._trim(self.filename)
