@@ -1,6 +1,7 @@
-from AnyQt.QtCore import Qt, Signal
+from AnyQt.QtCore import Qt, Signal, QEvent
 from AnyQt.QtGui import (
-    QBrush, QColor, QPalette, QPen, QFont, QFontMetrics, QFocusEvent
+    QBrush, QColor, QPalette, QPen, QFont, QFontMetrics, QFocusEvent,
+    QPaintEvent
 )
 from AnyQt.QtWidgets import (
     QStylePainter, QStyleOptionComboBox, QStyle, QApplication, QLineEdit
@@ -183,3 +184,30 @@ class TextEditCombo(ComboBox):
         else:
             self.addItem(text)
             self.setCurrentIndex(self.count() - 1)
+
+
+class FormatEditComboBox(TextEditCombo):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        le = self.lineEdit()
+        le.installEventFilter(self)
+        self.setFocusProxy(None)
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        if self.lineEdit().hasFocus():
+            super().paintEvent(event)
+            return
+        opt = QStyleOptionComboBox()
+        self.initStyleOption(opt)
+        # print("Edit focus")
+        painter = QStylePainter(self)
+        opt.currentText = str(self.currentData(Qt.DisplayRole))
+        painter.drawComplexControl(QStyle.CC_ComboBox, opt)
+        opt.editable = False
+        painter.drawControl(QStyle.CE_ComboBoxLabel, opt)
+
+    def eventFilter(self, recv: 'QObject', event: 'QEvent') -> bool:
+        if recv is self.lineEdit() and event.type() == QEvent.Paint \
+                and not self.lineEdit().hasFocus():
+            return True
+        return super().eventFilter(recv, event)

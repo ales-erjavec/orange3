@@ -26,14 +26,16 @@ import codecs
 import csv
 import traceback
 import itertools
+import datetime
 
-from functools import singledispatch
+from functools import singledispatch, partial
 from collections import defaultdict
 from types import MappingProxyType
 
 import typing
 from typing import (
-    List, Tuple, Dict, Iterator, Optional, Any, Union, Callable, Mapping
+    List, Tuple, Dict, Iterator, Optional, Any, Union, Callable, Mapping,
+    Sequence
 )
 
 from AnyQt.QtCore import (
@@ -562,6 +564,31 @@ class Item(QStandardItem):
         return self.__data.copy()
 
 
+class DateTimeFormatsModel(QStandardItemModel):
+    def __init__(self, items: Sequence[Mapping[Qt.ItemDataRole, Any]],
+                 *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for item in items:
+            self.appendRow(Item(item))
+
+    def data(self, index, role=Qt.DisplayRole):
+        if role == Qt.DisplayRole:
+            fmt = super().data(index, role)
+            if not fmt:
+                return "Default"
+            dt = datetime.datetime(1999, 12, 31, 12, 59, 59)
+            return dt.strftime(fmt)
+        # elif role == Qt.EditRole:
+        #     return super().data(index, role)
+        return super().data(index, role)
+
+    def flags(self, index: QModelIndex):
+        if index.row() == 0:
+            return Qt.ItemIsEnabled | Qt.ItemIsSelectable
+        return super().flags(index)
+
+
+
 class CSVImportWidget(QWidget):
     """
     CSV import widget with a live table preview
@@ -578,6 +605,14 @@ class CSVImportWidget(QWidget):
     #: Signal emitted when the preview model is reset. This is either because
     #: of `setPreviewContents` or a options change.
     previewModelReset = Signal()
+
+    PresetDateTimeFormats = (
+        None,
+        "%Y-%m-%d",
+        "%d.%m.%Y",
+        "%d. %m. %Y",
+        "%Y/%m/%d",
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -672,6 +707,17 @@ class CSVImportWidget(QWidget):
         number_sep_layout.addWidget(self.decimal_sep_edit_cb)
         number_sep_layout.addStretch(10)
         form.addRow("Number separators:", number_sep_layout)
+        self.datetime_edit_cb = TextEditCombo()
+        self.datetime_edit_format_model = QStandardItemModel(self)
+        dtformatmodel = DateTimeFormatsModel(
+            [{Qt.DisplayRole: fmt} for fmt in self.PresetDateTimeFormats],
+            parent=self
+        )
+        self.datetime_edit_cb.setModel(dtformatmodel)
+        self.datetime_edit_cb.currentTextChanged.connect(
+            self.__update_datetime_format
+        )
+        form.addRow("Datetime format:", self.datetime_edit_cb)
         self.column_type_edit_cb = QComboBox(
             enabled=False, objectName="column-type-edit-combo-box"
         )
@@ -812,6 +858,33 @@ class CSVImportWidget(QWidget):
             if coltype == ColumnType.Numeric:
                 delegate = ColumnValidateItemDelegate(view, converter=parser)
                 view.setItemDelegateForColumn(i, delegate)
+
+    def datetimeFormat(self) -> str:
+        return self.datetime_edit_cb.currentText()
+
+    def setDatetimeFormat(self, format):
+        self.datetime_edit_cb.setText(format)
+        self.__update_datetime_format(format)
+
+    def __update_datetime_format(self, fmt: str):
+        print("HELLP")
+        if fmt != self.datetime_edit_cb.currentText():
+            self.datetime_edit_cb.setText(fmt)
+        # update the delegates
+        model = self.__previewmodel
+        if model is None:
+            return
+        view = self.dataview
+        parser = partial(parse_datetime, format=fmt)
+        for i in range(model.columnCount()):
+            coltype = model.headerData(
+                i, Qt.Horizontal, TablePreviewModel.ColumnTypeRole
+            )
+            if coltype == ColumnType.Time:
+                delegate = ColumnValidateItemDelegate(view, converter=parser)
+                view.setItemDelegateForColumn(i, delegate)
+        self.optionsEdited.emit()
+        self.optionsChanged.emit()
 
     def columnTypes(self):
         # type: () -> Dict[int, ColumnType]
@@ -1154,6 +1227,7 @@ class CSVImportWidget(QWidget):
         numbersformat = self.numbersFormat()
         numberconverter = number_parser(
             numbersformat["group"], numbersformat["decimal"])
+        dateconverter = partial(parse_datetime, format=self.datetimeFormat())
         if coltype == ColumnType.Numeric:
             delegate = ColumnValidateItemDelegate(self.dataview,
                                                   converter=numberconverter)
@@ -1162,7 +1236,7 @@ class CSVImportWidget(QWidget):
                                                   converter=str.strip)
         elif coltype == ColumnType.Time:
             delegate = ColumnValidateItemDelegate(self.dataview,
-                                                  converter=parse_datetime)
+                                                  converter=dateconverter)
         elif coltype == ColumnType.Skip:
             delegate = SkipItemDelegate(self.dataview)
         else:
@@ -1737,11 +1811,14 @@ def format_exception_csv(err):
 _to_datetime = None
 
 
-def parse_datetime(text):
+def parse_datetime(text, format=None):
     global _to_datetime
     if _to_datetime is None:
         from pandas import to_datetime as _to_datetime
-    return _to_datetime(text)
+    if not format:
+        format = "mixed"
+    print(text, format, _to_datetime(text, format=format))
+    return _to_datetime(text, format=format)
 
 
 TEST_DATA = b"""\
