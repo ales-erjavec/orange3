@@ -1,9 +1,11 @@
 name: Test
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - master
+      - test/ci/python3.13
   pull_request:
     branches:
       - master
