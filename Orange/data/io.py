@@ -16,7 +16,7 @@ from itertools import chain
 from os import path, remove
 from tempfile import NamedTemporaryFile
 from urllib.parse import urlparse, urlsplit, urlunsplit, \
-    unquote as urlunquote, quote
+    unquote as urlunquote, parse_qs, urlencode
 from urllib.request import urlopen, Request
 from pathlib import Path
 
@@ -526,7 +526,10 @@ class UrlReader(FileFormat):
         parts = urlsplit(url)
         if not parts.netloc.endswith('dropbox.com'):
             raise ValueError
-        return urlunsplit(parts._replace(query='dl=1'))
+        query = parse_qs(parts.query)
+        query["dl"] = ["1"]
+        parts = parts._replace(query=urlencode(query, doseq=True))
+        return urlunsplit(parts)
 
     def _suggest_filename(self, content_disposition):
         default_name = re.sub(r'[\\:/]', '_', urlparse(self.filename).path)
