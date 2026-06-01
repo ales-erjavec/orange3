@@ -6,7 +6,7 @@ import numpy as np
 import scipy.sparse as sp
 
 from AnyQt.QtCore import Qt, QSize, QAbstractListModel, QObject, \
-    QItemSelectionModel
+    QItemSelectionModel, QModelIndex
 from AnyQt.QtGui import QColor
 from AnyQt.QtWidgets import QButtonGroup, QRadioButton, QListView
 
@@ -139,10 +139,13 @@ class ContDomainModel(DomainModel):
             return f"{name} {hint[0]}"
         value = super().data(index, role)
         if role == Qt.DisplayRole:
-            if isinstance(value, LabelledSeparator):
+            if self._is_separator(index):
                 return None
             return value, *(index.data(self.HintRole) or ("", False))
         return value
+
+    def _is_separator(self, index: QModelIndex) -> bool:
+        return super().data(index, Qt.AccessibleDescriptionRole) == "separator"
 
 
 class DefaultContModel(QAbstractListModel):

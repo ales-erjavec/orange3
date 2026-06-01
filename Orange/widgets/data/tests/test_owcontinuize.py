@@ -8,7 +8,7 @@ from AnyQt.QtCore import Qt, QModelIndex, QItemSelectionModel
 from AnyQt.QtTest import QSignalSpy
 
 from orangewidget.tests.base import GuiTest
-from orangewidget.utils.itemmodels import SeparatedListDelegate
+from orangewidget.utils.itemmodels import SeparatedListDelegate, SeparatorItem
 
 from Orange.data import Table, DiscreteVariable, ContinuousVariable, Domain
 from Orange.widgets.data.owcontinuize import OWContinuize, DefaultKey, \
@@ -823,6 +823,7 @@ class TestModelsAndViews(GuiTest):
         self.assertIsNone(ind.data())
         self.assertIsNone(ind.data(model.HintRole))
         self.assertIsNone(ind.data(model.FilterRole))
+        self.assertIsInstance(ind.data(Qt.EditRole), SeparatorItem)
 
     def test_defaultcontmodel(self):
         model = DefaultContModel()
